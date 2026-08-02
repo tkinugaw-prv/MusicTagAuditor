@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\MusicTagger.TagIo\MusicTagger.TagIo.csproj" />
+    <ProjectReference Include="..\..\src\MusicTagger.Core\MusicTagger.Core.csproj" />
   </ItemGroup>
 
 </Project>

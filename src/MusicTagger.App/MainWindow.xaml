@@ -22,7 +22,8 @@
       <DockPanel>
         <Button Content="フォルダを開く" Command="{Binding OpenLibraryCommand}" Padding="12,4" Margin="0,0,8,0" />
         <Button Content="再スキャン" Command="{Binding RescanCommand}" Padding="12,4" Margin="0,0,8,0" />
-        <Button Content="中止" Command="{Binding CancelScanCommand}" Padding="12,4" Margin="0,0,12,0" />
+        <Button Content="中止" Command="{Binding CancelScanCommand}" Padding="12,4" Margin="0,0,16,0" />
+        <Button Content="バックアップ" Command="{Binding CreateBackupCommand}" Padding="12,4" Margin="0,0,12,0" />
         <TextBlock Text="{Binding LibraryRoot, TargetNullValue='(未選択)'}"
                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="#333333" />
       </DockPanel>
@@ -101,6 +102,56 @@
               <DataGridTextColumn Header="ディスク" Binding="{Binding DiscNumber}" Width="70" />
             </DataGrid.Columns>
           </DataGrid>
+        </TabItem>
+
+        <TabItem Header="バックアップ履歴">
+          <Grid>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="180" MinHeight="100" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <DataGrid Grid.Row="0"
+                      ItemsSource="{Binding Backups}"
+                      SelectedItem="{Binding SelectedBackup}"
+                      AutoGenerateColumns="False"
+                      IsReadOnly="True"
+                      SelectionMode="Single"
+                      GridLinesVisibility="Horizontal">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="取得日時" Binding="{Binding CreatedAtText}" Width="160" />
+                <DataGridTextColumn Header="理由" Binding="{Binding ReasonText}" Width="120" />
+                <DataGridTextColumn Header="件数" Binding="{Binding TrackCountText}" Width="80" />
+                <DataGridTextColumn Header="補足" Binding="{Binding Note}" Width="200" />
+                <DataGridTextColumn Header="フォルダ" Binding="{Binding DirectoryPath}" Width="*" />
+              </DataGrid.Columns>
+            </DataGrid>
+
+            <Border Grid.Row="1" Padding="0,8" BorderBrush="#DDDDDD" BorderThickness="0,1,0,1" Margin="0,4">
+              <DockPanel>
+                <Button DockPanel.Dock="Left" Content="差分を確認"
+                        Command="{Binding PreviewRestoreCommand}" Padding="12,4" Margin="0,0,8,0" />
+                <Button DockPanel.Dock="Left" Content="選択した項目を復元"
+                        Command="{Binding RestoreCommand}" Padding="12,4" Margin="0,0,12,0" />
+                <TextBlock Text="{Binding RestoreSummary}" VerticalAlignment="Center" TextWrapping="Wrap" />
+              </DockPanel>
+            </Border>
+
+            <DataGrid Grid.Row="2"
+                      ItemsSource="{Binding RestoreItems}"
+                      AutoGenerateColumns="False"
+                      CanUserSortColumns="True"
+                      GridLinesVisibility="Horizontal">
+              <DataGrid.Columns>
+                <DataGridCheckBoxColumn Header="戻す" Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="50" />
+                <DataGridTextColumn Header="パス" Binding="{Binding RelativePath}" IsReadOnly="True" Width="300" />
+                <DataGridTextColumn Header="フィールド" Binding="{Binding Field}" IsReadOnly="True" Width="110" />
+                <DataGridTextColumn Header="現在の値" Binding="{Binding CurrentText}" IsReadOnly="True" Width="260" />
+                <DataGridTextColumn Header="戻す値" Binding="{Binding SnapshotText}" IsReadOnly="True" Width="260" />
+              </DataGrid.Columns>
+            </DataGrid>
+          </Grid>
         </TabItem>
 
         <TabItem Header="読み取り失敗">

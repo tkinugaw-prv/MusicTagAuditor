@@ -63,7 +63,13 @@ public static class MinimalAudioFileBuilder
         byte[] meta = BuildBox("meta", [.. metaPayload]);
 
         byte[] udta = BuildBox("udta", meta);
-        byte[] moov = BuildBox("moov", udta);
+
+        // TagLib# は mvhd が無いと CorruptFileException を投げる。書き込みテストには必須。
+        List<byte> moovPayload = [];
+        moovPayload.AddRange(BuildMovieHeader());
+        moovPayload.AddRange(BuildSoundTrack());
+        moovPayload.AddRange(udta);
+        byte[] moov = BuildBox("moov", [.. moovPayload]);
 
         List<byte> ftypPayload = [];
         ftypPayload.AddRange(Encoding.ASCII.GetBytes("M4A "));
@@ -151,6 +157,133 @@ public static class MinimalAudioFileBuilder
         }
 
         return [.. file];
+    }
+
+    /// <summary>
+    /// <c>mvhd</c>（ムービーヘッダ）を組み立てる。TagLib# が存在を必須とする。
+    /// </summary>
+    private static byte[] BuildMovieHeader()
+    {
+        List<byte> payload = [];
+        payload.AddRange(ToBigEndian(0));      // version + flags
+        payload.AddRange(ToBigEndian(0));      // creation_time
+        payload.AddRange(ToBigEndian(0));      // modification_time
+        payload.AddRange(ToBigEndian(1000));   // timescale
+        payload.AddRange(ToBigEndian(1000));   // duration
+        payload.AddRange(ToBigEndian(0x00010000)); // rate = 1.0
+        payload.AddRange(ToBigEndianUInt16(0x0100)); // volume = 1.0
+        payload.AddRange(new byte[2 + 8]);     // reserved
+        payload.AddRange(BuildUnityMatrix());
+        payload.AddRange(new byte[24]);        // pre_defined
+        payload.AddRange(ToBigEndian(2));      // next_track_ID
+
+        return BuildBox("mvhd", [.. payload]);
+    }
+
+    /// <summary>
+    /// 音声トラック（<c>trak</c>）を組み立てる。サンプルは 0 個でよいが、
+    /// TagLib# が音声プロパティを読むために階層自体は必要になる。
+    /// </summary>
+    private static byte[] BuildSoundTrack()
+    {
+        List<byte> tkhd = [];
+        tkhd.AddRange([0, 0, 0, 7]);           // version 0 + flags(enabled|in movie|in preview)
+        tkhd.AddRange(ToBigEndian(0));         // creation_time
+        tkhd.AddRange(ToBigEndian(0));         // modification_time
+        tkhd.AddRange(ToBigEndian(1));         // track_ID
+        tkhd.AddRange(ToBigEndian(0));         // reserved
+        tkhd.AddRange(ToBigEndian(1000));      // duration
+        tkhd.AddRange(new byte[8]);            // reserved
+        tkhd.AddRange(ToBigEndianUInt16(0));   // layer
+        tkhd.AddRange(ToBigEndianUInt16(0));   // alternate_group
+        tkhd.AddRange(ToBigEndianUInt16(0x0100)); // volume = 1.0
+        tkhd.AddRange(ToBigEndianUInt16(0));   // reserved
+        tkhd.AddRange(BuildUnityMatrix());
+        tkhd.AddRange(ToBigEndian(0));         // width
+        tkhd.AddRange(ToBigEndian(0));         // height
+
+        List<byte> mdhd = [];
+        mdhd.AddRange(ToBigEndian(0));         // version + flags
+        mdhd.AddRange(ToBigEndian(0));         // creation_time
+        mdhd.AddRange(ToBigEndian(0));         // modification_time
+        mdhd.AddRange(ToBigEndian(44100));     // timescale
+        mdhd.AddRange(ToBigEndian(44100));     // duration
+        mdhd.AddRange(ToBigEndianUInt16(0x55C4)); // language = und
+        mdhd.AddRange(ToBigEndianUInt16(0));   // pre_defined
+
+        List<byte> hdlr = [];
+        hdlr.AddRange(ToBigEndian(0));         // version + flags
+        hdlr.AddRange(ToBigEndian(0));         // pre_defined
+        hdlr.AddRange(Encoding.ASCII.GetBytes("soun"));
+        hdlr.AddRange(new byte[12]);           // reserved
+        hdlr.Add(0);                           // name（空文字）
+
+        List<byte> smhd = [];
+        smhd.AddRange(ToBigEndian(0));         // version + flags
+        smhd.AddRange(ToBigEndianUInt16(0));   // balance
+        smhd.AddRange(ToBigEndianUInt16(0));   // reserved
+
+        List<byte> dref = [];
+        dref.AddRange(ToBigEndian(0));         // version + flags
+        dref.AddRange(ToBigEndian(1));         // entry_count
+        dref.AddRange(ToBigEndian(12));        // url ボックスのサイズ
+        dref.AddRange(Encoding.ASCII.GetBytes("url "));
+        dref.AddRange([0, 0, 0, 1]);           // version + flags（自己完結）
+        byte[] dinf = BuildBox("dinf", BuildBox("dref", [.. dref]));
+
+        // mp4a サンプルエントリ。音声フォーマットの記述だけを持つ。
+        List<byte> mp4a = [];
+        mp4a.AddRange(new byte[6]);            // reserved
+        mp4a.AddRange(ToBigEndianUInt16(1));   // data_reference_index
+        mp4a.AddRange(new byte[8]);            // version / revision / vendor
+        mp4a.AddRange(ToBigEndianUInt16(2));   // channel_count
+        mp4a.AddRange(ToBigEndianUInt16(16));  // sample_size
+        mp4a.AddRange(new byte[4]);            // compression_id / packet_size
+        mp4a.AddRange(ToBigEndian(44100 << 16)); // sample_rate（16.16 固定小数）
+
+        List<byte> stsd = [];
+        stsd.AddRange(ToBigEndian(0));         // version + flags
+        stsd.AddRange(ToBigEndian(1));         // entry_count
+        stsd.AddRange(BuildBox("mp4a", [.. mp4a]));
+
+        List<byte> stbl = [];
+        stbl.AddRange(BuildBox("stsd", [.. stsd]));
+        stbl.AddRange(BuildBox("stts", [0, 0, 0, 0, 0, 0, 0, 0]));
+        stbl.AddRange(BuildBox("stsc", [0, 0, 0, 0, 0, 0, 0, 0]));
+        stbl.AddRange(BuildBox("stsz", [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]));
+        stbl.AddRange(BuildBox("stco", [0, 0, 0, 0, 0, 0, 0, 0]));
+
+        List<byte> minf = [];
+        minf.AddRange(BuildBox("smhd", [.. smhd]));
+        minf.AddRange(dinf);
+        minf.AddRange(BuildBox("stbl", [.. stbl]));
+
+        List<byte> mdia = [];
+        mdia.AddRange(BuildBox("mdhd", [.. mdhd]));
+        mdia.AddRange(BuildBox("hdlr", [.. hdlr]));
+        mdia.AddRange(BuildBox("minf", [.. minf]));
+
+        List<byte> trak = [];
+        trak.AddRange(BuildBox("tkhd", [.. tkhd]));
+        trak.AddRange(BuildBox("mdia", [.. mdia]));
+
+        return BuildBox("trak", [.. trak]);
+    }
+
+    /// <summary>
+    /// 変換なしを表す 3x3 行列（16.16 固定小数、末尾のみ 2.30）。
+    /// </summary>
+    private static byte[] BuildUnityMatrix()
+    {
+        List<byte> matrix = [];
+        int[] values = [0x00010000, 0, 0, 0, 0x00010000, 0, 0, 0, 0x40000000];
+
+        foreach (int value in values)
+        {
+            matrix.AddRange(ToBigEndian(value));
+        }
+
+        return [.. matrix];
     }
 
     /// <summary>
