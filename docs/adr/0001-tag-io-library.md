@@ -1,6 +1,6 @@
 # ADR-0001: タグ入出力ライブラリの選定
 
-- 状態: **提案**（AIMP での目視確認待ち）
+- 状態: **承認**
 - 日付: 2026-08-02
 - 対象: `docs/SPEC.md` 4章 / 13章 D1
 
@@ -98,12 +98,17 @@ FLAC / MP3 / AIFF は TagLib# の標準 API で読み書きする（V5・V6・V7
 
 ---
 
-## 未確認事項
+## AIMP による裏付け（2026-08-02 実施）
 
-**AIMP での目視確認が未了。** 次のファイルを AIMP で開き、「指揮者」欄の表示を確認する必要がある。
+`tools/TagIoProbe/work/taglibsharp/M4A.m4a` を AIMP のタグ編集画面で開いた。このファイルには `©con` = `Sergiu Celibidache` と `cond` = `Yevgeny Mravinsky` の**両方**が入っている。
 
-- `tools/TagIoProbe/work/taglibsharp/M4A.m4a` — `©con` = `Sergiu Celibidache`、`cond` = `Yevgeny Mravinsky` の両方が入っている。**`Sergiu Celibidache` が表示されれば V1 の判定（AIMP は `©con` のみを読む）が裏付けられる。**
-- `tools/TagIoProbe/work/atl/M4A.m4a` — `©con` = `Yevgeny Mravinsky`。
-- FLAC / MP3 / AIFF は各 work フォルダの同名ファイル。
+| AIMP の欄 | 表示された値 | 意味 |
+|---|---|---|
+| 指揮者 | `Sergiu Celibidache` | **AIMP は `©con` を読み、`cond` を無視する。** V1 の判定が裏付けられた |
+| アルバムアーティスト | `Peter Pears(T); Hermann Prey(BR)` | TagLib# が 1 値のまま格納した状態を、AIMP も 1 値として表示する（V7 の裏付け） |
+| 作曲 | `Ludwig van Beethoven` | `©wrt` |
+| ジャンル / 年 | `Classic` / `1983` | |
 
-確認が取れ次第、本 ADR の状態を「承認」に更新する。
+これにより、TagLib# の高レベル API（`Tag.Conductor`）をそのまま使うと **AIMP から指揮者が消える**ことが実機で確定した。本 ADR の決定（`©con` への直接書き込み）は必須の対処である。
+
+なお `TAGGING_POLICY.md` 4.3 のとおり、AIMP は**保存時**に `;` を複数値へ分割する。上記のアルバムアーティストは AIMP で保存し直すと壊れるため、musicTagger 側から書いた値を AIMP で編集・保存しないよう運用で注意する。
