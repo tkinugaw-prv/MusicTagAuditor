@@ -58,6 +58,7 @@ dotnet test
 
 - **M4A の指揮者は `©con`（`A9 63 6F 6E`）に書く。** TagLib# の `Tag.Conductor` は `cond` に書くため**使ってはならない**。`AppleTag.SetText` で atom を明示する。
 - **M4A の読み取りは自前の MP4 atom リーダーを使う。** TagLib# の MP4 読み取りは `; ` で値を分割するため、「1 値に `;` が含まれる状態」と「複数値に分割済みの状態」を区別できない。この区別は検査ルール R-205 / R-206 に必要。
+- **M4A はファイル全体を読まない。** タグは `moov` の中にあり、ファイルの大半を占める `mdat`（音声本体）には無い。全体を読むと 1,041 ファイルのスキャンに 34 秒かかり、非機能要件（1,000 ファイル / 10 秒）を満たせない。`moov` だけをシークして読むこと。
 - **`;` を値の区切りに使わない**（`TAGGING_POLICY.md` 3.4）。
 
 ### 検証スパイクの実行
@@ -70,9 +71,27 @@ dotnet run --project tools/TagIoProbe/TagIoProbe.csproj -- "D:\Music Library for
 
 ---
 
+## 実行
+
+```bash
+dotnet run --project src/MusicTagger.App/MusicTagger.App.csproj
+```
+
+第 1 引数にライブラリのパスを渡すと、起動直後にそのフォルダを開いてスキャンする。
+
+```bash
+dotnet run --project src/MusicTagger.App/MusicTagger.App.csproj -- "D:\Music Library for AIMP\Classic"
+```
+
+ログは `%LOCALAPPDATA%\musicTagger\logs\` に日次で出力される。設定・辞書は `%APPDATA%\musicTagger\`。
+
+---
+
 ## 環境変数
 
-現時点で使用する環境変数はない。追加する場合は本節に表を作成すること（`docs/llm_guideline.md`）。
+| 変数名 | 用途 | 既定値 |
+|---|---|---|
+| `MUSICTAGGER_LIBRARY_ROOT` | 実ライブラリを使う結合テストの対象パス。**テスト専用**で、アプリ本体は参照しない。指定したフォルダが存在しない場合、該当テストはスキップされる | `D:\Music Library for AIMP\Classic` |
 
 ---
 
