@@ -1,9 +1,6 @@
-﻿<Application x:Class="MusicTagger.App.App"
+<!-- StartupUri は使わない。メインウィンドウは DI 経由で App.OnStartup から表示する。 -->
+<Application x:Class="MusicTagger.App.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:MusicTagger.App"
-             StartupUri="MainWindow.xaml">
-    <Application.Resources>
-         
-    </Application.Resources>
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Application.Resources />
 </Application>

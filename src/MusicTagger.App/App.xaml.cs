@@ -1,10 +1,82 @@
+using System.IO;
 using System.Windows;
+using Microsoft.Extensions.DependencyInjection;
+using MusicTagger.App.ViewModels;
+using MusicTagger.Core.Abstractions;
+using MusicTagger.Core.Scanning;
+using MusicTagger.TagIo;
+using Serilog;
 
 namespace MusicTagger.App;
 
 /// <summary>
-/// アプリケーションのエントリポイント。
+/// アプリケーションのエントリポイント。DI コンテナとログの初期化を行う。
 /// </summary>
 public partial class App : Application
 {
+    /// <summary>サービスプロバイダ。</summary>
+    private ServiceProvider? _services;
+
+    /// <summary>
+    /// 起動時にログと DI を構成し、メインウィンドウを表示する。
+    /// </summary>
+    /// <param name="e">起動イベントの引数。</param>
+    protected override void OnStartup(StartupEventArgs e)
+    {
+        base.OnStartup(e);
+
+        ConfigureLogging();
+
+        ServiceCollection services = new();
+        services.AddSingleton<ITagReader, TagReader>();
+        services.AddSingleton<ScanOptions>();
+        services.AddSingleton<LibraryScanner>();
+        services.AddSingleton<MainViewModel>();
+        services.AddSingleton<MainWindow>();
+
+        _services = services.BuildServiceProvider();
+
+        Log.Information("musicTagger を起動した");
+
+        _services.GetRequiredService<MainWindow>().Show();
+
+        // 第 1 引数にライブラリのパスが渡されていればそのまま開く。
+        if (e.Args.Length > 0 && Directory.Exists(e.Args[0]))
+        {
+            MainViewModel viewModel = _services.GetRequiredService<MainViewModel>();
+            _ = Dispatcher.InvokeAsync(async () => await viewModel.OpenAsync(e.Args[0]));
+        }
+    }
+
+    /// <summary>
+    /// 終了時にログを確実に書き出す。
+    /// </summary>
+    /// <param name="e">終了イベントの引数。</param>
+    protected override void OnExit(ExitEventArgs e)
+    {
+        Log.Information("musicTagger を終了した");
+        Log.CloseAndFlush();
+
+        _services?.Dispose();
+
+        base.OnExit(e);
+    }
+
+    /// <summary>
+    /// Serilog をファイル出力で構成する。適用処理の事後追跡にログが必要（docs/SPEC.md 11章）。
+    /// </summary>
+    private static void ConfigureLogging()
+    {
+        string logDirectory = AppConst.GetLogDirectory();
+        Directory.CreateDirectory(logDirectory);
+
+        Log.Logger = new LoggerConfiguration()
+            .MinimumLevel.Information()
+            .WriteTo.File(
+                Path.Combine(logDirectory, AppConst.LOG_FILE_NAME),
+                rollingInterval: RollingInterval.Day,
+                retainedFileCountLimit: AppConst.LOG_RETAINED_FILE_COUNT,
+                encoding: System.Text.Encoding.UTF8)
+            .CreateLogger();
+    }
 }
