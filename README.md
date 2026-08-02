@@ -15,6 +15,7 @@
 | [docs/TAGGING_POLICY.md](docs/TAGGING_POLICY.md) | タグ付けの原則。実装の唯一の基準 |
 | [docs/SPEC.md](docs/SPEC.md) | アプリケーション仕様 |
 | [docs/adr/0001-tag-io-library.md](docs/adr/0001-tag-io-library.md) | タグ入出力ライブラリの選定記録 |
+| [docs/library-baseline-2026-08-03.md](docs/library-baseline-2026-08-03.md) | 実ライブラリの実態。検査ルール実装時の答え合わせ用 |
 | [docs/branch_strategy.md](docs/branch_strategy.md) | ブランチ戦略 |
 | [docs/llm_guideline.md](docs/llm_guideline.md) | コーディング規約 |
 
