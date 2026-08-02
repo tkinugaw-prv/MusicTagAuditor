@@ -1,9 +1,14 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- アプリ無しで復元するための PowerShell。スナップショットと一緒に書き出す。 -->
+    <EmbeddedResource Include="Backup\restore-tags.ps1" />
+  </ItemGroup>
 
 </Project>

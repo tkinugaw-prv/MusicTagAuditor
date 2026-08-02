@@ -3,6 +3,7 @@ using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using MusicTagger.App.ViewModels;
 using MusicTagger.Core.Abstractions;
+using MusicTagger.Core.Backup;
 using MusicTagger.Core.Scanning;
 using MusicTagger.TagIo;
 using Serilog;
@@ -29,8 +30,11 @@ public partial class App : Application
 
         ServiceCollection services = new();
         services.AddSingleton<ITagReader, TagReader>();
+        services.AddSingleton<ITagWriter, TagWriter>();
         services.AddSingleton<ScanOptions>();
         services.AddSingleton<LibraryScanner>();
+        services.AddSingleton<SnapshotService>();
+        services.AddSingleton<RestoreService>();
         services.AddSingleton<MainViewModel>();
         services.AddSingleton<MainWindow>();
 
