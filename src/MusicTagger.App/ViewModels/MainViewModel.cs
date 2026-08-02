@@ -5,6 +5,9 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
 using MusicTagger.Core.Backup;
+using MusicTagger.Core.Dictionary;
+using MusicTagger.Core.Inspection;
+using MusicTagger.Core.Models;
 using MusicTagger.Core.Scanning;
 using MusicTagger.TagIo;
 using Serilog;
@@ -26,6 +29,12 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>復元処理。</summary>
     private readonly RestoreService _restoreService;
+
+    /// <summary>検査エンジン。</summary>
+    private readonly InspectionEngine _inspectionEngine;
+
+    /// <summary>正規化辞書の索引。</summary>
+    private readonly DictionaryIndex _dictionary;
 
     /// <summary>直近のスキャン結果。バックアップの取得元になる。</summary>
     private ScanResult? _lastScan;
@@ -49,6 +58,7 @@ public sealed partial class MainViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(CreateBackupCommand))]
     [NotifyCanExecuteChangedFor(nameof(PreviewRestoreCommand))]
     [NotifyCanExecuteChangedFor(nameof(RestoreCommand))]
+    [NotifyCanExecuteChangedFor(nameof(InspectCommand))]
     private bool _isScanning;
 
     /// <summary>進捗の現在値。</summary>
@@ -81,20 +91,34 @@ public sealed partial class MainViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(RestoreCommand))]
     private bool _isRestoreReady;
 
+    /// <summary>検査結果で選択中のルール。</summary>
+    [ObservableProperty]
+    private RuleResultViewModel? _selectedRule;
+
+    /// <summary>検査結果の要約。</summary>
+    [ObservableProperty]
+    private string _inspectionSummary = "「検査」を押すと原則違反を洗い出します。";
+
     /// <summary>
     /// ビューモデルを初期化する。
     /// </summary>
     /// <param name="scanner">ライブラリスキャナ。</param>
     /// <param name="snapshotService">スナップショットの取得・読み込み。</param>
     /// <param name="restoreService">復元処理。</param>
+    /// <param name="inspectionEngine">検査エンジン。</param>
+    /// <param name="dictionary">正規化辞書の索引。</param>
     public MainViewModel(
         LibraryScanner scanner,
         SnapshotService snapshotService,
-        RestoreService restoreService)
+        RestoreService restoreService,
+        InspectionEngine inspectionEngine,
+        DictionaryIndex dictionary)
     {
         _scanner = scanner;
         _snapshotService = snapshotService;
         _restoreService = restoreService;
+        _inspectionEngine = inspectionEngine;
+        _dictionary = dictionary;
     }
 
     /// <summary>フォルダツリー。ルートノード 1 件を持つ。</summary>
@@ -111,6 +135,12 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>復元で戻る項目。**復元前に必ずこれを見せる**（docs/SPEC.md 8.3）。</summary>
     public ObservableCollection<RestoreItem> RestoreItems { get; } = [];
+
+    /// <summary>検査結果タブ上段。ルール別の集計。</summary>
+    public ObservableCollection<RuleResultViewModel> RuleResults { get; } = [];
+
+    /// <summary>検査結果タブ下段。選択したルールの差分明細。</summary>
+    public ObservableCollection<TagChange> InspectionChanges { get; } = [];
 
     /// <summary>
     /// 起動時に指定されたライブラリをそのまま開く。
@@ -352,6 +382,80 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// 検査ルールを実行して原則違反を洗い出す。書き込みは行わない。
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanInspect))]
+    private void Inspect()
+    {
+        if (_lastScan is null)
+        {
+            return;
+        }
+
+        RuleResults.Clear();
+        InspectionChanges.Clear();
+
+        try
+        {
+            InspectionContext context = new(_lastScan, _dictionary);
+            InspectionResult result = _inspectionEngine.Inspect(context);
+
+            foreach (RuleResult rule in result.Results.Where(rule => rule.Changes.Count > 0))
+            {
+                RuleResults.Add(new RuleResultViewModel(rule));
+            }
+
+            SelectedRule = RuleResults.FirstOrDefault();
+
+            int selected = result.AllChanges.Count(change => change.IsSelected);
+            int holds = result.AllChanges.Count(change => change.HoldReason != HoldReason.None);
+
+            InspectionSummary = string.Create(
+                CultureInfo.CurrentCulture,
+                $"検出 {result.TotalChanges:N0} 件 / 既定で選択 {selected:N0} 件 / 保留 {holds:N0} 件"
+                + $"（{result.Elapsed.TotalSeconds:F2} 秒）");
+
+            StatusText = InspectionSummary;
+
+            Log.Information(
+                "検査完了 検出={Total} 選択={Selected} 保留={Holds} 所要={Elapsed}",
+                result.TotalChanges,
+                selected,
+                holds,
+                result.Elapsed);
+        }
+        catch (Exception ex)
+        {
+            InspectionSummary = $"検査に失敗しました: {ex.Message}";
+            Log.Error(ex, "検査に失敗した root={Root}", LibraryRoot);
+        }
+    }
+
+    /// <summary>
+    /// 選択したルールの差分明細を下段に出す。
+    /// </summary>
+    partial void OnSelectedRuleChanged(RuleResultViewModel? value)
+    {
+        InspectionChanges.Clear();
+
+        if (value is null)
+        {
+            return;
+        }
+
+        foreach (TagChange change in value.Result.Changes)
+        {
+            InspectionChanges.Add(change);
+        }
+    }
+
+    /// <summary>検査を実行できるか。</summary>
+    private bool CanInspect()
+    {
+        return !IsScanning && _lastScan is not null;
+    }
+
     /// <summary>バックアップを取得できるか。</summary>
     private bool CanCreateBackup()
     {
@@ -404,6 +508,9 @@ public sealed partial class MainViewModel : ObservableObject
         Failures.Clear();
         Tracks.Clear();
         FolderTree.Clear();
+        RuleResults.Clear();
+        InspectionChanges.Clear();
+        InspectionSummary = "「検査」を押すと原則違反を洗い出します。";
         ProgressValue = 0;
         ProgressMaximum = 1;
         StatusText = "スキャンしています…";

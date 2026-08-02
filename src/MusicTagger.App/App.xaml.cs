@@ -4,6 +4,8 @@ using Microsoft.Extensions.DependencyInjection;
 using MusicTagger.App.ViewModels;
 using MusicTagger.Core.Abstractions;
 using MusicTagger.Core.Backup;
+using MusicTagger.Core.Dictionary;
+using MusicTagger.Core.Inspection;
 using MusicTagger.Core.Scanning;
 using MusicTagger.TagIo;
 using Serilog;
@@ -35,6 +37,11 @@ public partial class App : Application
         services.AddSingleton<LibraryScanner>();
         services.AddSingleton<SnapshotService>();
         services.AddSingleton<RestoreService>();
+        services.AddSingleton<InspectionEngine>();
+
+        // 辞書は %APPDATA%\musicTagger に置く。初回は同梱の既定辞書がコピーされる。
+        services.AddSingleton(_ => new DictionaryIndex(
+            DictionaryLoader.LoadOrCreate(AppConst.GetAppDataDirectory())));
         services.AddSingleton<MainViewModel>();
         services.AddSingleton<MainWindow>();
 
