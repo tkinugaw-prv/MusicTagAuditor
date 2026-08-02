@@ -1,0 +1,15 @@
+﻿<Project>
+
+  <!--
+    tools/ 配下は検証用の使い捨てスパイク。
+    本体コードと同じアナライザ設定にすると検証の本題から外れた修正が増えるため、
+    警告のエラー扱いだけを解除する（コード規約そのものは .editorconfig で共通）。
+  -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);CA1305;CA1822;CA1859;CS1591</NoWarn>
+  </PropertyGroup>
+
+</Project>

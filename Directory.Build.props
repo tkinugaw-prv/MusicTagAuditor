@@ -1,0 +1,29 @@
+﻿<Project>
+
+  <!--
+    全プロジェクト共通のビルド設定。
+    ランタイムは .NET 10 (LTS)。.NET 8 / 9 は 2026-11-10 にサポート終了のため採用しない。
+    詳細は docs/SPEC.md 3章を参照。
+  -->
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <!-- IDE0005（不要な using）をビルドで有効にするために必要。
+         同時に CS1591 が有効になり、public メンバーへのヘッダコメントが必須になる。
+         これは docs/llm_guideline.md「クラス、メソッドなどにはヘッダコメントは必須である」と一致する。 -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <NeutralLanguage>ja-JP</NeutralLanguage>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Product>musicTagger</Product>
+    <Company>tkinugaw-prv</Company>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+</Project>
