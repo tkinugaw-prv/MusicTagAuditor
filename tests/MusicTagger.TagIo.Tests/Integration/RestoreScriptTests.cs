@@ -273,6 +273,10 @@ public sealed class RestoreScriptTests : IDisposable
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
+
+            // スクリプトは UTF-8 で出力する。既定のコードページのままだと日本語が化ける。
+            StandardOutputEncoding = System.Text.Encoding.UTF8,
+            StandardErrorEncoding = System.Text.Encoding.UTF8,
         };
 
         startInfo.ArgumentList.Add("-NoProfile");

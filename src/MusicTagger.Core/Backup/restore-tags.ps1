@@ -50,6 +50,19 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# 日本語のパスやフィールド名を出力するため、コンソールの文字コードを UTF-8 に固定する。
+# 既定のままだと環境によっては ???? に化ける。
+$OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+try
+{
+    [Console]::OutputEncoding = $OutputEncoding
+}
+catch
+{
+    # 出力がリダイレクトされていて設定できない場合がある。表示だけの問題なので続行する。
+    Write-Verbose "コンソールの文字コードを設定できませんでした: $($_.Exception.Message)"
+}
+
 # --- 論理フィールドと格納先の対応（docs/TAGGING_POLICY.md 4.1） ---
 
 $MP4_ATOM_BY_FIELD = @{
