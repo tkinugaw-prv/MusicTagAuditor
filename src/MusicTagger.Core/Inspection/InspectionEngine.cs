@@ -15,11 +15,24 @@ public sealed class InspectionEngine
     /// <summary>
     /// エンジンを初期化する。
     /// </summary>
-    /// <param name="rules">実行するルール。省略時は既定の一式。</param>
+    /// <param name="rules">
+    /// 実行するルール。null または空なら既定の一式を使う。
+    ///
+    /// **空を「ルール無し」として受け入れてはならない。** DI コンテナは
+    /// <c>IEnumerable&lt;T&gt;</c> を要求されると、T が未登録でも既定値ではなく空のコレクションを
+    /// 注入する。これを素通しすると、検査が常に 0 件を返すのに例外も出ない状態になる。
+    /// ルールが 1 つも無いエンジンに正当な用途は無いので、既定へ寄せる。
+    /// </param>
     public InspectionEngine(IEnumerable<IInspectionRule>? rules = null)
     {
-        _rules = [.. (rules ?? CreateDefaultRules()).OrderBy(rule => rule.Id, StringComparer.Ordinal)];
+        IInspectionRule[] provided = [.. rules ?? []];
+
+        _rules = [.. (provided.Length > 0 ? provided : CreateDefaultRules())
+            .OrderBy(rule => rule.Id, StringComparer.Ordinal)];
     }
+
+    /// <summary>実行するルールの数。構成が意図どおりかの確認に使う。</summary>
+    public int RuleCount => _rules.Count;
 
     /// <summary>
     /// 段階 3 の時点で有効なルール一式を作る。

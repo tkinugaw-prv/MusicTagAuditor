@@ -290,6 +290,32 @@ public sealed class InspectionRuleTests
     }
 
     /// <summary>
+    /// ルールを空で渡しても既定の一式で動くことを確認する。
+    ///
+    /// DI コンテナは <c>IEnumerable&lt;T&gt;</c> を要求されると、T が未登録でも
+    /// 既定値ではなく空のコレクションを注入する。これを素通しすると検査が常に 0 件になり、
+    /// 例外も出ないため気づけない。実際に一度この状態で動いてしまった。
+    /// </summary>
+    [Fact]
+    public void FallsBackToDefaultRulesWhenNoneProvided()
+    {
+        Assert.NotEqual(0, new InspectionEngine([]).RuleCount);
+        Assert.NotEqual(0, new InspectionEngine().RuleCount);
+        Assert.Equal(InspectionEngine.CreateDefaultRules().Count, new InspectionEngine([]).RuleCount);
+    }
+
+    /// <summary>
+    /// 既定のルール一式に ID の重複が無いことを確認する。
+    /// </summary>
+    [Fact]
+    public void HasNoDuplicateRuleIds()
+    {
+        string[] ids = [.. InspectionEngine.CreateDefaultRules().Select(rule => rule.Id)];
+
+        Assert.Equal(ids.Length, ids.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    /// <summary>
     /// 指定したルールの検出結果を取り出す。
     /// </summary>
     private static IReadOnlyList<TagChange> ChangesOf(InspectionResult result, string ruleId)
