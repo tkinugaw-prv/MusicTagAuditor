@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
+using System.Text;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -8,6 +9,7 @@ using Microsoft.Win32;
 using MusicTagger.Core.Applying;
 using MusicTagger.Core.Backup;
 using MusicTagger.Core.Dictionary;
+using MusicTagger.Core.Export;
 using MusicTagger.Core.Inspection;
 using MusicTagger.Core.Models;
 using MusicTagger.Core.Scanning;
@@ -18,8 +20,8 @@ namespace MusicTagger.App.ViewModels;
 
 /// <summary>
 /// メインウィンドウのビューモデル。
-/// 段階 4 までの範囲。スキャンと読み取り、一覧表示、バックアップと復元、検査と適用を扱う。
-/// 辞書編集と手編集は段階 5 以降（docs/SPEC.md 12章）。
+/// 段階 5 までの範囲。スキャンと読み取り、一覧表示、バックアップと復元、検査と適用、
+/// 辞書の閲覧・編集を扱う。手編集は段階 6 以降（docs/SPEC.md 12章）。
 /// </summary>
 public sealed partial class MainViewModel : ObservableObject
 {
@@ -35,8 +37,8 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>検査エンジン。</summary>
     private readonly InspectionEngine _inspectionEngine;
 
-    /// <summary>正規化辞書の索引。</summary>
-    private readonly DictionaryIndex _dictionary;
+    /// <summary>正規化辞書の保持と保存。**索引は握らず、必要になるたびに取り直す。**</summary>
+    private readonly DictionaryStore _dictionaryStore;
 
     /// <summary>適用処理。</summary>
     private readonly ApplyService _applyService;
@@ -68,6 +70,8 @@ public sealed partial class MainViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(RestoreCommand))]
     [NotifyCanExecuteChangedFor(nameof(InspectCommand))]
     [NotifyCanExecuteChangedFor(nameof(ApplyCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AddUnknownValueToDictionaryCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AddSelectedChangeToDictionaryCommand))]
     private bool _isScanning;
 
     /// <summary>進捗の現在値。</summary>
@@ -113,6 +117,25 @@ public sealed partial class MainViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(ApplyCommand))]
     private bool _canApplyChanges;
 
+    /// <summary>検査結果があるか。CSV 出力は検出が 0 件でも意味があるので、選択件数とは別に持つ。</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ExportCsvCommand))]
+    private bool _hasInspectionResult;
+
+    /// <summary>検査結果の差分明細で選択中の行。</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AddSelectedChangeToDictionaryCommand))]
+    private TagChange? _selectedChange;
+
+    /// <summary>未知の値の一覧で選択中の行。</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AddUnknownValueToDictionaryCommand))]
+    private UnknownValue? _selectedUnknownValue;
+
+    /// <summary>未知の値の要約。</summary>
+    [ObservableProperty]
+    private string _unknownValueSummary = "検査すると、辞書に無い値がここに集まります。";
+
     /// <summary>
     /// ビューモデルを初期化する。
     /// </summary>
@@ -120,23 +143,35 @@ public sealed partial class MainViewModel : ObservableObject
     /// <param name="snapshotService">スナップショットの取得・読み込み。</param>
     /// <param name="restoreService">復元処理。</param>
     /// <param name="inspectionEngine">検査エンジン。</param>
-    /// <param name="dictionary">正規化辞書の索引。</param>
+    /// <param name="dictionaryStore">正規化辞書の保持と保存。</param>
+    /// <param name="dictionaryViewModel">辞書タブ。</param>
     /// <param name="applyService">適用処理。</param>
     public MainViewModel(
         LibraryScanner scanner,
         SnapshotService snapshotService,
         RestoreService restoreService,
         InspectionEngine inspectionEngine,
-        DictionaryIndex dictionary,
+        DictionaryStore dictionaryStore,
+        DictionaryViewModel dictionaryViewModel,
         ApplyService applyService)
     {
+        ArgumentNullException.ThrowIfNull(dictionaryViewModel);
+
         _scanner = scanner;
         _snapshotService = snapshotService;
         _restoreService = restoreService;
         _inspectionEngine = inspectionEngine;
-        _dictionary = dictionary;
+        _dictionaryStore = dictionaryStore;
         _applyService = applyService;
+
+        Dictionary = dictionaryViewModel;
+
+        // 辞書を保存したら検査をやり直す。タグは変わっていないので再スキャンは要らない。
+        Dictionary.Saved += OnDictionarySaved;
     }
+
+    /// <summary>辞書タブ。</summary>
+    public DictionaryViewModel Dictionary { get; }
 
     /// <summary>フォルダツリー。ルートノード 1 件を持つ。</summary>
     public ObservableCollection<FolderNodeViewModel> FolderTree { get; } = [];
@@ -158,6 +193,13 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>検査結果タブ下段。選択したルールの差分明細。</summary>
     public ObservableCollection<TagChange> InspectionChanges { get; } = [];
+
+    /// <summary>
+    /// 辞書に無いために修正案を出せなかった値（docs/SPEC.md 7.3）。
+    ///
+    /// **明細ではなく値単位でまとめる。** 同じ値が何ファイルに散っていても登録は 1 回で済む。
+    /// </summary>
+    public ObservableCollection<UnknownValue> UnknownValues { get; } = [];
 
     /// <summary>
     /// 適用で問題が起きた項目。**不一致が 1 件でもあればここに出す**（docs/SPEC.md 9章）。
@@ -411,6 +453,17 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanInspect))]
     private void Inspect()
     {
+        RunInspection();
+    }
+
+    /// <summary>
+    /// 検査を実行して画面に反映する。
+    ///
+    /// 辞書を編集した直後にも呼ぶ。**タグは変わっていないので再スキャンは不要**で、
+    /// 直近のスキャン結果に新しい索引を当て直すだけでよい。
+    /// </summary>
+    private void RunInspection()
+    {
         if (_lastScan is null)
         {
             return;
@@ -418,13 +471,15 @@ public sealed partial class MainViewModel : ObservableObject
 
         RuleResults.Clear();
         InspectionChanges.Clear();
+        UnknownValues.Clear();
         ApplyIssues.Clear();
         CanApplyChanges = false;
+        HasInspectionResult = false;
         _lastInspection = null;
 
         try
         {
-            InspectionContext context = new(_lastScan, _dictionary);
+            InspectionContext context = new(_lastScan, _dictionaryStore.Index);
             InspectionResult result = _inspectionEngine.Inspect(context);
 
             foreach (RuleResult rule in result.Results.Where(rule => rule.Changes.Count > 0))
@@ -434,6 +489,8 @@ public sealed partial class MainViewModel : ObservableObject
 
             _lastInspection = result;
             SelectedRule = RuleResults.FirstOrDefault();
+
+            LoadUnknownValues(result);
 
             int selected = result.AllChanges.Count(change => change.IsSelected);
             int holds = result.AllChanges.Count(change => change.HoldReason != HoldReason.None);
@@ -445,12 +502,14 @@ public sealed partial class MainViewModel : ObservableObject
 
             StatusText = InspectionSummary;
             CanApplyChanges = selected > 0;
+            HasInspectionResult = true;
 
             Log.Information(
-                "検査完了 検出={Total} 選択={Selected} 保留={Holds} 所要={Elapsed}",
+                "検査完了 検出={Total} 選択={Selected} 保留={Holds} 未知の値={Unknown} 所要={Elapsed}",
                 result.TotalChanges,
                 selected,
                 holds,
+                UnknownValues.Count,
                 result.Elapsed);
         }
         catch (Exception ex)
@@ -461,11 +520,233 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
+    /// 未知の値の一覧を作り直す。
+    /// </summary>
+    private void LoadUnknownValues(InspectionResult result)
+    {
+        foreach (UnknownValue unknown in UnknownValueCollector.Collect(result.AllChanges))
+        {
+            UnknownValues.Add(unknown);
+        }
+
+        SelectedUnknownValue = UnknownValues.FirstOrDefault();
+
+        int fileCount = UnknownValues.Sum(unknown => unknown.Count);
+
+        UnknownValueSummary = UnknownValues.Count == 0
+            ? "辞書に無い値はありません。"
+            : string.Create(
+                CultureInfo.CurrentCulture,
+                $"辞書に無い値 {UnknownValues.Count:N0} 種 / {fileCount:N0} ファイル。")
+                + " 行を選んで「辞書に追加」を押すと、登録して再検査します。";
+    }
+
+    /// <summary>
+    /// 辞書が保存されたら検査をやり直す。
+    /// 古い検査結果を残すと、辞書に足したのにまだ未知の値として出ているように見える。
+    /// </summary>
+    private void OnDictionarySaved(object? sender, EventArgs e)
+    {
+        if (_lastScan is null)
+        {
+            return;
+        }
+
+        RunInspection();
+        StatusText = "辞書の保存にあわせて検査をやり直しました。 " + InspectionSummary;
+    }
+
+    /// <summary>
+    /// 未知の値を辞書に足して再検査する。段階 5 の中心になる導線（docs/SPEC.md 7.3）。
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanAddUnknownValueToDictionary))]
+    private void AddUnknownValueToDictionary()
+    {
+        if (SelectedUnknownValue is not null)
+        {
+            AddToDictionary(SelectedUnknownValue);
+        }
+    }
+
+    /// <summary>
+    /// 差分明細で選んだ行の値を辞書に足す。
+    /// 明細を見ている流れのまま登録に進めるようにするための入口。
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanAddSelectedChangeToDictionary))]
+    private void AddSelectedChangeToDictionary()
+    {
+        if (SelectedChange is null)
+        {
+            return;
+        }
+
+        UnknownValue unknown = UnknownValueCollector.Collect([SelectedChange]).FirstOrDefault()
+            ?? new UnknownValue(
+                SelectedChange.BeforeText,
+                DictionaryEditor.SuggestCategory(SelectedChange.Field),
+                1,
+                [SelectedChange.Field],
+                SelectedChange.RelativePath,
+                [SelectedChange.RuleId]);
+
+        AddToDictionary(unknown);
+    }
+
+    /// <summary>
+    /// 追加ダイアログを開き、確定したら辞書を保存して再検査する。
+    /// </summary>
+    private void AddToDictionary(UnknownValue unknown)
+    {
+        if (!Dictionary.ConfirmDiscardIfDirty())
+        {
+            return;
+        }
+
+        AddToDictionaryViewModel viewModel = new(_dictionaryStore.Dictionary, _dictionaryStore.Index, unknown);
+
+        AddToDictionaryWindow window = new(viewModel)
+        {
+            Owner = Application.Current?.MainWindow,
+        };
+
+        if (window.ShowDialog() != true)
+        {
+            return;
+        }
+
+        try
+        {
+            TagDictionary edited = viewModel.Apply();
+
+            IReadOnlyList<DictionaryIssue> issues = DictionaryValidator.Validate(edited);
+
+            if (DictionaryValidator.HasError(issues))
+            {
+                // 索引に載らない登録をさせない。理由を出して中止する。
+                MessageBox.Show(
+                    "この内容では辞書に登録できません。"
+                    + Environment.NewLine + Environment.NewLine
+                    + string.Join(
+                        Environment.NewLine,
+                        issues.Where(issue => issue.Severity == DictionaryIssueSeverity.Error).Select(issue => issue.Summary)),
+                    "辞書に登録できません",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+
+                return;
+            }
+
+            _dictionaryStore.Save(edited);
+            Dictionary.ReloadFromStore();
+
+            Log.Information(
+                "辞書に追加した value={Value} category={Category} 件数={Count}",
+                unknown.Value,
+                unknown.Category,
+                unknown.Count);
+
+            RunInspection();
+
+            StatusText = $"「{unknown.Value}」を辞書に登録して再検査しました。 {InspectionSummary}";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"辞書への追加に失敗しました: {ex.Message}";
+            Log.Error(ex, "辞書への追加に失敗した value={Value}", unknown.Value);
+        }
+    }
+
+    /// <summary>
+    /// 検査結果を CSV に書き出す（docs/SPEC.md 5.1）。
+    ///
+    /// 明細と集計の 2 ファイルを出す。集計は全体像を先に掴むため、明細は 1 行ずつ確認するため。
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanExportCsv))]
+    private void ExportCsv()
+    {
+        if (_lastInspection is null)
+        {
+            return;
+        }
+
+        SaveFileDialog dialog = new()
+        {
+            Title = "検査結果を CSV に書き出す",
+            FileName = $"musicTagger-changes-{DateTime.Now:yyyyMMddHHmmss}.csv",
+            Filter = "CSV ファイル|*.csv",
+            DefaultExt = ".csv",
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        try
+        {
+            string summaryPath = BuildSummaryPath(dialog.FileName);
+
+            ChangeCsvExporter.WriteFile(dialog.FileName, _lastInspection.AllChanges);
+            File.WriteAllText(
+                summaryPath,
+                ChangeCsvExporter.BuildSummary(_lastInspection.AllChanges),
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+
+            StatusText = string.Create(
+                CultureInfo.CurrentCulture,
+                $"CSV を書き出しました（{_lastInspection.TotalChanges:N0} 件）: ")
+                + $"{Path.GetFileName(dialog.FileName)} / {Path.GetFileName(summaryPath)}";
+
+            Log.Information(
+                "CSV を書き出した path={Path} summary={Summary} 件数={Count}",
+                dialog.FileName,
+                summaryPath,
+                _lastInspection.TotalChanges);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"CSV の書き出しに失敗しました: {ex.Message}";
+            Log.Error(ex, "CSV の書き出しに失敗した path={Path}", dialog.FileName);
+        }
+    }
+
+    /// <summary>
+    /// 集計 CSV のパスを組み立てる。明細と並べて置く。
+    /// </summary>
+    private static string BuildSummaryPath(string detailPath)
+    {
+        string directory = Path.GetDirectoryName(detailPath) ?? string.Empty;
+
+        return Path.Combine(
+            directory,
+            Path.GetFileNameWithoutExtension(detailPath) + "-summary" + Path.GetExtension(detailPath));
+    }
+
+    /// <summary>未知の値を辞書に足せるか。</summary>
+    private bool CanAddUnknownValueToDictionary()
+    {
+        return !IsScanning && SelectedUnknownValue is not null;
+    }
+
+    /// <summary>選択中の明細を辞書に足せるか。</summary>
+    private bool CanAddSelectedChangeToDictionary()
+    {
+        return !IsScanning && SelectedChange is not null && !SelectedChange.HasFix;
+    }
+
+    /// <summary>CSV を書き出せるか。</summary>
+    private bool CanExportCsv()
+    {
+        return _lastInspection is not null;
+    }
+
+    /// <summary>
     /// 選択したルールの差分明細を下段に出す。
     /// </summary>
     partial void OnSelectedRuleChanged(RuleResultViewModel? value)
     {
         InspectionChanges.Clear();
+        SelectedChange = null;
 
         if (value is null)
         {
@@ -707,9 +988,13 @@ public sealed partial class MainViewModel : ObservableObject
         FolderTree.Clear();
         RuleResults.Clear();
         InspectionChanges.Clear();
+        UnknownValues.Clear();
         ApplyIssues.Clear();
         InspectionSummary = "「検査」を押すと原則違反を洗い出します。";
+        UnknownValueSummary = "検査すると、辞書に無い値がここに集まります。";
         CanApplyChanges = false;
+        HasInspectionResult = false;
+        SelectedChange = null;
         _lastInspection = null;
         ProgressValue = 0;
         ProgressMaximum = 1;

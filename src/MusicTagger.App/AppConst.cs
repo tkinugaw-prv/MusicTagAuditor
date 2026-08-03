@@ -17,6 +17,16 @@ public static class AppConst
     /// <summary>ログの保存世代数。</summary>
     public const int LOG_RETAINED_FILE_COUNT = 14;
 
+    /// <summary>同梱の既定辞書のファイル名。</summary>
+    public const string BUNDLED_DICTIONARY_FILE_NAME = "default-dictionary.json";
+
+    /// <summary>リポジトリ内での既定辞書の位置。</summary>
+    private static readonly string[] BUNDLED_DICTIONARY_SEGMENTS =
+        ["src", "MusicTagger.Core", "Dictionary", BUNDLED_DICTIONARY_FILE_NAME];
+
+    /// <summary>開発中に上へ辿る最大の段数。</summary>
+    private const int BUNDLED_DICTIONARY_SEARCH_DEPTH = 8;
+
     /// <summary>
     /// 設定・辞書の保存先（<c>%APPDATA%\musicTagger</c>）。docs/SPEC.md 7.1。
     /// </summary>
@@ -38,5 +48,32 @@ public static class AppConst
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             APP_FOLDER_NAME,
             "logs");
+    }
+
+    /// <summary>
+    /// リポジトリ内の既定辞書を探す。
+    ///
+    /// 既定辞書は埋め込みリソースなので、実行中のアセンブリから書き戻すことはできない。
+    /// 開発中に「育てた辞書を同梱側へ戻す」ための書き出し先の初期値として、
+    /// 実行ディレクトリから上へ辿ってソースを探す。配布物では見つからず null を返す。
+    /// </summary>
+    /// <returns>既定辞書の絶対パス。見つからなければ null。</returns>
+    public static string? FindBundledDictionaryPath()
+    {
+        DirectoryInfo? directory = new(AppContext.BaseDirectory);
+
+        for (int depth = 0; depth < BUNDLED_DICTIONARY_SEARCH_DEPTH && directory is not null; depth++)
+        {
+            string candidate = Path.Combine([directory.FullName, .. BUNDLED_DICTIONARY_SEGMENTS]);
+
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            directory = directory.Parent;
+        }
+
+        return null;
     }
 }
