@@ -90,6 +90,15 @@ public sealed record EnsembleEntry
     /// <summary>時代分割を行わない個別例外（5.3.2）。</summary>
     public bool NoEraSplit { get; init; }
 
+    /// <summary>
+    /// 指揮者を置かない団体か（合奏団・弦楽四重奏団など）。
+    ///
+    /// この団体の録音では <c>conductor</c> が空なのが正しい（docs/TAGGING_POLICY.md 2.2）。
+    /// **立てないと R-402 が誤検出する。** 実ライブラリでは I Musici と Smetana Quartet が該当し、
+    /// 合わせて 22 件になる（docs/library-baseline-2026-08-03.md）。
+    /// </summary>
+    public bool NoConductor { get; init; }
+
     /// <summary>ラテン文字の別表記・誤記。</summary>
     public IReadOnlyList<string> Aliases { get; init; } = [];
 

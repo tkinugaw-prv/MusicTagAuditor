@@ -12,10 +12,22 @@ namespace MusicTagger.Core.Inspection;
 public sealed class InspectionOptions
 {
     /// <summary>
-    /// R-304（曲名中のウムラウト欠落）を有効にするか。
-    /// 誤検出が増えるため既定で無効（docs/SPEC.md 6.2）。
+    /// 既定で無効なルールのうち、利用者が明示的に有効にしたもの。
+    ///
+    /// 誤検出が増えるルールは既定で無効にし、選んだときだけ動かす（docs/SPEC.md 6.2）。
+    /// 現在の対象は R-304（曲名中の発音区別符号の欠落）。
     /// </summary>
-    public bool EnableUmlautCheck { get; init; }
+    public IReadOnlySet<string> EnabledOptionalRuleIds { get; init; } = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// 既定で無効なルールが有効にされているかを返す。
+    /// </summary>
+    /// <param name="ruleId">ルール ID。</param>
+    /// <returns>有効なら true。</returns>
+    public bool IsEnabled(string ruleId)
+    {
+        return EnabledOptionalRuleIds.Contains(ruleId);
+    }
 }
 
 /// <summary>

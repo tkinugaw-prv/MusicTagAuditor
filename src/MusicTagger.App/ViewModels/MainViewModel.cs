@@ -14,6 +14,7 @@ using MusicTagger.Core.Dictionary;
 using MusicTagger.Core.Editing;
 using MusicTagger.Core.Export;
 using MusicTagger.Core.Inspection;
+using MusicTagger.Core.Inspection.Rules;
 using MusicTagger.Core.Models;
 using MusicTagger.Core.Scanning;
 using MusicTagger.TagIo;
@@ -146,6 +147,13 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>未知の値の要約。</summary>
     [ObservableProperty]
     private string _unknownValueSummary = "検査すると、辞書に無い値がここに集まります。";
+
+    /// <summary>
+    /// R-304（曲名中の発音区別符号の欠落）を有効にするか。
+    /// 誤検出が増えるため既定で無効（docs/SPEC.md 6.2）。
+    /// </summary>
+    [ObservableProperty]
+    private bool _enableDiacriticCheck;
 
     /// <summary>ファイル一覧の絞り込み文字列（docs/SPEC.md 5.2）。</summary>
     [ObservableProperty]
@@ -565,7 +573,14 @@ public sealed partial class MainViewModel : ObservableObject
 
         try
         {
-            InspectionContext context = new(_lastScan, _dictionaryStore.Index);
+            InspectionOptions options = new()
+            {
+                EnabledOptionalRuleIds = EnableDiacriticCheck
+                    ? new HashSet<string>(StringComparer.Ordinal) { DiacriticMissingRule.RULE_ID }
+                    : new HashSet<string>(StringComparer.Ordinal),
+            };
+
+            InspectionContext context = new(_lastScan, _dictionaryStore.Index, options);
             InspectionResult result = _inspectionEngine.Inspect(context);
 
             foreach (RuleResult rule in result.Results.Where(rule => rule.Changes.Count > 0))

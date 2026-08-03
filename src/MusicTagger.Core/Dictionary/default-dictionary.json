@@ -104,7 +104,8 @@
   "_ensemblesComment": [
     "eras を持つ団体は録音年で正規形が変わる（5.3.1）。これは表記揺れではないので片寄せしない。",
     "同一性は entityId で判断する。名前が似ていても別実体、名前が違っても同一実体がある。",
-    "date が空欄で eras を持つ団体は HOLD_ERA_UNKNOWN として保留する（7.5）。"
+    "date が空欄で eras を持つ団体は HOLD_ERA_UNKNOWN として保留する（7.5）。",
+    "noConductor は指揮者を置かない団体（合奏団・弦楽四重奏団）。conductor が空なのが正しい（2.2）。"
   ],
 
   "ensembles": [
@@ -208,8 +209,8 @@
     { "entityId": "il-ipo", "canonical": "Israel Philharmonic Orchestra", "aliases": [], "aliasesJa": ["イスラエル・フィルハーモニー管弦楽団"] },
     { "entityId": "jp-new-japan-phil", "canonical": "New Japan Philharmonic", "aliases": [], "aliasesJa": ["新日本フィルハーモニー交響楽団", "新日本フィル"] },
     { "entityId": "jp-osaka-phil", "canonical": "Osaka Philharmonic Orchestra", "aliases": [], "aliasesJa": ["大阪フィルハーモニー交響楽団", "大阪フィル"] },
-    { "entityId": "it-i-musici", "canonical": "I Musici", "aliases": [], "aliasesJa": ["イ・ムジチ合奏団", "イ・ムジチ"] },
-    { "entityId": "cz-smetana-quartet", "canonical": "Smetana Quartet", "aliases": ["Smetana String Quartet"], "aliasesJa": ["スメタナ四重奏団"] },
+    { "entityId": "it-i-musici", "canonical": "I Musici", "noConductor": true, "aliases": [], "aliasesJa": ["イ・ムジチ合奏団", "イ・ムジチ"] },
+    { "entityId": "cz-smetana-quartet", "canonical": "Smetana Quartet", "noConductor": true, "aliases": ["Smetana String Quartet"], "aliasesJa": ["スメタナ四重奏団"] },
     { "entityId": "de-muenchener-bach-chor", "canonical": "Münchener Bach-Chor", "aliases": [], "aliasesJa": ["ミュンヘン・バッハ合唱団"] },
     { "entityId": "de-muenchener-bach-orchester", "canonical": "Münchener Bach-Orchester", "aliases": [], "aliasesJa": ["ミュンヘン・バッハ管弦楽団"] }
   ],

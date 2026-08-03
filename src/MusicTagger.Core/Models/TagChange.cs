@@ -115,10 +115,13 @@ public sealed record TagChange(
     /// <summary>
     /// 判定区分。差分プレビューの色分けに使う（docs/SPEC.md 5.3）。
     ///
-    /// チェック状態と区分がずれないよう、修正値の有無で判定する。
+    /// **<see cref="IsSelected"/> の既定値と同じ条件で判定する。**
     /// 「確定」なのにチェックが外れている、という状態を作らない。
+    ///
+    /// 修正値があっても ❓ のものは「要確認」になる。R-303（ファイル名からの補完）と
+    /// R-403（文字化けの削除）が該当し、値は出せるが 1 件ずつ人間が見て決める必要がある。
     /// </summary>
     public string Classification => HoldReason != HoldReason.None
         ? "保留"
-        : HasFix ? "確定" : "要確認";
+        : HasFix && Severity != Severity.Info ? "確定" : "要確認";
 }
