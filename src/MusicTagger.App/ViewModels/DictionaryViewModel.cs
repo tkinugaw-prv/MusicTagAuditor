@@ -93,6 +93,7 @@ public sealed partial class DictionaryViewModel : ObservableObject
         _store = store;
 
         Load();
+        CheckForUpdates();
     }
 
     /// <summary>辞書を保存したときに発火する。検査をやり直すために使う。</summary>
@@ -118,6 +119,35 @@ public sealed partial class DictionaryViewModel : ObservableObject
 
     /// <summary>辞書ファイルのパス。</summary>
     public string FilePath => _store.FilePath;
+
+    /// <summary>
+    /// 同梱の既定辞書から取り込める件数。
+    ///
+    /// 起動時に数えておく。**気づけないと、アプリ側でルールの誤検出を直しても
+    /// 既存の利用者には届かない。** 実際に段階 7 の <c>noConductor</c> がそうなっていた。
+    /// </summary>
+    [ObservableProperty]
+    private int _pendingMergeCount;
+
+    /// <summary>
+    /// 同梱の既定辞書との差分を数える。**比較に失敗しても起動は妨げない。**
+    /// </summary>
+    private void CheckForUpdates()
+    {
+        try
+        {
+            PendingMergeCount = _store.BuildMergePlan().Count;
+
+            if (PendingMergeCount > 0)
+            {
+                StatusText = $"既定辞書に {PendingMergeCount:N0} 件の更新があります。「既定辞書から取り込む」で反映できます。";
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "既定辞書との比較に失敗した");
+        }
+    }
 
     /// <summary>
     /// ストアの内容を読み直して編集行を作り直す。
@@ -265,6 +295,96 @@ public sealed partial class DictionaryViewModel : ObservableObject
         {
             StatusText = $"書き出しに失敗しました: {ex.Message}";
             Log.Error(ex, "既定辞書の書き出しに失敗した path={Path}", dialog.FileName);
+        }
+    }
+
+    /// <summary>
+    /// 同梱の既定辞書から差分を取り込む。
+    ///
+    /// 利用者辞書は初回起動時にコピーされたきり更新されないため、アプリ側に足した
+    /// エントリや設定はこの導線でしか届かない。**取り込む前に必ず一覧を見せる。**
+    /// </summary>
+    [RelayCommand]
+    private void MergeFromDefault()
+    {
+        if (!ConfirmDiscardIfDirty())
+        {
+            return;
+        }
+
+        IReadOnlyList<DictionaryMergeItem> plan;
+
+        try
+        {
+            plan = _store.BuildMergePlan();
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"既定辞書との比較に失敗しました: {ex.Message}";
+            Log.Error(ex, "既定辞書との比較に失敗した");
+
+            return;
+        }
+
+        if (plan.Count == 0)
+        {
+            StatusText = "既定辞書との差分はありません。";
+            return;
+        }
+
+        MergeDictionaryWindow window = new(plan)
+        {
+            Owner = Application.Current?.MainWindow,
+        };
+
+        if (window.ShowDialog() != true)
+        {
+            return;
+        }
+
+        ApplyMerge([.. window.Items]);
+    }
+
+    /// <summary>
+    /// 取り込みを実行して保存する。
+    /// </summary>
+    private void ApplyMerge(IReadOnlyList<DictionaryMergeItem> items)
+    {
+        try
+        {
+            TagDictionary merged = _store.Merge(items);
+
+            RefreshIssues(merged);
+
+            if (DictionaryValidator.HasError(Issues))
+            {
+                MessageBox.Show(
+                    "取り込むと辞書に問題が生じます。下の一覧を確認してください。"
+                    + Environment.NewLine + Environment.NewLine
+                    + "取り込みは中止しました。",
+                    "取り込めません",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+
+                return;
+            }
+
+            _store.Save(merged);
+            Load();
+
+            PendingMergeCount = _store.BuildMergePlan().Count;
+
+            int applied = items.Count(item => item.IsSelected);
+
+            StatusText = $"既定辞書から {applied:N0} 件を取り込みました。";
+            Log.Information("既定辞書から取り込んだ 件数={Count} 版={Version}", applied, merged.Version);
+
+            Saved?.Invoke(this, EventArgs.Empty);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"取り込みに失敗しました: {ex.Message}";
+            Log.Error(ex, "既定辞書からの取り込みに失敗した");
         }
     }
 
