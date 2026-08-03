@@ -3,6 +3,7 @@ using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using MusicTagger.App.ViewModels;
 using MusicTagger.Core.Abstractions;
+using MusicTagger.Core.Applying;
 using MusicTagger.Core.Backup;
 using MusicTagger.Core.Dictionary;
 using MusicTagger.Core.Inspection;
@@ -37,6 +38,7 @@ public partial class App : Application
         services.AddSingleton<LibraryScanner>();
         services.AddSingleton<SnapshotService>();
         services.AddSingleton<RestoreService>();
+        services.AddSingleton<ApplyService>();
         // ルールを明示的に登録する。登録しないと DI は空のコレクションを注入し、
         // 検査が常に 0 件になる（例外も出ないため気づきにくい）。
         foreach (IInspectionRule rule in InspectionEngine.CreateDefaultRules())

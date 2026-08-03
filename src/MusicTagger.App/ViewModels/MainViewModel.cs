@@ -1,9 +1,11 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
+using MusicTagger.Core.Applying;
 using MusicTagger.Core.Backup;
 using MusicTagger.Core.Dictionary;
 using MusicTagger.Core.Inspection;
@@ -16,8 +18,8 @@ namespace MusicTagger.App.ViewModels;
 
 /// <summary>
 /// メインウィンドウのビューモデル。
-/// 段階 2 までの範囲。スキャンと読み取り、一覧表示、バックアップと復元を扱う。
-/// 検査ルールによる一括適用は段階 3 以降（docs/SPEC.md 12章）。
+/// 段階 4 までの範囲。スキャンと読み取り、一覧表示、バックアップと復元、検査と適用を扱う。
+/// 辞書編集と手編集は段階 5 以降（docs/SPEC.md 12章）。
 /// </summary>
 public sealed partial class MainViewModel : ObservableObject
 {
@@ -35,6 +37,12 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>正規化辞書の索引。</summary>
     private readonly DictionaryIndex _dictionary;
+
+    /// <summary>適用処理。</summary>
+    private readonly ApplyService _applyService;
+
+    /// <summary>直近の検査結果。適用対象はここから取る。</summary>
+    private InspectionResult? _lastInspection;
 
     /// <summary>直近のスキャン結果。バックアップの取得元になる。</summary>
     private ScanResult? _lastScan;
@@ -59,6 +67,7 @@ public sealed partial class MainViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(PreviewRestoreCommand))]
     [NotifyCanExecuteChangedFor(nameof(RestoreCommand))]
     [NotifyCanExecuteChangedFor(nameof(InspectCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ApplyCommand))]
     private bool _isScanning;
 
     /// <summary>進捗の現在値。</summary>
@@ -99,6 +108,11 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private string _inspectionSummary = "「検査」を押すと原則違反を洗い出します。";
 
+    /// <summary>適用できる状態か。検査するまでは適用させない。</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ApplyCommand))]
+    private bool _canApplyChanges;
+
     /// <summary>
     /// ビューモデルを初期化する。
     /// </summary>
@@ -107,18 +121,21 @@ public sealed partial class MainViewModel : ObservableObject
     /// <param name="restoreService">復元処理。</param>
     /// <param name="inspectionEngine">検査エンジン。</param>
     /// <param name="dictionary">正規化辞書の索引。</param>
+    /// <param name="applyService">適用処理。</param>
     public MainViewModel(
         LibraryScanner scanner,
         SnapshotService snapshotService,
         RestoreService restoreService,
         InspectionEngine inspectionEngine,
-        DictionaryIndex dictionary)
+        DictionaryIndex dictionary,
+        ApplyService applyService)
     {
         _scanner = scanner;
         _snapshotService = snapshotService;
         _restoreService = restoreService;
         _inspectionEngine = inspectionEngine;
         _dictionary = dictionary;
+        _applyService = applyService;
     }
 
     /// <summary>フォルダツリー。ルートノード 1 件を持つ。</summary>
@@ -141,6 +158,12 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>検査結果タブ下段。選択したルールの差分明細。</summary>
     public ObservableCollection<TagChange> InspectionChanges { get; } = [];
+
+    /// <summary>
+    /// 適用で問題が起きた項目。**不一致が 1 件でもあればここに出す**（docs/SPEC.md 9章）。
+    /// 書き込めたことと意図した値が入っていることは別である。
+    /// </summary>
+    public ObservableCollection<string> ApplyIssues { get; } = [];
 
     /// <summary>
     /// 起動時に指定されたライブラリをそのまま開く。
@@ -395,6 +418,9 @@ public sealed partial class MainViewModel : ObservableObject
 
         RuleResults.Clear();
         InspectionChanges.Clear();
+        ApplyIssues.Clear();
+        CanApplyChanges = false;
+        _lastInspection = null;
 
         try
         {
@@ -406,6 +432,7 @@ public sealed partial class MainViewModel : ObservableObject
                 RuleResults.Add(new RuleResultViewModel(rule));
             }
 
+            _lastInspection = result;
             SelectedRule = RuleResults.FirstOrDefault();
 
             int selected = result.AllChanges.Count(change => change.IsSelected);
@@ -417,6 +444,7 @@ public sealed partial class MainViewModel : ObservableObject
                 + $"（{result.Elapsed.TotalSeconds:F2} 秒）");
 
             StatusText = InspectionSummary;
+            CanApplyChanges = selected > 0;
 
             Log.Information(
                 "検査完了 検出={Total} 選択={Selected} 保留={Holds} 所要={Elapsed}",
@@ -448,6 +476,175 @@ public sealed partial class MainViewModel : ObservableObject
         {
             InspectionChanges.Add(change);
         }
+    }
+
+    /// <summary>
+    /// チェックされた修正案を書き込む。docs/SPEC.md 9章の工程 4〜7。
+    ///
+    /// 適用直前のスナップショットは <see cref="ApplyService"/> が必ず取る。
+    /// 書き込み後の読み戻し照合も同サービスが行い、不一致は握りつぶさず報告する。
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanApply))]
+    private async Task ApplyAsync()
+    {
+        if (_lastScan is null || _lastInspection is null)
+        {
+            return;
+        }
+
+        TagChange[] targets = [.. _lastInspection.AllChanges.Where(change => change.IsSelected && change.HasFix)];
+
+        if (targets.Length == 0)
+        {
+            StatusText = "適用対象がありません。";
+            return;
+        }
+
+        if (!ConfirmApply(targets))
+        {
+            return;
+        }
+
+        IsScanning = true;
+        ApplyIssues.Clear();
+        ProgressValue = 0;
+        ProgressMaximum = 1;
+        StatusText = "適用しています…";
+
+        try
+        {
+            Progress<ApplyProgress> progress = new(report =>
+            {
+                ProgressMaximum = Math.Max(report.Total, 1);
+                ProgressValue = report.Completed;
+            });
+
+            ApplyResult result = await _applyService
+                .ApplyAsync(
+                    _lastScan,
+                    targets,
+                    portableLibraryPath: TagWriter.GetPortableLibraryPath(),
+                    progress: progress)
+                .ConfigureAwait(true);
+
+            ShowApplyResult(result);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"適用に失敗しました: {ex.Message}";
+            Log.Error(ex, "適用に失敗した root={Root}", LibraryRoot);
+        }
+        finally
+        {
+            IsScanning = false;
+        }
+
+        // 適用後の状態で読み直す。古い検査結果を残すと、直したものがまだ出ているように見える。
+        await ScanAsync().ConfigureAwait(true);
+        RefreshBackups();
+    }
+
+    /// <summary>
+    /// 適用してよいかを確認する。書き込みは取り消しにくいので、件数と内訳を示してから実行する。
+    /// </summary>
+    private static bool ConfirmApply(IReadOnlyList<TagChange> targets)
+    {
+        string breakdown = string.Join(
+            Environment.NewLine,
+            targets.GroupBy(change => change.RuleId)
+                .OrderBy(group => group.Key, StringComparer.Ordinal)
+                .Select(group => $"  {group.Key}  {group.Count():N0} 項目"));
+
+        int fileCount = targets
+            .Select(change => change.RelativePath)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+
+        string message = string.Create(
+            CultureInfo.CurrentCulture,
+            $"{fileCount:N0} ファイルに {targets.Count:N0} 項目を書き込みます。")
+            + Environment.NewLine + Environment.NewLine
+            + breakdown
+            + Environment.NewLine + Environment.NewLine
+            + "書き込みの直前にタグのスナップショットを自動で取ります。"
+            + Environment.NewLine
+            + "適用後は全項目を読み戻して照合します。";
+
+        return MessageBox.Show(
+            message,
+            "タグを適用しますか？",
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Warning,
+            MessageBoxResult.Cancel) == MessageBoxResult.OK;
+    }
+
+    /// <summary>
+    /// 適用結果を画面とログに出す。**不一致は必ず知らせる。**
+    /// </summary>
+    private void ShowApplyResult(ApplyResult result)
+    {
+        foreach (ApplyFailure failure in result.Failures)
+        {
+            ApplyIssues.Add($"[書き込み失敗] {failure.RelativePath} — {failure.Message}");
+        }
+
+        foreach (VerificationMismatch mismatch in result.Mismatches)
+        {
+            ApplyIssues.Add($"[読み戻し不一致] {mismatch.Summary}");
+        }
+
+        foreach (ApplyConflict conflict in result.Conflicts)
+        {
+            ApplyIssues.Add($"[修正案の競合] {conflict.Summary}");
+        }
+
+        string summary = string.Create(
+            CultureInfo.CurrentCulture,
+            $"適用しました。{result.SucceededFiles:N0} / {result.AttemptedFiles:N0} ファイル、{result.AppliedChanges:N0} 項目。")
+            + $" バックアップ: {Path.GetFileName(result.BackupDirectory)}";
+
+        if (!result.IsClean)
+        {
+            summary += $" ⚠ 要確認 {ApplyIssues.Count} 件";
+        }
+
+        StatusText = summary;
+        InspectionSummary = summary;
+
+        Log.Information(
+            "適用完了 対象={Attempted} 成功={Succeeded} 項目={Applied} 失敗={Failures} 不一致={Mismatches} 競合={Conflicts} backup={Backup}",
+            result.AttemptedFiles,
+            result.SucceededFiles,
+            result.AppliedChanges,
+            result.Failures.Count,
+            result.Mismatches.Count,
+            result.Conflicts.Count,
+            result.BackupDirectory);
+
+        foreach (string issue in ApplyIssues)
+        {
+            Log.Warning("適用の要確認項目 {Issue}", issue);
+        }
+
+        if (result.IsClean)
+        {
+            return;
+        }
+
+        // 書き込めたことと意図した値が入っていることは別。黙って終わらせない。
+        MessageBox.Show(
+            $"{ApplyIssues.Count} 件の要確認項目があります。検査結果タブの下部に一覧を表示しました。"
+            + Environment.NewLine + Environment.NewLine
+            + $"適用前の状態は「{Path.GetFileName(result.BackupDirectory)}」から復元できます。",
+            "適用は完了しましたが確認が必要です",
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
+    }
+
+    /// <summary>適用できるか。</summary>
+    private bool CanApply()
+    {
+        return !IsScanning && CanApplyChanges;
     }
 
     /// <summary>検査を実行できるか。</summary>
@@ -510,7 +707,10 @@ public sealed partial class MainViewModel : ObservableObject
         FolderTree.Clear();
         RuleResults.Clear();
         InspectionChanges.Clear();
+        ApplyIssues.Clear();
         InspectionSummary = "「検査」を押すと原則違反を洗い出します。";
+        CanApplyChanges = false;
+        _lastInspection = null;
         ProgressValue = 0;
         ProgressMaximum = 1;
         StatusText = "スキャンしています…";

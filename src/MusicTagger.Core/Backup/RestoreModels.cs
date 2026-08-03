@@ -46,20 +46,6 @@ public sealed record RestorePlan(
 public sealed record RestoreFailure(string RelativePath, string Message);
 
 /// <summary>
-/// 書き込んだが意図した値になっていなかった項目。
-/// 書き込みの成功と、意図した値が入っていることは別である（docs/TAGGING_POLICY.md 7.3）。
-/// </summary>
-/// <param name="RelativePath">対象ファイル。</param>
-/// <param name="Field">対象フィールド。</param>
-/// <param name="Expected">書こうとした値。</param>
-/// <param name="Actual">読み戻した値。</param>
-public sealed record VerificationMismatch(
-    string RelativePath,
-    TagField Field,
-    IReadOnlyList<string> Expected,
-    IReadOnlyList<string> Actual);
-
-/// <summary>
 /// 復元の結果。
 /// </summary>
 /// <param name="AttemptedFiles">書き込みを試みたファイル数。</param>
