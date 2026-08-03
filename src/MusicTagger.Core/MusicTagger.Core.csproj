@@ -9,6 +9,8 @@
   <ItemGroup>
     <!-- アプリ無しで復元するための PowerShell。スナップショットと一緒に書き出す。 -->
     <EmbeddedResource Include="Backup\restore-tags.ps1" />
+    <!-- 既定の正規化辞書。初回起動時に %APPDATA%\musicTagger へコピーする。 -->
+    <EmbeddedResource Include="Dictionary\default-dictionary.json" />
   </ItemGroup>
 
 </Project>

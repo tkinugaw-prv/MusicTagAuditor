@@ -111,17 +111,17 @@ public sealed class LibraryScannerTests : IDisposable
         CreateFile("02.m4a");
         CreateFile("03.m4a");
 
-        List<ScanProgress> reports = [];
-        Progress<ScanProgress> progress = new(report => reports.Add(report));
+        // Progress<T> は同期コンテキストへ非同期に流すため、通知の到着時刻も順序も保証されない。
+        // ここで確かめたいのは「スキャナが全件分を通知するか」なので、同期的に記録する実装を渡す。
+        RecordingProgress progress = new();
 
         await new LibraryScanner(new FakeTagReader(), new ScanOptions { MaxDegreeOfParallelism = 1 })
             .ScanAsync(_root, progress);
 
-        // Progress<T> は同期コンテキストへ非同期に流すため、通知が届くまで待つ。
-        await WaitUntilAsync(() => reports.Count == 3);
+        IReadOnlyList<ScanProgress> reports = progress.Reports;
 
         Assert.All(reports, report => Assert.Equal(3, report.Total));
-        Assert.Equal(3, reports[^1].Completed);
+        Assert.Equal([1, 2, 3], reports.Select(report => report.Completed).Order());
     }
 
     /// <summary>
@@ -173,13 +173,35 @@ public sealed class LibraryScannerTests : IDisposable
     }
 
     /// <summary>
-    /// 条件が満たされるまで短く待つ。
+    /// 進捗を同期的に記録する。並列読み取りから呼ばれるためロックで保護する。
     /// </summary>
-    private static async Task WaitUntilAsync(Func<bool> condition)
+    private sealed class RecordingProgress : IProgress<ScanProgress>
     {
-        for (int i = 0; i < 100 && !condition(); i++)
+        /// <summary>記録した通知。</summary>
+        private readonly List<ScanProgress> _reports = [];
+
+        /// <summary>排他用。</summary>
+        private readonly Lock _gate = new();
+
+        /// <summary>記録した通知のコピー。</summary>
+        public IReadOnlyList<ScanProgress> Reports
         {
-            await Task.Delay(10);
+            get
+            {
+                lock (_gate)
+                {
+                    return [.. _reports];
+                }
+            }
+        }
+
+        /// <inheritdoc />
+        public void Report(ScanProgress value)
+        {
+            lock (_gate)
+            {
+                _reports.Add(value);
+            }
         }
     }
 

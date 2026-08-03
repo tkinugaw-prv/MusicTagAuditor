@@ -4,6 +4,8 @@ using Microsoft.Extensions.DependencyInjection;
 using MusicTagger.App.ViewModels;
 using MusicTagger.Core.Abstractions;
 using MusicTagger.Core.Backup;
+using MusicTagger.Core.Dictionary;
+using MusicTagger.Core.Inspection;
 using MusicTagger.Core.Scanning;
 using MusicTagger.TagIo;
 using Serilog;
@@ -35,12 +37,26 @@ public partial class App : Application
         services.AddSingleton<LibraryScanner>();
         services.AddSingleton<SnapshotService>();
         services.AddSingleton<RestoreService>();
+        // ルールを明示的に登録する。登録しないと DI は空のコレクションを注入し、
+        // 検査が常に 0 件になる（例外も出ないため気づきにくい）。
+        foreach (IInspectionRule rule in InspectionEngine.CreateDefaultRules())
+        {
+            services.AddSingleton(rule);
+        }
+
+        services.AddSingleton<InspectionEngine>();
+
+        // 辞書は %APPDATA%\musicTagger に置く。初回は同梱の既定辞書がコピーされる。
+        services.AddSingleton(_ => new DictionaryIndex(
+            DictionaryLoader.LoadOrCreate(AppConst.GetAppDataDirectory())));
         services.AddSingleton<MainViewModel>();
         services.AddSingleton<MainWindow>();
 
         _services = services.BuildServiceProvider();
 
-        Log.Information("musicTagger を起動した");
+        InspectionEngine engine = _services.GetRequiredService<InspectionEngine>();
+
+        Log.Information("musicTagger を起動した 検査ルール={RuleCount} 件", engine.RuleCount);
 
         _services.GetRequiredService<MainWindow>().Show();
 

@@ -23,6 +23,7 @@
         <Button Content="フォルダを開く" Command="{Binding OpenLibraryCommand}" Padding="12,4" Margin="0,0,8,0" />
         <Button Content="再スキャン" Command="{Binding RescanCommand}" Padding="12,4" Margin="0,0,8,0" />
         <Button Content="中止" Command="{Binding CancelScanCommand}" Padding="12,4" Margin="0,0,16,0" />
+        <Button Content="検査" Command="{Binding InspectCommand}" Padding="12,4" Margin="0,0,8,0" FontWeight="Bold" />
         <Button Content="バックアップ" Command="{Binding CreateBackupCommand}" Padding="12,4" Margin="0,0,12,0" />
         <TextBlock Text="{Binding LibraryRoot, TargetNullValue='(未選択)'}"
                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="#333333" />
@@ -62,6 +63,74 @@
       <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch" Background="#EEEEEE" />
 
       <TabControl Grid.Column="2" Margin="4">
+
+        <TabItem Header="検査結果">
+          <Grid>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="200" MinHeight="100" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- 上段: ルール別の集計 -->
+            <DataGrid Grid.Row="0"
+                      ItemsSource="{Binding RuleResults}"
+                      SelectedItem="{Binding SelectedRule}"
+                      AutoGenerateColumns="False"
+                      SelectionMode="Single"
+                      GridLinesVisibility="Horizontal">
+              <DataGrid.Columns>
+                <DataGridCheckBoxColumn Header="適用" Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="50" />
+                <DataGridTextColumn Header="" Binding="{Binding SeverityMark}" IsReadOnly="True" Width="34" />
+                <DataGridTextColumn Header="ID" Binding="{Binding RuleId}" IsReadOnly="True" Width="70" />
+                <DataGridTextColumn Header="内容" Binding="{Binding Description}" IsReadOnly="True" Width="*" />
+                <DataGridTextColumn Header="検出" Binding="{Binding Count}" IsReadOnly="True" Width="70" />
+                <DataGridTextColumn Header="修正可" Binding="{Binding FixableCount}" IsReadOnly="True" Width="70" />
+                <DataGridTextColumn Header="保留" Binding="{Binding HoldCount}" IsReadOnly="True" Width="60" />
+              </DataGrid.Columns>
+            </DataGrid>
+
+            <Border Grid.Row="1" Padding="0,8" BorderBrush="#DDDDDD" BorderThickness="0,1,0,1" Margin="0,4">
+              <TextBlock Text="{Binding InspectionSummary}" TextWrapping="Wrap" />
+            </Border>
+
+            <!-- 下段: 差分プレビュー。根拠列を必ず持つ（docs/SPEC.md 5.3） -->
+            <DataGrid Grid.Row="2"
+                      ItemsSource="{Binding InspectionChanges}"
+                      AutoGenerateColumns="False"
+                      CanUserSortColumns="True"
+                      EnableRowVirtualization="True"
+                      GridLinesVisibility="Horizontal">
+
+              <DataGrid.RowStyle>
+                <Style TargetType="DataGridRow">
+                  <Style.Triggers>
+                    <!-- 判定区分で色を変える（確定 / 要確認 / 保留） -->
+                    <DataTrigger Binding="{Binding Classification}" Value="確定">
+                      <Setter Property="Background" Value="#EAF7EA" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding Classification}" Value="要確認">
+                      <Setter Property="Background" Value="#FFF6E5" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding Classification}" Value="保留">
+                      <Setter Property="Background" Value="#EDEDED" />
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </DataGrid.RowStyle>
+
+              <DataGrid.Columns>
+                <DataGridCheckBoxColumn Header="適用" Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="50" />
+                <DataGridTextColumn Header="区分" Binding="{Binding Classification}" IsReadOnly="True" Width="60" />
+                <DataGridTextColumn Header="パス" Binding="{Binding RelativePath}" IsReadOnly="True" Width="280" />
+                <DataGridTextColumn Header="タグ" Binding="{Binding Field}" IsReadOnly="True" Width="100" />
+                <DataGridTextColumn Header="変更前" Binding="{Binding BeforeText}" IsReadOnly="True" Width="200" />
+                <DataGridTextColumn Header="変更後" Binding="{Binding AfterText}" IsReadOnly="True" Width="200" />
+                <DataGridTextColumn Header="根拠" Binding="{Binding Rationale}" IsReadOnly="True" Width="*" />
+              </DataGrid.Columns>
+            </DataGrid>
+          </Grid>
+        </TabItem>
 
         <TabItem Header="ファイル一覧">
           <DataGrid ItemsSource="{Binding Tracks}"
