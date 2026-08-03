@@ -34,6 +34,7 @@ public static class ChangeCsvExporter
         [Severity.Error] = "エラー",
         [Severity.Warning] = "警告",
         [Severity.Info] = "要確認",
+        [Severity.Manual] = "手編集",
     };
 
     /// <summary>

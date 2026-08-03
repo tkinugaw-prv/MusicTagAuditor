@@ -9,6 +9,7 @@
   <Window.Resources>
     <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
     <conv:CountToVisibilityConverter x:Key="CountToVisibility" />
+    <conv:TagFieldLabelConverter x:Key="TagFieldLabel" />
 
     <!-- フォルダツリー。子フォルダを再帰的に展開する。 -->
     <HierarchicalDataTemplate DataType="{x:Type vm:FolderNodeViewModel}"
@@ -204,45 +205,143 @@
           </Grid>
         </TabItem>
 
+        <!-- ファイル一覧。手編集はここで行う（docs/SPEC.md 5.2） -->
         <TabItem Header="ファイル一覧">
-          <DataGrid ItemsSource="{Binding Tracks}"
-                    AutoGenerateColumns="False"
-                    IsReadOnly="True"
-                    CanUserSortColumns="True"
-                    EnableRowVirtualization="True"
-                    EnableColumnVirtualization="True"
-                    GridLinesVisibility="Horizontal"
-                    HeadersVisibility="Column"
-                    SelectionMode="Extended">
+          <Grid>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" MinHeight="120" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="150" MinHeight="60" />
+            </Grid.RowDefinitions>
 
-            <DataGrid.RowStyle>
-              <Style TargetType="DataGridRow">
-                <Setter Property="ToolTip" Value="{Binding SplitValueSummary}" />
-                <Style.Triggers>
-                  <!-- 複数値として格納されている行は、表示上は連結されて見えるため色で区別する -->
-                  <DataTrigger Binding="{Binding HasSplitValues}" Value="True">
-                    <Setter Property="Background" Value="#FFF6E5" />
-                  </DataTrigger>
-                </Style.Triggers>
-              </Style>
-            </DataGrid.RowStyle>
+            <!-- 絞り込みと一括入力 -->
+            <StackPanel Grid.Row="0" Margin="0,0,0,6">
+              <DockPanel>
+                <TextBlock DockPanel.Dock="Left" Text="絞り込み" VerticalAlignment="Center" Margin="0,0,6,0" />
+                <CheckBox DockPanel.Dock="Right" Content="編集した行のみ" VerticalAlignment="Center"
+                          IsChecked="{Binding ShowOnlyEditedTracks}" Margin="12,0,0,0" />
+                <CheckBox DockPanel.Dock="Right" Content="空欄のある行のみ" VerticalAlignment="Center"
+                          IsChecked="{Binding ShowOnlyEmptyFields}" Margin="12,0,0,0" />
+                <TextBox Text="{Binding TrackFilterText, UpdateSourceTrigger=PropertyChanged}" Padding="4"
+                         ToolTip="パスとすべてのタグを対象に検索します" />
+              </DockPanel>
 
-            <DataGrid.Columns>
-              <DataGridTextColumn Header="ファイル" Binding="{Binding FileName}" Width="220" />
-              <DataGridTextColumn Header="フォルダ" Binding="{Binding FolderPath}" Width="200" />
-              <DataGridTextColumn Header="形式" Binding="{Binding Format}" Width="60" />
-              <DataGridTextColumn Header="タイトル" Binding="{Binding Title}" Width="240" />
-              <DataGridTextColumn Header="作曲家" Binding="{Binding Composer}" Width="160" />
-              <DataGridTextColumn Header="アーティスト" Binding="{Binding Artist}" Width="160" />
-              <DataGridTextColumn Header="指揮者" Binding="{Binding Conductor}" Width="160" />
-              <DataGridTextColumn Header="アルバムアーティスト" Binding="{Binding AlbumArtist}" Width="200" />
-              <DataGridTextColumn Header="アルバム" Binding="{Binding Album}" Width="220" />
-              <DataGridTextColumn Header="ジャンル" Binding="{Binding Genre}" Width="80" />
-              <DataGridTextColumn Header="年" Binding="{Binding Date}" Width="60" />
-              <DataGridTextColumn Header="トラック" Binding="{Binding TrackNumber}" Width="70" />
-              <DataGridTextColumn Header="ディスク" Binding="{Binding DiscNumber}" Width="70" />
-            </DataGrid.Columns>
-          </DataGrid>
+              <DockPanel Margin="0,6,0,0">
+                <TextBlock DockPanel.Dock="Left" Text="一括入力" VerticalAlignment="Center" Margin="0,0,6,0" FontWeight="Bold" />
+                <ComboBox DockPanel.Dock="Left" Width="160" Margin="0,0,6,0"
+                          ItemsSource="{Binding EditableFields}"
+                          SelectedItem="{Binding BulkField}">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                      <TextBlock Text="{Binding Converter={StaticResource TagFieldLabel}}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+                <Button DockPanel.Dock="Right" Content="選択行に一括入力"
+                        Command="{Binding BulkInputCommand}"
+                        CommandParameter="{Binding SelectedItems, ElementName=TrackGrid}"
+                        Padding="12,4" Margin="6,0,0,0"
+                        ToolTip="選択した行すべてに同じ値を入れます。空欄のまま押すとタグを消します" />
+                <TextBox Text="{Binding BulkValue, UpdateSourceTrigger=PropertyChanged}" Padding="4" />
+              </DockPanel>
+            </StackPanel>
+
+            <DataGrid Grid.Row="1"
+                      x:Name="TrackGrid"
+                      ItemsSource="{Binding Tracks}"
+                      AutoGenerateColumns="False"
+                      CanUserSortColumns="True"
+                      EnableRowVirtualization="True"
+                      EnableColumnVirtualization="True"
+                      GridLinesVisibility="Horizontal"
+                      HeadersVisibility="Column"
+                      SelectionMode="Extended"
+                      SelectionUnit="FullRow">
+
+              <DataGrid.RowStyle>
+                <Style TargetType="DataGridRow">
+                  <Setter Property="ToolTip" Value="{Binding SplitValueSummary}" />
+                  <Style.Triggers>
+                    <!-- 複数値として格納されている行は、表示上は連結されて見えるため色で区別する -->
+                    <DataTrigger Binding="{Binding HasSplitValues}" Value="True">
+                      <Setter Property="Background" Value="#FFF6E5" />
+                    </DataTrigger>
+                    <!-- 保留中の編集がある行。まだファイルには書き込まれていない -->
+                    <DataTrigger Binding="{Binding IsEdited}" Value="True">
+                      <Setter Property="Background" Value="#E8F1FF" />
+                      <Setter Property="FontWeight" Value="Bold" />
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </DataGrid.RowStyle>
+
+              <DataGrid.Columns>
+                <!-- ファイル名・フォルダ・形式は編集できない。リネームは対象外（docs/SPEC.md 2.2） -->
+                <DataGridTextColumn Header="ファイル" Binding="{Binding FileName}" IsReadOnly="True" Width="220" />
+                <DataGridTextColumn Header="フォルダ" Binding="{Binding FolderPath}" IsReadOnly="True" Width="200" />
+                <DataGridTextColumn Header="形式" Binding="{Binding Format}" IsReadOnly="True" Width="60" />
+                <DataGridTextColumn Header="タイトル" Binding="{Binding Title}" Width="240" />
+                <DataGridTextColumn Header="作曲家" Binding="{Binding Composer}" Width="160" />
+                <DataGridTextColumn Header="アーティスト" Binding="{Binding Artist}" Width="160" />
+                <DataGridTextColumn Header="指揮者" Binding="{Binding Conductor}" Width="160" />
+                <DataGridTextColumn Header="アルバムアーティスト" Binding="{Binding AlbumArtist}" Width="200" />
+                <DataGridTextColumn Header="アルバム" Binding="{Binding Album}" Width="220" />
+                <DataGridTextColumn Header="ジャンル" Binding="{Binding Genre}" Width="80" />
+                <DataGridTextColumn Header="年" Binding="{Binding Date}" Width="60" />
+                <DataGridTextColumn Header="トラック" Binding="{Binding TrackNumber}" Width="70" />
+                <DataGridTextColumn Header="ディスク" Binding="{Binding DiscNumber}" Width="70" />
+              </DataGrid.Columns>
+            </DataGrid>
+
+            <Border Grid.Row="2" Padding="0,8" BorderBrush="#DDDDDD" BorderThickness="0,1,0,1" Margin="0,4">
+              <DockPanel>
+                <Button DockPanel.Dock="Left" Content="編集内容を適用"
+                        Command="{Binding ApplyManualEditsCommand}" Padding="12,4" Margin="0,0,8,0" FontWeight="Bold" />
+                <Button DockPanel.Dock="Left" Content="編集を破棄"
+                        Command="{Binding DiscardManualEditsCommand}" Padding="12,4" Margin="0,0,12,0" />
+                <TextBlock Text="{Binding ManualEditSummary}" VerticalAlignment="Center" TextWrapping="Wrap" />
+              </DockPanel>
+            </Border>
+
+            <!-- 気づいてほしい点。止めはしないが黙って通しもしない -->
+            <ItemsControl Grid.Row="3"
+                          ItemsSource="{Binding ManualEditWarnings}"
+                          MaxHeight="110"
+                          Background="#FFF7F0"
+                          Margin="0,0,0,4"
+                          Visibility="{Binding ManualEditWarnings.Count, Converter={StaticResource CountToVisibility}}">
+              <ItemsControl.Template>
+                <ControlTemplate TargetType="ItemsControl">
+                  <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8,6">
+                    <ItemsPresenter />
+                  </ScrollViewer>
+                </ControlTemplate>
+              </ItemsControl.Template>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" Foreground="#8A4B00" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- 保留中の編集。適用前に必ずここで差分を確認できる -->
+            <DataGrid Grid.Row="4"
+                      ItemsSource="{Binding ManualEditChanges}"
+                      AutoGenerateColumns="False"
+                      CanUserSortColumns="True"
+                      GridLinesVisibility="Horizontal">
+              <DataGrid.Columns>
+                <DataGridCheckBoxColumn Header="適用" Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="50" />
+                <DataGridTextColumn Header="パス" Binding="{Binding RelativePath}" IsReadOnly="True" Width="300" />
+                <DataGridTextColumn Header="タグ" Binding="{Binding Field}" IsReadOnly="True" Width="110" />
+                <DataGridTextColumn Header="変更前" Binding="{Binding BeforeText}" IsReadOnly="True" Width="220" />
+                <DataGridTextColumn Header="変更後" Binding="{Binding AfterText}" IsReadOnly="True" Width="220" />
+                <DataGridTextColumn Header="根拠" Binding="{Binding Rationale}" IsReadOnly="True" Width="*" />
+              </DataGrid.Columns>
+            </DataGrid>
+          </Grid>
         </TabItem>
 
         <!-- 辞書（docs/SPEC.md 7.3） -->

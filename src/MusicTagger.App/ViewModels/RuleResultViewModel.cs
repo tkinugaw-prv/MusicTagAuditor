@@ -15,6 +15,9 @@ public sealed partial class RuleResultViewModel : ObservableObject
         [Severity.Error] = "⛔",
         [Severity.Warning] = "⚠",
         [Severity.Info] = "❓",
+
+        // 手編集はルールの結果として現れないが、記号表を引けない重大度を残さない。
+        [Severity.Manual] = "✎",
     };
 
     /// <summary>このルールを一括で選択するか。</summary>

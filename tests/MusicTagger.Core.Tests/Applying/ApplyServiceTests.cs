@@ -1,6 +1,7 @@
 using MusicTagger.Core.Abstractions;
 using MusicTagger.Core.Applying;
 using MusicTagger.Core.Backup;
+using MusicTagger.Core.Editing;
 using MusicTagger.Core.Models;
 using MusicTagger.Core.Scanning;
 
@@ -266,6 +267,74 @@ public sealed class ApplyServiceTests : IDisposable
         Assert.Single(result.Conflicts);
         Assert.Equal(["Classic"], _writer.Writes["01.m4a"][TagField.Genre]);
         Assert.DoesNotContain(TagField.AlbumArtist, _writer.Writes["01.m4a"].Keys);
+    }
+
+    /// <summary>
+    /// **手編集はルールの修正案より優先される**ことを確認する（段階 6）。
+    /// 人間が明示的に入れた値のほうが強い。
+    /// </summary>
+    [Fact]
+    public async Task PrefersManualEditOverRuleProposal()
+    {
+        await _service.ApplyAsync(
+            BuildScan(),
+            [
+                Change("01.m4a", TagField.Conductor, ["Wand"], ["Günter Wand"], "R-202"),
+                Change("01.m4a", TagField.Conductor, ["Wand"], ["Herbert von Karajan"], ManualEditConst.RULE_ID),
+            ]);
+
+        Assert.Equal(["Herbert von Karajan"], _writer.Writes["01.m4a"][TagField.Conductor]);
+    }
+
+    /// <summary>
+    /// 手編集で解消した競合も報告することを確認する。
+    /// どの案を捨てたのかを利用者が知る必要がある。
+    /// </summary>
+    [Fact]
+    public async Task StillReportsConflictResolvedByManualEdit()
+    {
+        ApplyResult result = await _service.ApplyAsync(
+            BuildScan(),
+            [
+                Change("01.m4a", TagField.Conductor, ["Wand"], ["Günter Wand"], "R-202"),
+                Change("01.m4a", TagField.Conductor, ["Wand"], ["Herbert von Karajan"], ManualEditConst.RULE_ID),
+            ]);
+
+        ApplyConflict conflict = Assert.Single(result.Conflicts);
+
+        Assert.True(conflict.IsResolved);
+        Assert.Equal("Herbert von Karajan", conflict.AdoptedValue);
+        Assert.Contains("R-202", conflict.Summary, StringComparison.Ordinal);
+
+        // 捨てた案があるので「問題なく完了」にはしない。
+        Assert.False(result.IsClean);
+    }
+
+    /// <summary>
+    /// 手編集で値を消す指示が書き込まれることを確認する。
+    ///
+    /// 修正案が空であること（ルールの「決められなかった」）と、削除の指示は別物である。
+    /// 空欄にするのは原則が認める操作（docs/TAGGING_POLICY.md 7.4）。
+    /// </summary>
+    [Fact]
+    public async Task AppliesManualClear()
+    {
+        TagChange clear = new(
+            "01.m4a",
+            TagField.AlbumArtist,
+            ["Gustav Mahler"],
+            [],
+            ManualEditConst.RULE_ID,
+            "手編集",
+            Severity.Manual,
+            HoldReason.None,
+            ClearsValue: true);
+
+        ApplyResult result = await _service.ApplyAsync(BuildScan(), [clear]);
+
+        Assert.Equal(1, result.AppliedChanges);
+        Assert.True(result.IsClean);
+        Assert.Empty(_writer.Writes["01.m4a"][TagField.AlbumArtist]);
     }
 
     /// <summary>

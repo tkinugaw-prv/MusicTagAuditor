@@ -13,6 +13,14 @@ public enum Severity
 
     /// <summary>❓ 人間の確認が必要。自動修正しない。</summary>
     Info,
+
+    /// <summary>
+    /// ✎ 人間が手で入れた値（段階 6）。
+    ///
+    /// ルールの重大度 3 段階とは別軸。ルールが出した案ではないので「原則違反の重さ」を持たない。
+    /// エラー扱いにすると CSV や画面で「原則違反」に見えてしまうため、独立した区分にしてある。
+    /// </summary>
+    Manual,
 }
 
 /// <summary>
@@ -47,6 +55,14 @@ public enum HoldReason
 /// </param>
 /// <param name="Severity">重大度。</param>
 /// <param name="HoldReason">保留の理由。</param>
+/// <param name="ClearsValue">
+/// 値を消すことが目的の変更か。**手編集だけが立てる**（段階 6）。
+///
+/// 修正案が空であること（<c>AfterValues</c> が空）は、ルールにとっては「決められなかった」を意味し、
+/// 削除の指示ではない。両者は結果として同じ形になるので、意図を別のフラグで持つ。
+/// タグを消すのは <c>TAGGING_POLICY.md</c> 7.4 が認める正当な操作である
+/// （誤った値で埋めるより空欄のほうが後から対処できる）。
+/// </param>
 public sealed record TagChange(
     string RelativePath,
     TagField Field,
@@ -55,7 +71,8 @@ public sealed record TagChange(
     string RuleId,
     string Rationale,
     Severity Severity,
-    HoldReason HoldReason = HoldReason.None)
+    HoldReason HoldReason = HoldReason.None,
+    bool ClearsValue = false)
 {
     /// <summary>利用者が明示的に切り替えたチェック状態。未設定なら既定値を使う。</summary>
     private bool? _isSelected;
@@ -80,16 +97,20 @@ public sealed record TagChange(
     /// <summary>
     /// 修正値を持つか。持たないものは一覧に出すだけで適用できない。
     /// 修正案が空なのは「決められなかった」という意味であり、削除の指示ではない。
+    /// 削除の意図は <see cref="ClearsValue"/> で表す。消すものが無ければ変更にならない。
     /// </summary>
     public bool HasFix => HoldReason == HoldReason.None
-        && AfterValues.Count > 0
-        && !AfterValues.SequenceEqual(BeforeValues, StringComparer.Ordinal);
+        && (ClearsValue
+            ? BeforeValues.Count > 0
+            : AfterValues.Count > 0 && !AfterValues.SequenceEqual(BeforeValues, StringComparer.Ordinal));
 
     /// <summary>表示用の現在値。</summary>
     public string BeforeText => string.Join(TrackTags.VALUE_JOIN_SEPARATOR, BeforeValues);
 
-    /// <summary>表示用の修正後の値。</summary>
-    public string AfterText => HasFix ? string.Join(TrackTags.VALUE_JOIN_SEPARATOR, AfterValues) : string.Empty;
+    /// <summary>表示用の修正後の値。値を消す変更は、空欄と区別できるよう明示する。</summary>
+    public string AfterText => ClearsValue
+        ? "（値を消す）"
+        : HasFix ? string.Join(TrackTags.VALUE_JOIN_SEPARATOR, AfterValues) : string.Empty;
 
     /// <summary>
     /// 判定区分。差分プレビューの色分けに使う（docs/SPEC.md 5.3）。

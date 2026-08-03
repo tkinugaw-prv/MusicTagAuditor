@@ -1,14 +1,17 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Windows;
+using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
 using MusicTagger.Core.Applying;
 using MusicTagger.Core.Backup;
 using MusicTagger.Core.Dictionary;
+using MusicTagger.Core.Editing;
 using MusicTagger.Core.Export;
 using MusicTagger.Core.Inspection;
 using MusicTagger.Core.Models;
@@ -51,6 +54,14 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>直近のスキャン結果。ツリーでの絞り込みはこの一覧から行う。</summary>
     private IReadOnlyList<TrackRowViewModel> _allTracks = [];
+
+    /// <summary>
+    /// 保留中の手編集（段階 6）。**セルを直してもここに溜めるだけで、ファイルには書き込まない。**
+    /// </summary>
+    private readonly ManualEditSet _manualEdits = new();
+
+    /// <summary>ファイル一覧の絞り込みビュー。</summary>
+    private ICollectionView? _trackView;
 
     /// <summary>実行中のスキャンをキャンセルするためのトークンソース。</summary>
     private CancellationTokenSource? _scanCancellation;
@@ -136,6 +147,36 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private string _unknownValueSummary = "検査すると、辞書に無い値がここに集まります。";
 
+    /// <summary>ファイル一覧の絞り込み文字列（docs/SPEC.md 5.2）。</summary>
+    [ObservableProperty]
+    private string _trackFilterText = string.Empty;
+
+    /// <summary>いずれかのタグが空欄の行だけを出すか。R-401 / R-402 の対象を探すのに使う。</summary>
+    [ObservableProperty]
+    private bool _showOnlyEmptyFields;
+
+    /// <summary>編集した行だけを出すか。</summary>
+    [ObservableProperty]
+    private bool _showOnlyEditedTracks;
+
+    /// <summary>一括入力の対象フィールド。</summary>
+    [ObservableProperty]
+    private TagField _bulkField = TagField.Conductor;
+
+    /// <summary>一括入力する値。</summary>
+    [ObservableProperty]
+    private string _bulkValue = string.Empty;
+
+    /// <summary>手編集の要約。</summary>
+    [ObservableProperty]
+    private string _manualEditSummary = "セルを直すと、ここに保留中の編集が集まります。";
+
+    /// <summary>保留中の手編集があるか。</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ApplyManualEditsCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DiscardManualEditsCommand))]
+    private bool _hasManualEdits;
+
     /// <summary>
     /// ビューモデルを初期化する。
     /// </summary>
@@ -168,10 +209,21 @@ public sealed partial class MainViewModel : ObservableObject
 
         // 辞書を保存したら検査をやり直す。タグは変わっていないので再スキャンは要らない。
         Dictionary.Saved += OnDictionarySaved;
+
+        _manualEdits.Changed += OnManualEditsChanged;
     }
 
     /// <summary>辞書タブ。</summary>
     public DictionaryViewModel Dictionary { get; }
+
+    /// <summary>一括入力で選べるフィールド。</summary>
+    public IReadOnlyList<TagField> EditableFields => ManualEditConst.EDITABLE_FIELDS;
+
+    /// <summary>保留中の手編集の差分。**適用前に必ずここで確認できる。**</summary>
+    public ObservableCollection<TagChange> ManualEditChanges { get; } = [];
+
+    /// <summary>手編集で気づいてほしい点。止めはしない。</summary>
+    public ObservableCollection<ManualEditWarning> ManualEditWarnings { get; } = [];
 
     /// <summary>フォルダツリー。ルートノード 1 件を持つ。</summary>
     public ObservableCollection<FolderNodeViewModel> FolderTree { get; } = [];
@@ -235,6 +287,11 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
+        if (!ConfirmDiscardManualEdits())
+        {
+            return;
+        }
+
         LibraryRoot = dialog.FolderName;
         await ScanAsync();
     }
@@ -245,7 +302,36 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanRescan))]
     private async Task RescanAsync()
     {
+        if (!ConfirmDiscardManualEdits())
+        {
+            return;
+        }
+
         await ScanAsync();
+    }
+
+    /// <summary>
+    /// 保留中の手編集を捨ててよいかを確認する。
+    ///
+    /// 編集は読み取り時点のタグを土台にしているため、読み直すと足場が変わる。
+    /// 黙って捨てると、入力した内容が理由も分からず消えたように見える。
+    /// </summary>
+    /// <returns>続行してよければ true。</returns>
+    private bool ConfirmDiscardManualEdits()
+    {
+        if (!_manualEdits.HasEdits)
+        {
+            return true;
+        }
+
+        return MessageBox.Show(
+            string.Create(CultureInfo.CurrentCulture, $"保留中の手編集が {_manualEdits.Count:N0} 項目あります。")
+            + Environment.NewLine
+            + "読み直すとこの編集は失われます。破棄して続けますか？",
+            "保留中の編集があります",
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Warning,
+            MessageBoxResult.Cancel) == MessageBoxResult.OK;
     }
 
     /// <summary>
@@ -741,6 +827,297 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
+    /// 選択した行に同じ値を入れる（docs/SPEC.md 5.2）。
+    /// **アルバム単位の編集で必須**とされている操作。
+    /// </summary>
+    /// <param name="selection">一覧で選択されている行。</param>
+    [RelayCommand]
+    private void BulkInput(System.Collections.IList? selection)
+    {
+        TrackRowViewModel[] rows = [.. (selection ?? Array.Empty<object>()).OfType<TrackRowViewModel>()];
+
+        if (rows.Length == 0)
+        {
+            StatusText = "一括入力する行を選んでください。";
+            return;
+        }
+
+        // 値を消す一括入力は取り返しが付きにくいので、件数を示して確認する。
+        if (BulkValue.Trim().Length == 0 && !ConfirmBulkClear(rows.Length))
+        {
+            return;
+        }
+
+        int applied = _manualEdits.SetMany(rows.Select(row => row.Tags), BulkField, BulkValue);
+
+        foreach (TrackRowViewModel row in rows)
+        {
+            row.NotifyEditsChanged();
+        }
+
+        StatusText = string.Create(
+            CultureInfo.CurrentCulture,
+            $"{ManualEditConst.Label(BulkField)} に一括入力しました（{applied:N0} / {rows.Length:N0} 行）。")
+            + " 変更が無かった行は編集になりません。";
+    }
+
+    /// <summary>
+    /// 一括で値を消してよいかを確認する。
+    /// </summary>
+    private static bool ConfirmBulkClear(int rowCount)
+    {
+        return MessageBox.Show(
+            string.Create(CultureInfo.CurrentCulture, $"{rowCount:N0} 行のタグを空にします。")
+            + Environment.NewLine + Environment.NewLine
+            + "空欄にすること自体は原則が認める操作ですが（TAGGING_POLICY 7.4）、"
+            + "入力し忘れでないかを確認してください。",
+            "選択した行のタグを空にしますか？",
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Warning,
+            MessageBoxResult.Cancel) == MessageBoxResult.OK;
+    }
+
+    /// <summary>
+    /// 保留中の手編集をすべて捨てる。
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(HasManualEdits))]
+    private void DiscardManualEdits()
+    {
+        bool confirmed = MessageBox.Show(
+            string.Create(CultureInfo.CurrentCulture, $"保留中の編集 {_manualEdits.Count:N0} 項目を捨てます。"),
+            "編集を破棄しますか？",
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Warning,
+            MessageBoxResult.Cancel) == MessageBoxResult.OK;
+
+        if (!confirmed)
+        {
+            return;
+        }
+
+        _manualEdits.Clear();
+        RefreshTrackRows();
+
+        StatusText = "保留中の編集を破棄しました。";
+    }
+
+    /// <summary>
+    /// 保留中の手編集を書き込む。
+    ///
+    /// 検査結果の適用とまったく同じ経路を通す。書き込み経路を 2 本持つと、
+    /// 自動バックアップや読み戻し照合を片方で入れ忘れる。
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanApplyManualEdits))]
+    private async Task ApplyManualEditsAsync()
+    {
+        if (_lastScan is null)
+        {
+            return;
+        }
+
+        TagChange[] targets = [.. _manualEdits.ToChanges().Where(change => change.IsSelected && change.HasFix)];
+
+        if (targets.Length == 0)
+        {
+            StatusText = "適用する編集がありません。";
+            return;
+        }
+
+        if (!ConfirmApplyManualEdits(targets))
+        {
+            return;
+        }
+
+        IsScanning = true;
+        ApplyIssues.Clear();
+        ProgressValue = 0;
+        ProgressMaximum = 1;
+        StatusText = "手編集を適用しています…";
+
+        try
+        {
+            Progress<ApplyProgress> progress = new(report =>
+            {
+                ProgressMaximum = Math.Max(report.Total, 1);
+                ProgressValue = report.Completed;
+            });
+
+            ApplyResult result = await _applyService
+                .ApplyAsync(
+                    _lastScan,
+                    targets,
+                    note: $"手編集の適用前（{targets.Length} 項目）",
+                    portableLibraryPath: TagWriter.GetPortableLibraryPath(),
+                    progress: progress)
+                .ConfigureAwait(true);
+
+            ShowApplyResult(result);
+
+            Log.Information("手編集を適用した 項目={Count}", targets.Length);
+
+            // 書き込みが済んだので保留分は役目を終える。残すと二重に適用しかねない。
+            _manualEdits.Clear();
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"手編集の適用に失敗しました: {ex.Message}";
+            Log.Error(ex, "手編集の適用に失敗した root={Root}", LibraryRoot);
+        }
+        finally
+        {
+            IsScanning = false;
+        }
+
+        await ScanAsync().ConfigureAwait(true);
+        RefreshBackups();
+    }
+
+    /// <summary>
+    /// 手編集を適用してよいかを確認する。
+    /// </summary>
+    private bool ConfirmApplyManualEdits(IReadOnlyList<TagChange> targets)
+    {
+        int fileCount = targets
+            .Select(change => change.RelativePath)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+
+        string breakdown = string.Join(
+            Environment.NewLine,
+            targets.GroupBy(change => change.Field)
+                .OrderBy(group => group.Key)
+                .Select(group => $"  {ManualEditConst.Label(group.Key)}  {group.Count():N0} 項目"));
+
+        string warningText = ManualEditWarnings.Count == 0
+            ? string.Empty
+            : Environment.NewLine + Environment.NewLine
+                + $"⚠ 気づいてほしい点が {ManualEditWarnings.Count} 件あります（下の一覧を確認してください）。";
+
+        string message = string.Create(
+            CultureInfo.CurrentCulture,
+            $"{fileCount:N0} ファイルに {targets.Count:N0} 項目を書き込みます。")
+            + Environment.NewLine + Environment.NewLine
+            + breakdown
+            + warningText
+            + Environment.NewLine + Environment.NewLine
+            + "書き込みの直前にタグのスナップショットを自動で取ります。"
+            + Environment.NewLine
+            + "適用後は全項目を読み戻して照合します。";
+
+        return MessageBox.Show(
+            message,
+            "手編集を適用しますか？",
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Warning,
+            MessageBoxResult.Cancel) == MessageBoxResult.OK;
+    }
+
+    /// <summary>手編集を適用できるか。</summary>
+    private bool CanApplyManualEdits()
+    {
+        return !IsScanning && HasManualEdits;
+    }
+
+    /// <summary>
+    /// 手編集が変わったら差分と警告を作り直す。
+    /// </summary>
+    private void OnManualEditsChanged(object? sender, EventArgs e)
+    {
+        ManualEditChanges.Clear();
+        ManualEditWarnings.Clear();
+
+        IReadOnlyList<TagChange> changes = _manualEdits.ToChanges();
+
+        foreach (TagChange change in changes)
+        {
+            ManualEditChanges.Add(change);
+        }
+
+        if (_lastScan is not null)
+        {
+            foreach (ManualEditWarning warning in
+                ManualEditValidator.Validate(changes, _lastScan.Tracks, _dictionaryStore.Index))
+            {
+                ManualEditWarnings.Add(warning);
+            }
+        }
+
+        HasManualEdits = changes.Count > 0;
+
+        ManualEditSummary = changes.Count == 0
+            ? "セルを直すと、ここに保留中の編集が集まります。"
+            : string.Create(
+                CultureInfo.CurrentCulture,
+                $"保留中の編集 {changes.Count:N0} 項目 /"
+                + $" {changes.Select(change => change.RelativePath).Distinct(StringComparer.OrdinalIgnoreCase).Count():N0} ファイル。"
+                + $" 気づいてほしい点 {ManualEditWarnings.Count:N0} 件。");
+
+        // 編集済みだけを表示している場合、絞り込みの結果が変わる。
+        _trackView?.Refresh();
+    }
+
+    /// <summary>
+    /// 一覧の行の表示を出し直す。一括入力や編集の破棄のあとに呼ぶ。
+    /// </summary>
+    private void RefreshTrackRows()
+    {
+        foreach (TrackRowViewModel row in _allTracks)
+        {
+            row.NotifyEditsChanged();
+        }
+
+        _trackView?.Refresh();
+    }
+
+    /// <summary>
+    /// 絞り込みが変わったら一覧を絞り直す。
+    /// </summary>
+    partial void OnTrackFilterTextChanged(string value)
+    {
+        _trackView?.Refresh();
+    }
+
+    /// <summary>
+    /// 絞り込みが変わったら一覧を絞り直す。
+    /// </summary>
+    partial void OnShowOnlyEmptyFieldsChanged(bool value)
+    {
+        _trackView?.Refresh();
+    }
+
+    /// <summary>
+    /// 絞り込みが変わったら一覧を絞り直す。
+    /// </summary>
+    partial void OnShowOnlyEditedTracksChanged(bool value)
+    {
+        _trackView?.Refresh();
+    }
+
+    /// <summary>
+    /// 一覧に出すかどうかを判定する（docs/SPEC.md 5.2 の絞り込み）。
+    /// </summary>
+    private bool MatchesTrackFilter(object item)
+    {
+        if (item is not TrackRowViewModel row)
+        {
+            return false;
+        }
+
+        if (ShowOnlyEditedTracks && !row.IsEdited)
+        {
+            return false;
+        }
+
+        if (ShowOnlyEmptyFields && !row.HasEmptyField)
+        {
+            return false;
+        }
+
+        return TrackFilterText.Length == 0
+            || row.SearchText.Contains(TrackFilterText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// 選択したルールの差分明細を下段に出す。
     /// </summary>
     partial void OnSelectedRuleChanged(RuleResultViewModel? value)
@@ -983,6 +1360,11 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         IsScanning = true;
+
+        // 編集は読み取り時点のタグを土台にしている。読み直したら足場が変わるので捨てる。
+        // 捨ててよいかは呼び出し側が確認済み（ConfirmDiscardManualEdits）。
+        _manualEdits.Clear();
+
         Failures.Clear();
         Tracks.Clear();
         FolderTree.Clear();
@@ -1050,7 +1432,7 @@ public sealed partial class MainViewModel : ObservableObject
     private void Load(ScanResult result)
     {
         _lastScan = result;
-        _allTracks = [.. result.Tracks.Select(track => new TrackRowViewModel(track))];
+        _allTracks = [.. result.Tracks.Select(track => new TrackRowViewModel(track, _manualEdits))];
 
         foreach (ScanFailure failure in result.Failures)
         {
@@ -1088,6 +1470,22 @@ public sealed partial class MainViewModel : ObservableObject
         {
             Tracks.Add(track);
         }
+
+        SetUpTrackView();
+    }
+
+    /// <summary>
+    /// ファイル一覧の絞り込みビューを用意する。初回だけ作ればよい。
+    /// </summary>
+    private void SetUpTrackView()
+    {
+        if (_trackView is not null)
+        {
+            return;
+        }
+
+        _trackView = CollectionViewSource.GetDefaultView(Tracks);
+        _trackView.Filter = MatchesTrackFilter;
     }
 
     /// <summary>
