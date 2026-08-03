@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
 
   "_comment": [
     "既定の正規化辞書。docs/TAGGING_POLICY.md 5章が唯一の基準。",

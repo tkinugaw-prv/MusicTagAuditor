@@ -365,6 +365,21 @@
                         Padding="12,4" Margin="0,0,8,0" />
                 <Button DockPanel.Dock="Left" Content="編集を破棄" Command="{Binding RevertCommand}"
                         Padding="12,4" Margin="0,0,8,0" />
+                <Button DockPanel.Dock="Left" Content="既定辞書から取り込む" Command="{Binding MergeFromDefaultCommand}"
+                        Padding="12,4" Margin="0,0,8,0"
+                        ToolTip="アプリ側に追加されたエントリや設定を、この辞書へ取り込みます">
+                  <Button.Style>
+                    <Style TargetType="Button">
+                      <Style.Triggers>
+                        <!-- 取り込めるものがあるときだけ目立たせる -->
+                        <DataTrigger Binding="{Binding PendingMergeCount, Converter={StaticResource CountToVisibility}}" Value="Visible">
+                          <Setter Property="FontWeight" Value="Bold" />
+                          <Setter Property="Background" Value="#FFF0D0" />
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </Button.Style>
+                </Button>
                 <Button DockPanel.Dock="Left" Content="既定辞書として書き出し" Command="{Binding ExportCommand}"
                         Padding="12,4" Margin="0,0,12,0"
                         ToolTip="リポジトリ同梱の default-dictionary.json へ書き戻します" />

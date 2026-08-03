@@ -84,4 +84,27 @@ public sealed class DictionaryStore
     {
         DictionaryWriter.WriteFile(path, _dictionary);
     }
+
+    /// <summary>
+    /// 同梱の既定辞書から取り込める差分を洗い出す。
+    ///
+    /// 利用者辞書は初回起動時にコピーされたきりなので、同梱側に足したエントリや項目は
+    /// そのままでは届かない（<see cref="DictionaryMerger"/>）。
+    /// </summary>
+    /// <returns>取り込める差分。無ければ空。</returns>
+    public IReadOnlyList<DictionaryMergeItem> BuildMergePlan()
+    {
+        return DictionaryMerger.BuildPlan(_dictionary, DictionaryLoader.LoadDefault());
+    }
+
+    /// <summary>
+    /// 選ばれた差分を取り込んだ辞書を作る。**保存はしない。**
+    /// 検証を通してから <see cref="Save"/> を呼ぶこと。
+    /// </summary>
+    /// <param name="items">取り込む差分。</param>
+    /// <returns>取り込んだ結果。</returns>
+    public TagDictionary Merge(IEnumerable<DictionaryMergeItem> items)
+    {
+        return DictionaryMerger.Apply(_dictionary, DictionaryLoader.LoadDefault(), items);
+    }
 }
