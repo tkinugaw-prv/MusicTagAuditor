@@ -29,8 +29,10 @@ public sealed partial class RuleResultViewModel : ObservableObject
     {
         Result = result;
 
-        // 修正案を持つ ⛔ だけを既定でチェックする。❓ と保留は既定で外す。
-        _isSelected = result.Severity == Severity.Error && result.FixableCount > 0;
+        // 修正値が決まっている ⛔ と ⚠ を既定でチェックする。❓ と保留は既定で外す。
+        // TagChange.IsSelected の既定値と同じ条件にすること。ずれると
+        // 「ルール行はチェック済みなのに明細は未チェック」という状態になる。
+        _isSelected = result.Severity != Severity.Info && result.FixableCount > 0;
     }
 
     /// <summary>元のルール結果。</summary>

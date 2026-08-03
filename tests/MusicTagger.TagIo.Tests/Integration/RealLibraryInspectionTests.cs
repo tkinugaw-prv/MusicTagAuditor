@@ -28,7 +28,12 @@ public sealed class RealLibraryInspectionTests(ITestOutputHelper output)
 
         InspectionResult result = new InspectionEngine().Inspect(context);
 
-        output.WriteLine($"対象 {scan.Tracks.Count} 件 / 検出 {result.TotalChanges} 件 / 所要 {result.Elapsed.TotalSeconds:F2} 秒");
+        int selected = result.AllChanges.Count(change => change.IsSelected);
+        int holds = result.AllChanges.Count(change => change.HoldReason != HoldReason.None);
+
+        output.WriteLine(
+            $"対象 {scan.Tracks.Count} 件 / 検出 {result.TotalChanges} 件 / 既定で選択 {selected} 件"
+            + $" / 保留 {holds} 件 / 所要 {result.Elapsed.TotalSeconds:F2} 秒");
         output.WriteLine("");
         output.WriteLine("| ID | 内容 | 検出 | 修正可 | 保留 |");
         output.WriteLine("|---|---|---|---|---|");

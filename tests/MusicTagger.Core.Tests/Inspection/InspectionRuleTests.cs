@@ -274,10 +274,11 @@ public sealed class InspectionRuleTests
     }
 
     /// <summary>
-    /// 重大度に応じて既定のチェック状態が決まることを確認する（docs/SPEC.md 9章）。
+    /// 既定のチェック状態が決まることを確認する（docs/SPEC.md 9章）。
+    /// 修正値が決まっている ⛔ と ⚠ はチェック済み、❓ は未チェック。
     /// </summary>
     [Fact]
-    public void SelectsErrorsByDefaultAndLeavesInfoUnchecked()
+    public void SelectsErrorsAndWarningsByDefaultAndLeavesInfoUnchecked()
     {
         InspectionResult result = Inspect(
             Track("ブルックナー/ブルックナー 8 - ショルティ/01.flac",
@@ -285,8 +286,39 @@ public sealed class InspectionRuleTests
                 (TagField.Composer, ["Anton Bruckner"]),
                 (TagField.Date, [])));
 
-        Assert.True(Assert.Single(ChangesOf(result, "R-203")).IsSelected);
-        Assert.False(Assert.Single(ChangesOf(result, "R-105")).IsSelected);
+        // ⛔ 指揮者を特定できたので修正値が決まっている
+        TagChange error = Assert.Single(ChangesOf(result, "R-203"));
+        Assert.True(error.IsSelected);
+        Assert.Equal("確定", error.Classification);
+
+        // ⚠ genre は必ず Classic なので修正値が一意に決まる
+        TagChange warning = Assert.Single(ChangesOf(result, "R-102"));
+        Assert.Equal(Severity.Warning, warning.Severity);
+        Assert.True(warning.IsSelected);
+        Assert.Equal("確定", warning.Classification);
+
+        // ❓ 修正値を決められない
+        TagChange info = Assert.Single(ChangesOf(result, "R-105"));
+        Assert.False(info.IsSelected);
+        Assert.Equal("要確認", info.Classification);
+    }
+
+    /// <summary>
+    /// 修正値を決められなかったものは、重大度が ⛔ でもチェックしないことを確認する。
+    /// 「確信が持てない項目は書き換えない」という原則（docs/TAGGING_POLICY.md 7.4）。
+    /// </summary>
+    [Fact]
+    public void DoesNotSelectChangesWithoutFixEvenForErrors()
+    {
+        InspectionResult result = Inspect(
+            Track("ワーグナー/Wagner Opera Choruses/01.flac",
+                (TagField.Artist, ["Richard Wagner"]),
+                (TagField.Composer, ["Richard Wagner"])));
+
+        TagChange change = Assert.Single(ChangesOf(result, "R-203"));
+
+        Assert.False(change.IsSelected);
+        Assert.Equal("要確認", change.Classification);
     }
 
     /// <summary>

@@ -61,15 +61,19 @@ public sealed record TagChange(
     private bool? _isSelected;
 
     /// <summary>
-    /// 適用対象にするかどうか。
-    /// ⛔ は既定でチェック済み、❓ は既定で未チェック、保留は対象外（docs/SPEC.md 9章）。
+    /// 適用対象にするかどうか（docs/SPEC.md 9章）。
+    ///
+    /// **修正値が決まっている ⛔ と ⚠ を既定でチェックする。** ❓ と保留は既定で外す。
+    /// ⚠ を含めるのは、該当する R-102 / R-103 / R-104 がいずれも修正値を一意に決められるため
+    /// （genre は必ず Classic、単一ディスクなら 1/1、ISO 形式からは年を抽出できる）。
+    /// 修正値を決められなかったものは重大度によらずチェックしない。
     ///
     /// 既定値をプロパティ初期化子で書くと、レコードの位置指定パラメータが代入される前に
     /// 評価されてしまい常に true になる。遅延評価にして取り違えを防ぐ。
     /// </summary>
     public bool IsSelected
     {
-        get => _isSelected ?? (Severity == Severity.Error && HasFix);
+        get => _isSelected ?? (Severity != Severity.Info && HasFix);
         set => _isSelected = value;
     }
 
@@ -89,8 +93,11 @@ public sealed record TagChange(
 
     /// <summary>
     /// 判定区分。差分プレビューの色分けに使う（docs/SPEC.md 5.3）。
+    ///
+    /// チェック状態と区分がずれないよう、修正値の有無で判定する。
+    /// 「確定」なのにチェックが外れている、という状態を作らない。
     /// </summary>
     public string Classification => HoldReason != HoldReason.None
         ? "保留"
-        : HasFix && Severity == Severity.Error ? "確定" : "要確認";
+        : HasFix ? "確定" : "要確認";
 }
