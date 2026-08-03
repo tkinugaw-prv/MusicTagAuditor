@@ -28,6 +28,9 @@
         <Button Content="中止" Command="{Binding CancelScanCommand}" Padding="12,4" Margin="0,0,16,0" />
         <Button Content="検査" Command="{Binding InspectCommand}" Padding="12,4" Margin="0,0,8,0" FontWeight="Bold" />
         <Button Content="バックアップ" Command="{Binding CreateBackupCommand}" Padding="12,4" Margin="0,0,12,0" />
+        <CheckBox Content="発音区別符号も検査" VerticalAlignment="Center" Margin="0,0,12,0"
+                  IsChecked="{Binding EnableDiacriticCheck}"
+                  ToolTip="R-304。誤検出が増えるため既定では無効です" />
         <TextBlock Text="{Binding LibraryRoot, TargetNullValue='(未選択)'}"
                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="#333333" />
       </DockPanel>

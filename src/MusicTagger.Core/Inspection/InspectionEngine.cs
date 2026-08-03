@@ -35,8 +35,7 @@ public sealed class InspectionEngine
     public int RuleCount => _rules.Count;
 
     /// <summary>
-    /// 段階 3 の時点で有効なルール一式を作る。
-    /// R-3xx / R-4xx / R-5xx は段階 7 で追加する（docs/SPEC.md 12章）。
+    /// docs/SPEC.md 6.1 のルール一式を作る。段階 7 で全ルールが揃った。
     /// </summary>
     /// <returns>ルールの一覧。</returns>
     public static IReadOnlyList<IInspectionRule> CreateDefaultRules()
@@ -57,6 +56,16 @@ public sealed class InspectionEngine
             new PersonNameFormatRule(),
             new JapanesePerformerNameRule(),
             new EnsembleEraRule(),
+            new TypoRule(),
+            new TitleContainsExtensionRule(),
+            new PlaceholderTitleRule(),
+            new DiacriticMissingRule(),
+            new ComposerMissingRule(),
+            new ConductorMissingRule(),
+            new MojibakeRule(),
+            new AlbumNameCollisionRule(),
+            new JapaneseAlbumNameRule(),
+            new MovementNumberStyleRule(),
         ];
     }
 
@@ -73,6 +82,12 @@ public sealed class InspectionEngine
 
         foreach (IInspectionRule rule in _rules)
         {
+            // 既定で無効なルールは、利用者が明示的に選んだときだけ動かす（docs/SPEC.md 6.2）。
+            if (!rule.IsEnabledByDefault && !context.Options.IsEnabled(rule.Id))
+            {
+                continue;
+            }
+
             TagChange[] changes = [.. rule.Inspect(context)
                 .OrderBy(change => change.RelativePath, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(change => change.Field)];
