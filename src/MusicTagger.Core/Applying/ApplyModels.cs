@@ -15,19 +15,29 @@ public sealed record ApplyFailure(string RelativePath, string Message);
 ///
 /// ルール同士の担当範囲がずれると起こりうる。**どちらが正しいか機械的に決められないため
 /// 書き込まずに報告する。** 黙ってどちらかを採用すると、意図しない値が入る。
+///
+/// **例外は手編集**（段階 6）。人間が明示的に入れた値のほうが強いので、
+/// 競合していても手編集の値を書き込む。ただし競合そのものは握りつぶさず、
+/// どの案を捨てたのかが分かる形で報告する。
 /// </summary>
 /// <param name="RelativePath">対象ファイル。</param>
 /// <param name="Field">対象フィールド。</param>
 /// <param name="Proposals">競合している修正案（ルール ID と修正後の値）。</param>
+/// <param name="AdoptedValue">採用した値。書き込まなかった場合は null。</param>
 public sealed record ApplyConflict(
     string RelativePath,
     TagField Field,
-    IReadOnlyList<(string RuleId, string AfterText)> Proposals)
+    IReadOnlyList<(string RuleId, string AfterText)> Proposals,
+    string? AdoptedValue = null)
 {
+    /// <summary>競合を解消して書き込んだか。</summary>
+    public bool IsResolved => AdoptedValue is not null;
+
     /// <summary>表示用の説明。</summary>
     public string Summary =>
         $"{RelativePath} [{Field}] "
-        + string.Join(" / ", Proposals.Select(proposal => $"{proposal.RuleId}→「{proposal.AfterText}」"));
+        + string.Join(" / ", Proposals.Select(proposal => $"{proposal.RuleId}→「{proposal.AfterText}」"))
+        + (IsResolved ? $" — 手編集の「{AdoptedValue}」を採用した" : " — 書き込まなかった");
 }
 
 /// <summary>
@@ -52,6 +62,8 @@ public sealed record ApplyResult(
     /// <summary>
     /// 問題なく完了したか。**不一致が 1 件でもあれば false。**
     /// 書き込めたことと意図した値が入っていることは別である。
+    ///
+    /// 手編集で解消した競合は、捨てた案を利用者に知らせる必要があるので「要確認」に数える。
     /// </summary>
     public bool IsClean => Failures.Count == 0 && Mismatches.Count == 0 && Conflicts.Count == 0;
 }

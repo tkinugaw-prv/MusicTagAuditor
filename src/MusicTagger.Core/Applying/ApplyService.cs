@@ -1,5 +1,6 @@
 using MusicTagger.Core.Abstractions;
 using MusicTagger.Core.Backup;
+using MusicTagger.Core.Editing;
 using MusicTagger.Core.Models;
 using MusicTagger.Core.Scanning;
 
@@ -135,6 +136,9 @@ public sealed class ApplyService
     /// <summary>
     /// 1 ファイル分の書き込み内容を組み立てる。
     /// 同じフィールドに異なる修正案が選ばれている場合は書き込まず、競合として報告する。
+    ///
+    /// **例外は手編集。** 人間が明示的に入れた値のほうが強いので、競合していても手編集を採用する。
+    /// 競合そのものは報告し続ける。捨てた案が何だったかを利用者が知る必要があるため。
     /// </summary>
     private static Dictionary<TagField, IReadOnlyList<string>> BuildFields(
         IGrouping<string, TagChange> group,
@@ -149,7 +153,17 @@ public sealed class ApplyService
             // 値が同じなら競合ではない。別々のルールが同じ結論に達しただけ。
             string[] distinct = [.. proposals.Select(change => change.AfterText).Distinct(StringComparer.Ordinal)];
 
-            if (distinct.Length > 1)
+            if (distinct.Length <= 1)
+            {
+                fields[byField.Key] = proposals[0].AfterValues;
+                continue;
+            }
+
+            TagChange[] manual = [.. proposals.Where(change => change.RuleId == ManualEditConst.RULE_ID)];
+
+            // 手編集どうしが食い違うことは無い（1 ファイル 1 フィールドに 1 件しか持てない）。
+            // 万一 2 件以上来たら機械的に決められないので、通常どおり書き込まずに報告する。
+            if (manual.Length != 1)
             {
                 conflicts.Add(new ApplyConflict(
                     group.Key,
@@ -159,7 +173,13 @@ public sealed class ApplyService
                 continue;
             }
 
-            fields[byField.Key] = proposals[0].AfterValues;
+            fields[byField.Key] = manual[0].AfterValues;
+
+            conflicts.Add(new ApplyConflict(
+                group.Key,
+                byField.Key,
+                [.. proposals.Select(change => (change.RuleId, change.AfterText))],
+                manual[0].AfterText));
         }
 
         return fields;
