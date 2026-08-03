@@ -96,7 +96,13 @@
             <Border Grid.Row="1" Padding="0,8" BorderBrush="#DDDDDD" BorderThickness="0,1,0,1" Margin="0,4">
               <DockPanel>
                 <Button DockPanel.Dock="Left" Content="チェックした項目を適用"
-                        Command="{Binding ApplyCommand}" Padding="12,4" Margin="0,0,12,0" FontWeight="Bold" />
+                        Command="{Binding ApplyCommand}" Padding="12,4" Margin="0,0,8,0" FontWeight="Bold" />
+                <Button DockPanel.Dock="Left" Content="CSV出力"
+                        Command="{Binding ExportCsvCommand}" Padding="12,4" Margin="0,0,8,0"
+                        ToolTip="明細と集計の 2 ファイルを書き出します" />
+                <Button DockPanel.Dock="Left" Content="選択行を辞書に追加"
+                        Command="{Binding AddSelectedChangeToDictionaryCommand}" Padding="12,4" Margin="0,0,12,0"
+                        ToolTip="修正案を出せなかった行を辞書に登録して再検査します" />
                 <TextBlock Text="{Binding InspectionSummary}" VerticalAlignment="Center" TextWrapping="Wrap" />
               </DockPanel>
             </Border>
@@ -125,6 +131,7 @@
             <!-- 下段: 差分プレビュー。根拠列を必ず持つ（docs/SPEC.md 5.3） -->
             <DataGrid Grid.Row="3"
                       ItemsSource="{Binding InspectionChanges}"
+                      SelectedItem="{Binding SelectedChange}"
                       AutoGenerateColumns="False"
                       CanUserSortColumns="True"
                       EnableRowVirtualization="True"
@@ -155,6 +162,43 @@
                 <DataGridTextColumn Header="変更前" Binding="{Binding BeforeText}" IsReadOnly="True" Width="200" />
                 <DataGridTextColumn Header="変更後" Binding="{Binding AfterText}" IsReadOnly="True" Width="200" />
                 <DataGridTextColumn Header="根拠" Binding="{Binding Rationale}" IsReadOnly="True" Width="*" />
+              </DataGrid.Columns>
+            </DataGrid>
+          </Grid>
+        </TabItem>
+
+        <!-- 辞書に無い値。docs/SPEC.md 7.3 が「最も使用頻度が高い」とする導線 -->
+        <TabItem Header="辞書に無い値">
+          <Grid>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Border Grid.Row="0" Padding="0,8" BorderBrush="#DDDDDD" BorderThickness="0,0,0,1" Margin="0,0,0,4">
+              <DockPanel>
+                <Button DockPanel.Dock="Left" Content="辞書に追加"
+                        Command="{Binding AddUnknownValueToDictionaryCommand}"
+                        Padding="12,4" Margin="0,0,12,0" FontWeight="Bold" />
+                <TextBlock Text="{Binding UnknownValueSummary}" VerticalAlignment="Center" TextWrapping="Wrap" />
+              </DockPanel>
+            </Border>
+
+            <DataGrid Grid.Row="1"
+                      ItemsSource="{Binding UnknownValues}"
+                      SelectedItem="{Binding SelectedUnknownValue}"
+                      AutoGenerateColumns="False"
+                      IsReadOnly="True"
+                      SelectionMode="Single"
+                      CanUserSortColumns="True"
+                      GridLinesVisibility="Horizontal">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="件数" Binding="{Binding Count}" Width="60" />
+                <DataGridTextColumn Header="値" Binding="{Binding Value}" Width="280" />
+                <DataGridTextColumn Header="登録先" Binding="{Binding CategoryText}" Width="80" />
+                <DataGridTextColumn Header="フィールド" Binding="{Binding FieldsText}" Width="150" />
+                <DataGridTextColumn Header="ルール" Binding="{Binding RuleIdsText}" Width="80" />
+                <DataGridTextColumn Header="代表ファイル" Binding="{Binding SampleRelativePath}" Width="*" />
               </DataGrid.Columns>
             </DataGrid>
           </Grid>
@@ -199,6 +243,291 @@
               <DataGridTextColumn Header="ディスク" Binding="{Binding DiscNumber}" Width="70" />
             </DataGrid.Columns>
           </DataGrid>
+        </TabItem>
+
+        <!-- 辞書（docs/SPEC.md 7.3） -->
+        <TabItem Header="辞書" DataContext="{Binding Dictionary}">
+          <Grid>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- ツールバー -->
+            <StackPanel Grid.Row="0" Margin="0,0,0,6">
+              <DockPanel>
+                <Button DockPanel.Dock="Left" Content="保存" Command="{Binding SaveCommand}"
+                        Padding="12,4" Margin="0,0,8,0" FontWeight="Bold" />
+                <Button DockPanel.Dock="Left" Content="検証だけ実行" Command="{Binding ValidateCommand}"
+                        Padding="12,4" Margin="0,0,8,0" />
+                <Button DockPanel.Dock="Left" Content="編集を破棄" Command="{Binding RevertCommand}"
+                        Padding="12,4" Margin="0,0,8,0" />
+                <Button DockPanel.Dock="Left" Content="既定辞書として書き出し" Command="{Binding ExportCommand}"
+                        Padding="12,4" Margin="0,0,12,0"
+                        ToolTip="リポジトリ同梱の default-dictionary.json へ書き戻します" />
+                <TextBlock DockPanel.Dock="Right" Text="● 未保存" Foreground="#C05000" VerticalAlignment="Center"
+                           Visibility="{Binding IsDirty, Converter={StaticResource BoolToVisibility}}" />
+                <TextBox Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
+                         Padding="4" Margin="0,0,12,0" MinWidth="200"
+                         ToolTip="正規形・別名・実体 ID で絞り込む" />
+              </DockPanel>
+
+              <TextBlock Text="{Binding StatusText}" Margin="0,6,0,0" TextWrapping="Wrap" Foreground="#333333" />
+              <TextBlock Text="{Binding FilePath}" Margin="0,2,0,0" Foreground="#888888" TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+
+            <TabControl Grid.Row="1">
+
+              <!-- 作曲家 -->
+              <TabItem Header="作曲家">
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="260" MinWidth="160" />
+                    <ColumnDefinition Width="4" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+
+                  <DockPanel Grid.Column="0">
+                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,6,0,0">
+                      <Button Content="追加" Command="{Binding AddComposerCommand}" Padding="10,3" Margin="0,0,6,0" />
+                      <Button Content="削除" Command="{Binding RemoveComposerCommand}" Padding="10,3" />
+                    </StackPanel>
+                    <ListBox ItemsSource="{Binding Composers}" SelectedItem="{Binding SelectedComposer}"
+                             DisplayMemberPath="Canonical" />
+                  </DockPanel>
+
+                  <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch" Background="#EEEEEE" />
+
+                  <Grid Grid.Column="2" Margin="8,0,0,0">
+                    <Grid.RowDefinitions>
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="*" />
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="正規形" FontWeight="Bold" Margin="0,0,0,4" />
+                    <TextBox Grid.Row="1" Padding="4"
+                             Text="{Binding SelectedComposer.Canonical, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock Grid.Row="2" Text="別名（1 行 1 件）" FontWeight="Bold" Margin="0,10,0,4" />
+                    <TextBox Grid.Row="3" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
+                             Text="{Binding SelectedComposer.AliasesText, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock Grid.Row="4" Text="日本語表記（1 行 1 件）" FontWeight="Bold" Margin="0,10,0,4" />
+                    <TextBox Grid.Row="5" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
+                             Text="{Binding SelectedComposer.AliasesJaText, UpdateSourceTrigger=PropertyChanged}" />
+                  </Grid>
+                </Grid>
+              </TabItem>
+
+              <!-- 人物 -->
+              <TabItem Header="人物">
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="260" MinWidth="160" />
+                    <ColumnDefinition Width="4" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+
+                  <DockPanel Grid.Column="0">
+                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,6,0,0">
+                      <Button Content="追加" Command="{Binding AddPersonCommand}" Padding="10,3" Margin="0,0,6,0" />
+                      <Button Content="削除" Command="{Binding RemovePersonCommand}" Padding="10,3" />
+                    </StackPanel>
+                    <ListBox ItemsSource="{Binding Persons}" SelectedItem="{Binding SelectedPerson}"
+                             DisplayMemberPath="Canonical" />
+                  </DockPanel>
+
+                  <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch" Background="#EEEEEE" />
+
+                  <Grid Grid.Column="2" Margin="8,0,0,0">
+                    <Grid.RowDefinitions>
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="*" />
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="正規形" FontWeight="Bold" Margin="0,0,0,4" />
+                    <TextBox Grid.Row="1" Padding="4"
+                             Text="{Binding SelectedPerson.Canonical, UpdateSourceTrigger=PropertyChanged}" />
+                    <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,8,0,0">
+                      <CheckBox Content="指揮者" IsChecked="{Binding SelectedPerson.IsConductor}" Margin="0,0,16,0" />
+                      <CheckBox Content="ソリスト" IsChecked="{Binding SelectedPerson.IsSoloist}" />
+                    </StackPanel>
+                    <TextBlock Grid.Row="3" Text="別名（1 行 1 件）" FontWeight="Bold" Margin="0,10,0,4" />
+                    <TextBox Grid.Row="4" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
+                             Text="{Binding SelectedPerson.AliasesText, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock Grid.Row="5" Text="日本語表記（1 行 1 件）" FontWeight="Bold" Margin="0,10,0,4" />
+                    <TextBox Grid.Row="6" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
+                             Text="{Binding SelectedPerson.AliasesJaText, UpdateSourceTrigger=PropertyChanged}" />
+                  </Grid>
+                </Grid>
+              </TabItem>
+
+              <!-- 団体 -->
+              <TabItem Header="団体">
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="260" MinWidth="160" />
+                    <ColumnDefinition Width="4" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+
+                  <DockPanel Grid.Column="0">
+                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,6,0,0">
+                      <Button Content="追加" Command="{Binding AddEnsembleCommand}" Padding="10,3" Margin="0,0,6,0" />
+                      <Button Content="削除" Command="{Binding RemoveEnsembleCommand}" Padding="10,3" />
+                    </StackPanel>
+                    <ListBox ItemsSource="{Binding Ensembles}" SelectedItem="{Binding SelectedEnsemble}"
+                             DisplayMemberPath="DisplayName" />
+                  </DockPanel>
+
+                  <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch" Background="#EEEEEE" />
+
+                  <ScrollViewer Grid.Column="2" Margin="8,0,0,0" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                      <TextBlock Text="実体 ID（改名をまたいで同一の団体を指す。名前の類似で束ねないこと）"
+                                 FontWeight="Bold" Margin="0,0,0,4" TextWrapping="Wrap" />
+                      <TextBox Padding="4"
+                               Text="{Binding SelectedEnsemble.EntityId, UpdateSourceTrigger=PropertyChanged}" />
+
+                      <TextBlock Text="正規形（時代分割しない場合）" FontWeight="Bold" Margin="0,10,0,4" />
+                      <TextBox Padding="4"
+                               Text="{Binding SelectedEnsemble.Canonical, UpdateSourceTrigger=PropertyChanged}" />
+
+                      <CheckBox Content="時代分割を行わない（個別例外。TAGGING_POLICY 5.3.2）"
+                                IsChecked="{Binding SelectedEnsemble.NoEraSplit}" Margin="0,8,0,0" />
+
+                      <DockPanel Margin="0,12,0,4">
+                        <Button DockPanel.Dock="Right" Content="区分を削除" Command="{Binding RemoveEraCommand}" Padding="8,2" />
+                        <Button DockPanel.Dock="Right" Content="区分を追加" Command="{Binding AddEraCommand}" Padding="8,2" Margin="0,0,6,0" />
+                        <TextBlock Text="時代分割（収録時点の名称を採用する。TAGGING_POLICY 5.3.1）" FontWeight="Bold" VerticalAlignment="Center" />
+                      </DockPanel>
+                      <DataGrid ItemsSource="{Binding SelectedEnsemble.Eras}"
+                                SelectedItem="{Binding SelectedEra}"
+                                AutoGenerateColumns="False"
+                                SelectionMode="Single"
+                                MaxHeight="160"
+                                GridLinesVisibility="Horizontal">
+                        <DataGrid.Columns>
+                          <DataGridTextColumn Header="この年以降" Binding="{Binding FromText, UpdateSourceTrigger=PropertyChanged}" Width="90" />
+                          <DataGridTextColumn Header="この年より前" Binding="{Binding UntilText, UpdateSourceTrigger=PropertyChanged}" Width="100" />
+                          <DataGridTextColumn Header="正規形" Binding="{Binding Canonical, UpdateSourceTrigger=PropertyChanged}" Width="*" />
+                        </DataGrid.Columns>
+                      </DataGrid>
+
+                      <TextBlock Text="別名（1 行 1 件）" FontWeight="Bold" Margin="0,12,0,4" />
+                      <TextBox Height="90" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
+                               Text="{Binding SelectedEnsemble.AliasesText, UpdateSourceTrigger=PropertyChanged}" />
+
+                      <TextBlock Text="日本語表記（1 行 1 件）" FontWeight="Bold" Margin="0,10,0,4" />
+                      <TextBox Height="90" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
+                               Text="{Binding SelectedEnsemble.AliasesJaText, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+                  </ScrollViewer>
+                </Grid>
+              </TabItem>
+
+              <!-- 誤記 -->
+              <TabItem Header="誤記">
+                <Grid>
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                  </Grid.RowDefinitions>
+
+                  <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,6">
+                    <Button Content="追加" Command="{Binding AddTypoCommand}" Padding="10,3" Margin="0,0,6,0" />
+                    <Button Content="削除" Command="{Binding RemoveTypoCommand}" Padding="10,3" Margin="0,0,12,0" />
+                    <TextBlock VerticalAlignment="Center" Foreground="#666666" TextWrapping="Wrap"
+                               Text="照合は正規表現で行う。団体名には適用しない（Münchener Bach-Chor の -ener は正しい表記）。" />
+                  </StackPanel>
+
+                  <DataGrid Grid.Row="1"
+                            ItemsSource="{Binding Typos}"
+                            SelectedItem="{Binding SelectedTypo}"
+                            AutoGenerateColumns="False"
+                            SelectionMode="Single"
+                            GridLinesVisibility="Horizontal">
+                    <DataGrid.Columns>
+                      <DataGridTextColumn Header="パターン" Binding="{Binding Pattern, UpdateSourceTrigger=PropertyChanged}" Width="240" />
+                      <DataGridTextColumn Header="置換後" Binding="{Binding Replacement, UpdateSourceTrigger=PropertyChanged}" Width="200" />
+                      <DataGridTextColumn Header="メモ" Binding="{Binding Note, UpdateSourceTrigger=PropertyChanged}" Width="*" />
+                      <DataGridTextColumn Header="正規表現" Binding="{Binding ValidityMark}" IsReadOnly="True" Width="80" />
+                    </DataGrid.Columns>
+                  </DataGrid>
+
+                  <!-- その場で試せるテスト欄（docs/SPEC.md 7.3） -->
+                  <Border Grid.Row="2" Padding="8" Margin="0,6,0,0" Background="#F7F7F7" BorderBrush="#DDDDDD" BorderThickness="1">
+                    <StackPanel>
+                      <TextBlock Text="選択中のパターンを試す" FontWeight="Bold" Margin="0,0,0,4" />
+                      <TextBox Padding="4" Text="{Binding TypoTestInput, UpdateSourceTrigger=PropertyChanged}" />
+                      <TextBlock Text="{Binding TypoTestResult}" Margin="0,6,0,0" TextWrapping="Wrap" Foreground="#333333" />
+                    </StackPanel>
+                  </Border>
+                </Grid>
+              </TabItem>
+
+              <!-- 保護対象 -->
+              <TabItem Header="保護対象">
+                <Grid>
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                  </Grid.RowDefinitions>
+
+                  <StackPanel Grid.Row="0" Margin="0,0,0,6">
+                    <TextBlock TextWrapping="Wrap" Foreground="#666666"
+                               Text="配役情報を含むため書き換えない albumartist（TAGGING_POLICY 2.3）。ここに載っている値は全ルールの検査前に除外される。" />
+                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                      <Button Content="追加" Command="{Binding AddProtectedValueCommand}" Padding="10,3" Margin="0,0,6,0" />
+                      <Button Content="削除" Command="{Binding RemoveProtectedValueCommand}" Padding="10,3" />
+                    </StackPanel>
+                  </StackPanel>
+
+                  <ListBox Grid.Row="1"
+                           ItemsSource="{Binding ProtectedValues}"
+                           SelectedItem="{Binding SelectedProtectedValue}"
+                           DisplayMemberPath="Value"
+                           HorizontalContentAlignment="Stretch" />
+
+                  <StackPanel Grid.Row="2" Margin="0,6,0,0">
+                    <TextBlock Text="選択中の値" FontWeight="Bold" Margin="0,0,0,4" />
+                    <TextBox Height="70" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                             Text="{Binding SelectedProtectedValue.Value, UpdateSourceTrigger=PropertyChanged}" />
+                  </StackPanel>
+                </Grid>
+              </TabItem>
+
+            </TabControl>
+
+            <!-- 検証結果。エラーは保存を止める -->
+            <ItemsControl Grid.Row="2"
+                          ItemsSource="{Binding Issues}"
+                          MaxHeight="130"
+                          Margin="0,6,0,0"
+                          Background="#FFF7F0"
+                          Visibility="{Binding Issues.Count, Converter={StaticResource CountToVisibility}}">
+              <ItemsControl.Template>
+                <ControlTemplate TargetType="ItemsControl">
+                  <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8,6">
+                    <ItemsPresenter />
+                  </ScrollViewer>
+                </ControlTemplate>
+              </ItemsControl.Template>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" Foreground="#8A4B00" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </Grid>
         </TabItem>
 
         <TabItem Header="バックアップ履歴">

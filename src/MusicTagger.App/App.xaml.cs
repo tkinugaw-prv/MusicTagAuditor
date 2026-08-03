@@ -49,8 +49,10 @@ public partial class App : Application
         services.AddSingleton<InspectionEngine>();
 
         // 辞書は %APPDATA%\musicTagger に置く。初回は同梱の既定辞書がコピーされる。
-        services.AddSingleton(_ => new DictionaryIndex(
-            DictionaryLoader.LoadOrCreate(AppConst.GetAppDataDirectory())));
+        // 索引ではなくストアを登録する。段階 5 で辞書を編集できるようになり、
+        // 索引は保存のたびに作り直されるため、握り込むと古いものを参照し続けてしまう。
+        services.AddSingleton(_ => new DictionaryStore(AppConst.GetAppDataDirectory()));
+        services.AddSingleton<DictionaryViewModel>();
         services.AddSingleton<MainViewModel>();
         services.AddSingleton<MainWindow>();
 

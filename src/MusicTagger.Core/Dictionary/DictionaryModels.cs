@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace MusicTagger.Core.Dictionary;
@@ -139,6 +140,17 @@ public sealed record TagDictionary
     /// **検査そのものから除外する。** 除外しないと R-207 / R-208 が誤検出だらけになる。
     /// </summary>
     public IReadOnlyList<string> ProtectedAlbumArtists { get; init; } = [];
+
+    /// <summary>
+    /// モデルに無いプロパティ（<c>_comment</c> 等）をそのまま保持する。
+    ///
+    /// 同梱辞書は「推測で名前を足さないこと」といった注意書きを <c>_</c> 始まりの
+    /// プロパティとして持っている。**書き出しでこれを落とすと、辞書を編集する人が
+    /// 前提を知らないまま値を足せるようになる。** 読み書きで往復させて残す。
+    /// なお書き出し位置は末尾になる（拡張データは通常プロパティの後に出力されるため）。
+    /// </summary>
+    [JsonExtensionData]
+    public IDictionary<string, JsonElement>? Extensions { get; set; }
 }
 
 /// <summary>

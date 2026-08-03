@@ -46,13 +46,23 @@ public sealed class DictionaryLoader
     }
 
     /// <summary>
+    /// 利用者辞書のパスを組み立てる。
+    /// </summary>
+    /// <param name="directory">辞書を置くフォルダ（<c>%APPDATA%\musicTagger</c>）。</param>
+    /// <returns>辞書ファイルの絶対パス。</returns>
+    public static string GetUserDictionaryPath(string directory)
+    {
+        return Path.Combine(directory, USER_DICTIONARY_FILE_NAME);
+    }
+
+    /// <summary>
     /// 利用者辞書を読み込む。存在しなければ既定辞書をコピーして作る。
     /// </summary>
     /// <param name="directory">辞書を置くフォルダ（<c>%APPDATA%\musicTagger</c>）。</param>
     /// <returns>読み込んだ辞書。</returns>
     public static TagDictionary LoadOrCreate(string directory)
     {
-        string path = Path.Combine(directory, USER_DICTIONARY_FILE_NAME);
+        string path = GetUserDictionaryPath(directory);
 
         if (!File.Exists(path))
         {
