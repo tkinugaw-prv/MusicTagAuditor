@@ -320,9 +320,10 @@
                   <DataGridTextColumn Header="区分" Binding="{Binding Classification}" IsReadOnly="True" Width="68"
                                       ElementStyle="{StaticResource CenterCellTextStyle}" />
                   <!--
-                    幅は star ではなく実幅で与え、入り切らないぶんは横スクロールさせる。
-                    star で配分すると根拠列の実効幅が 255px ほどしか取れず、
+                    根拠以外は実幅で固定し、余りは根拠列だけが star で吸う。
+                    全列を star にすると根拠の実効幅が 255px ほどしか取れず、
                     自動判定の理由が読めないまま承認することになる（docs/SPEC.md 5.3）。
+                    根拠を実幅で固定するとウィンドウを広げても伸びないので star + MinWidth。
                     ファイル一覧タブの手編集差分も同じ幅体系に揃えること。
                   -->
                   <DataGridTextColumn Header="パス" Binding="{Binding RelativePath}" IsReadOnly="True" Width="300"
@@ -333,7 +334,7 @@
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
                   <DataGridTextColumn Header="変更後" Binding="{Binding AfterText}" IsReadOnly="True" Width="190"
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
-                  <DataGridTextColumn Header="根拠" Binding="{Binding Rationale}" IsReadOnly="True" Width="460"
+                  <DataGridTextColumn Header="根拠" Binding="{Binding Rationale}" IsReadOnly="True" Width="*" MinWidth="460"
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
                 </DataGrid.Columns>
               </DataGrid>
@@ -559,7 +560,7 @@
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
                   <DataGridTextColumn Header="変更後" Binding="{Binding AfterText}" IsReadOnly="True" Width="190"
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
-                  <DataGridTextColumn Header="根拠" Binding="{Binding Rationale}" IsReadOnly="True" Width="460"
+                  <DataGridTextColumn Header="根拠" Binding="{Binding Rationale}" IsReadOnly="True" Width="*" MinWidth="460"
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
                 </DataGrid.Columns>
               </DataGrid>
