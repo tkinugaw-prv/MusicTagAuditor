@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="260" viewBox="0 0 320 260">
+
+<!-- 大きいサイズ用（説明資料・ストア画像向け）。
+     背後にもう 1 枚タグを重ね、「一括で付け直す」ことを示す。
+     小さいサイズでは 2 枚目が潰れるため icon_source_small.svg では省く。 -->
+
+<rect x="0" y="0" width="320" height="260" fill="none"/>
+
+<!-- 背面のタグ -->
+<g transform="translate(120,132) scale(0.72) rotate(-34) translate(-59,-98)" opacity="0.55">
+  <path d="M59 4 L110 50 Q118 57 118 68 L118 178 Q118 192 104 192 L14 192 Q0 192 0 178 L0 68 Q0 57 8 50 Z"
+        fill="#6FC6A9" stroke="#0F6E56" stroke-width="9" stroke-linejoin="round"/>
+  <circle cx="59" cy="46" r="12" fill="#E1F5EE" stroke="#0F6E56" stroke-width="8"/>
+</g>
+
+<!-- 前面のタグ＋音符 -->
+<g transform="translate(186,130) scale(0.94) rotate(-12) translate(-59,-98)">
+  <path d="M59 4 L110 50 Q118 57 118 68 L118 178 Q118 192 104 192 L14 192 Q0 192 0 178 L0 68 Q0 57 8 50 Z"
+        fill="#9FE1CB" stroke="#0F6E56" stroke-width="9" stroke-linejoin="round"/>
+  <circle cx="59" cy="46" r="12" fill="#E1F5EE" stroke="#0F6E56" stroke-width="8"/>
+  <g fill="#085041">
+    <ellipse cx="50" cy="158" rx="17" ry="12.5" transform="rotate(-18 50 158)"/>
+    <rect x="60" y="79" width="8" height="81" rx="3"/>
+    <path d="M64 79 Q106 92 99 130 Q97 103 64 113 Z"/>
+  </g>
+</g>
+
+</svg>

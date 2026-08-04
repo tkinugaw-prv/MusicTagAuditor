@@ -23,6 +23,73 @@
 
 ---
 
+## 画面
+
+**配色とコントロールの見た目は「音楽フォルダー時間フィッター」（MusicFolderTimeFitter）に合わせている。** 同じ人が同じ音楽ライブラリに対して使う道具なので、2 つのアプリが別物に見えないようにする。
+
+デザイントークン（背景・枠・文字・アクセント緑 `#5EC2A5`・角丸 5px・フォント `Inter, Yu Gothic UI, Segoe UI`）は向こうの `Themes/DarkTheme.xaml` と同じ値を `src/MusicTagger.App/Themes/DarkTheme.xaml` に置いている。**片方だけ変えないこと。**
+
+| 領域 | 面 |
+|---|---|
+| タイトルバー・操作バー・ステータスバー | `PanelBarBrush` |
+| 入力エリア・ツリー・表のヘッダ | `PanelInputBrush` |
+| 表の本体 | `BgOuterBrush` |
+
+OS のタイトルバーは `Interop/DwmDarkTitleBar.cs` で着色する。DWM の属性が無い環境（Windows 10 など）では黙って標準の外観に戻る。
+
+### musicTagger 固有の色
+
+検査結果は重大度と判定区分で色が変わる（`docs/SPEC.md` 5.3 / 6章）。淡色前提の背景色をそのまま暗くすると判別できなくなるため、暗い面の上で使える値に置き直している。
+
+| 用途 | トークン |
+|---|---|
+| 確定 / 要確認 / 保留 の行 | `RowConfirmedBrush` / `RowReviewBrush` / `RowHoldBrush` |
+| 保留中の手編集がある行 | `RowEditedBrush` |
+| 適用の失敗・不一致 | `DangerPanelBrush` |
+| 手編集の気づき・辞書の検証結果 | `NoticePanelBrush` |
+
+検査結果タブの重大度記号は `SeverityToBrushConverter` で色を付ける。**記号（⛔ / ⚠ / ❓ / ✎）はどれも同じ濃さの字形で出るため、形の違いだけでは一覧のまま重大度を読み分けられない。**
+
+| 重大度 | 記号 | トークン |
+|---|---|---|
+| error | ⛔ | `DangerBrush` |
+| warning | ⚠ | `WarningBrush` |
+| info | ❓ | `InfoBrush` |
+| manual（手編集） | ✎ | `AccentBrush` |
+
+**色は C# に書かず、テーマのリソースから引く**（`Application.Current.TryFindResource`）。値を持たせると `Themes/DarkTheme.xaml` と二重管理になる。
+
+⚠（U+26A0）だけは輪郭だけの細い三角で描かれ、塗り潰しの ⛔ / ❓ と並ぶと一段沈む。`SeverityGlyphConverter` で Segoe MDL2 Assets の塗り潰し字形（U+E814）へ差し替えている。置き換え表に無い記号はそのまま通すので、ビューモデル側の記号が増減しても表示は欠けない。
+
+**書体の切り替えは警告の行だけに閉じる。** `FontFamily` に `Segoe MDL2 Assets, Segoe UI Symbol, ...` と並べて書いても、この書体に無い ⛔ / ❓ は後続へフォールバックせず豆腐になる。列全体ではなく `DataTrigger` で該当行だけ差し替えること。
+
+**判定区分の色は選択色より先に書く。** `DataGridRow` のスタイルはトリガの記述順で後勝ちになるため、順序を入れ替えると区分の色が選択色を上書きし、どの行を選んでいるか分からなくなる。
+
+### 入力欄のプレースホルダ
+
+WPF の `TextBox` は placeholder を持たない。ラベルを置けない検索欄・絞り込み欄は、空欄だと**何を入れる欄なのかが画面から消える**ため、添付プロパティ `Controls/Placeholder.cs` で説明文を持たせ、テーマの `TextBox` テンプレートが薄い文字で描く。
+
+```xml
+<TextBox ctl:Placeholder.Text="正規形・別名・実体 ID で絞り込む"
+         Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}" />
+```
+
+`xmlns:ctl="clr-namespace:MusicTagger.App.Controls"` を宣言して使う。表示・非表示はテンプレートの `Text` トリガで切り替わるので、**バインドは `UpdateSourceTrigger=PropertyChanged` にすること。** 既定の `LostFocus` だと入力中にプレースホルダが消えない。
+
+### アイコン
+
+音符とタグを組み合わせたマーク。配色は「音楽フォルダー時間フィッター」のアイコンと同じ 4 色で、並べたときに同じ組の道具に見えるようにしている。
+
+| ファイル | 用途 |
+|---|---|
+| `src/MusicTagger.App/Assets/app_icon.ico` | 実行ファイルとウィンドウのアイコン（16〜256px の 9 サイズ） |
+| `src/MusicTagger.App/Assets/icon_source_small.svg` | 上記の元データ。**形を変えるときはこちらを直してから .ico を作り直す** |
+| `src/MusicTagger.App/Assets/icon_source_detail.svg` | 説明資料向けの大きいサイズ（タグを 2 枚重ねた版） |
+
+タイトルバーの見出しにも同じ形を出す。こちらは `Themes/DarkTheme.xaml` の `AppMarkImage`（`DrawingImage`）で描いており、SVG とは別に持っている。**符頭と符幹が重なるので `GeometryGroup` の `FillRule` は `Nonzero` にすること。** 既定の `EvenOdd` だと重なった部分が打ち消し合って穴になる。
+
+---
+
 ## 開発環境
 
 - .NET 10 SDK（LTS。GA 2025-11-11 / サポート期限 2028-11-14）

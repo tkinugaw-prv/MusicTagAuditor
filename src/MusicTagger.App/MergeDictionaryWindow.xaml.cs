@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Windows;
+using MusicTagger.App.Interop;
 using MusicTagger.Core.Dictionary;
 
 namespace MusicTagger.App;
@@ -37,6 +38,16 @@ public partial class MergeDictionaryWindow : Window
 
     /// <summary>見出しに出す説明。</summary>
     public string Header { get; }
+
+    /// <summary>
+    /// HWND 確定後に OS のタイトルバーをダークテーマへ合わせる。
+    /// </summary>
+    /// <param name="e">イベント引数。</param>
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        DwmDarkTitleBar.Apply(this);
+    }
 
     /// <summary>
     /// すべて取り込む対象にする。
