@@ -2,6 +2,7 @@ using MusicTagAuditor.Core.Applying;
 using MusicTagAuditor.Core.Backup;
 using MusicTagAuditor.Core.Dictionary;
 using MusicTagAuditor.Core.Inspection;
+using MusicTagAuditor.Core.Inspection.Rules;
 using MusicTagAuditor.Core.Models;
 using MusicTagAuditor.Core.Scanning;
 using Xunit.Abstractions;
@@ -16,11 +17,17 @@ namespace MusicTagAuditor.TagIo.Tests.Integration;
 /// </summary>
 public sealed class RealLibraryApplyTests(ITestOutputHelper output) : IDisposable
 {
-    /// <summary>複製する検体の上限。</summary>
+    /// <summary>複製する検体の目安（フォーマット 3 種 × 下記の合計）。</summary>
     private const int SPECIMEN_COUNT = 200;
 
-    /// <summary>ルールごとに拾うフォルダ数。</summary>
-    private const int FOLDERS_PER_RULE = 3;
+    /// <summary>フォーマットごとに拾う検体数。フォーマットの偏りを避ける。</summary>
+    private const int SPECIMEN_COUNT_PER_FORMAT = SPECIMEN_COUNT / 3;
+
+    /// <summary>
+    /// 複製にだけ書き込む違反値。<see cref="GenreNotClassicRule.CANONICAL_GENRE"/> と異なるので
+    /// R-101 が確実に検出する。
+    /// </summary>
+    private const string SEEDED_GENRE = "Classical";
 
     /// <summary>複製先のルート。</summary>
     private readonly string _root = Path.Combine(
@@ -181,10 +188,16 @@ public sealed class RealLibraryApplyTests(ITestOutputHelper output) : IDisposabl
     }
 
     /// <summary>
-    /// 実ライブラリから検体を複製する。
+    /// 実ライブラリから検体を複製し、複製にだけ違反を書き込む。
     ///
-    /// **修正案が出るファイルを優先して選ぶ。** 先頭から機械的に取ると、
-    /// たまたま問題の無いファイルばかりになりルールの大半を通らない。
+    /// 実ライブラリはアプリで修正を適用済みのことがあり、自動修正できる違反が 1 件も
+    /// 残っていない場合がある。修正案の有無を実データの汚れ具合に委ねると、ライブラリを
+    /// きれいにするほどこのテストが落ちてしまう。そのため、フォーマットごとにフォルダを
+    /// 拾って複製したうえで（<see cref="RealLibraryManualEditTests"/> と同じ選び方）、
+    /// 複製にだけ genre を意図的に壊して R-101 の修正案を自前で用意する。実ファイル固有の
+    /// 癖（フォーマット別の書き込み経路など）は複製元のまま残るので、生成した検体では
+    /// 確認できない部分は引き続き通せる。
+    ///
     /// フォルダ単位で複製するのは、指揮者の特定が同一フォルダの他ファイルを見るため
     /// （docs/TAGGING_POLICY.md 6.2）。
     /// </summary>
@@ -193,54 +206,28 @@ public sealed class RealLibraryApplyTests(ITestOutputHelper output) : IDisposabl
         string libraryRoot = IntegrationConst.ResolveLibraryRoot();
 
         ScanResult source = await new LibraryScanner(_reader).ScanAsync(libraryRoot);
-        DictionaryIndex dictionary = new(DictionaryLoader.LoadDefault());
-        InspectionResult inspection = new InspectionEngine().Inspect(new InspectionContext(source, dictionary));
 
-        // ルールごとに数フォルダずつ拾い、フォーマットの偏りも避ける。
-        HashSet<string> folders = new(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var byRule in inspection.Results.Where(rule => rule.FixableCount > 0))
-        {
-            IEnumerable<string> candidates = byRule.Changes
-                .Where(change => change.IsSelected && change.HasFix)
-                .Select(change => Path.GetDirectoryName(change.RelativePath) ?? string.Empty)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Take(FOLDERS_PER_RULE);
-
-            foreach (string folder in candidates)
-            {
-                folders.Add(folder);
-            }
-        }
-
-        Dictionary<string, List<TrackTags>> tracksByFolder = source.Tracks
+        var foldersByFormat = source.Tracks
             .GroupBy(track => Path.GetDirectoryName(track.RelativePath) ?? string.Empty, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.OrdinalIgnoreCase);
+            .GroupBy(folder => folder.First().Format);
 
-        int copied = 0;
+        IEnumerable<TrackTags> specimens = foldersByFormat
+            .SelectMany(byFormat => byFormat
+                .SelectMany(folder => folder)
+                .Take(SPECIMEN_COUNT_PER_FORMAT));
 
-        foreach (string folder in folders)
+        foreach (TrackTags track in specimens)
         {
-            if (!tracksByFolder.TryGetValue(folder, out List<TrackTags>? tracks))
+            string destinationPath = Path.Combine(_root, track.RelativePath);
+
+            Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
+            File.Copy(track.FullPath, destinationPath, overwrite: true);
+            File.SetAttributes(destinationPath, FileAttributes.Normal);
+
+            _writer.Write(destinationPath, new Dictionary<TagField, IReadOnlyList<string>>
             {
-                continue;
-            }
-
-            foreach (TrackTags track in tracks)
-            {
-                if (copied >= SPECIMEN_COUNT)
-                {
-                    return;
-                }
-
-                string destinationPath = Path.Combine(_root, track.RelativePath);
-
-                Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
-                File.Copy(track.FullPath, destinationPath, overwrite: true);
-                File.SetAttributes(destinationPath, FileAttributes.Normal);
-
-                copied++;
-            }
+                [TagField.Genre] = [SEEDED_GENRE],
+            });
         }
     }
 }
