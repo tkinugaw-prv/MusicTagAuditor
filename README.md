@@ -315,7 +315,11 @@ Excel が日本語を Shift-JIS と誤認しないよう、BOM 付き UTF-8 で�
 
 **音声ファイル本体は複製しない**（対象ライブラリは 30GB）。タグだけを JSON にスナップショットする。
 
-保存先はライブラリ直下の `backup_{yyyyMMddHHmmss}\`。
+保存先は既定ではライブラリ直下の `backup_{yyyyMMddHHmmss}\`。入力エリアの「バックアップ先」で任意のフォルダ（別ドライブでもよい）に変えられる。設定は `%APPDATA%\MusicTagAuditor\settings.json` に残る。
+
+- 保存先を変えても、以前ライブラリ直下に取ったバックアップは履歴に並び続ける（両方を走査してマージする）
+- 保存先を複数のライブラリで共用した場合、履歴には `manifest.json` の `libraryRoot` が一致するものだけを出す。同じ秒に取得したものは `backup_{yyyyMMddHHmmss}_2` のように連番で分ける
+- 保存先をライブラリ配下に置いてもスキャン対象は増えない（`backup_*` は中間階層でも除外される）
 
 | ファイル | 内容 |
 |---|---|
@@ -354,7 +358,7 @@ dotnet run --project src/MusicTagAuditor.App/MusicTagAuditor.App.csproj
 dotnet run --project src/MusicTagAuditor.App/MusicTagAuditor.App.csproj -- "D:\Music Library for AIMP\Classic"
 ```
 
-ログは `%LOCALAPPDATA%\MusicTagAuditor\logs\` に日次で出力される。設定・辞書は `%APPDATA%\MusicTagAuditor\`。
+ログは `%LOCALAPPDATA%\MusicTagAuditor\logs\` に日次で出力される。辞書は `%APPDATA%\MusicTagAuditor\dictionary.json`、設定は同フォルダの `settings.json`（現在の項目はバックアップ先のみ）。設定が壊れていても既定値で起動し、理由をログに残す。
 
 ---
 

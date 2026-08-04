@@ -8,6 +8,7 @@ using MusicTagAuditor.Core.Backup;
 using MusicTagAuditor.Core.Dictionary;
 using MusicTagAuditor.Core.Inspection;
 using MusicTagAuditor.Core.Scanning;
+using MusicTagAuditor.Core.Settings;
 using MusicTagAuditor.TagIo;
 using Serilog;
 
@@ -36,7 +37,15 @@ public partial class App : Application
         services.AddSingleton<ITagWriter, TagWriter>();
         services.AddSingleton<ScanOptions>();
         services.AddSingleton<LibraryScanner>();
-        services.AddSingleton<SnapshotService>();
+
+        // 設定は %APPDATA%\MusicTagAuditor\settings.json に置く。
+        // 読めなくても既定値で起動する（設定は入力し直せるが、起動できないと何もできない）。
+        services.AddSingleton(_ => new AppSettingsStore(AppConst.GetAppDataDirectory()));
+
+        // バックアップの保存先は毎回ストアから取り直す。設定を変えた直後から効かせるため、
+        // 値ではなく取得手段を渡す。Core は引き続き UI にも設定の保存形式にも依存しない。
+        services.AddSingleton(provider =>
+            new SnapshotService(() => provider.GetRequiredService<AppSettingsStore>().Current.BackupRoot));
         services.AddSingleton<RestoreService>();
         services.AddSingleton<ApplyService>();
         // ルールを明示的に登録する。登録しないと DI は空のコレクションを注入し、
@@ -59,6 +68,12 @@ public partial class App : Application
         _services = services.BuildServiceProvider();
 
         InspectionEngine engine = _services.GetRequiredService<InspectionEngine>();
+        AppSettingsStore settingsStore = _services.GetRequiredService<AppSettingsStore>();
+
+        if (settingsStore.LoadError is not null)
+        {
+            Log.Warning("設定の読み込みに失敗した {Reason}", settingsStore.LoadError);
+        }
 
         Log.Information("Music Tag Auditor を起動した 検査ルール={RuleCount} 件", engine.RuleCount);
 

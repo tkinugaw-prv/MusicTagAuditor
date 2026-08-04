@@ -27,6 +27,9 @@ public sealed class SnapshotService
     /// <summary>埋め込まれた復元スクリプトのリソース名の末尾。</summary>
     private const string RESTORE_SCRIPT_RESOURCE_SUFFIX = "restore-tags.ps1";
 
+    /// <summary>同名フォルダに足す連番の開始値。</summary>
+    private const int DIRECTORY_SEQUENCE_START = 2;
+
     /// <summary>
     /// スナップショット出力用のシリアライズ設定。
     /// 日本語をエスケープせずに出す。人と外部スクリプトが直接読むファイルであり、
@@ -39,6 +42,25 @@ public sealed class SnapshotService
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     });
+
+    /// <summary>
+    /// 設定されたバックアップの保存先を取る手段。null または null を返す間は
+    /// 従来どおりライブラリ直下に置く。
+    /// </summary>
+    private readonly Func<string?>? _backupRootProvider;
+
+    /// <summary>
+    /// スナップショットの取得・読み込みを行うサービスを作る。
+    /// </summary>
+    /// <param name="backupRootProvider">
+    /// 設定されたバックアップの保存先を返す関数。
+    /// **毎回呼び直す**ので、設定を変えた直後から新しい保存先が効く。
+    /// 省略時はライブラリ直下（従来の動作）。
+    /// </param>
+    public SnapshotService(Func<string?>? backupRootProvider = null)
+    {
+        _backupRootProvider = backupRootProvider;
+    }
 
     /// <summary>
     /// スキャン結果からスナップショットを作り、バックアップフォルダへ書き出す。
@@ -58,8 +80,7 @@ public sealed class SnapshotService
     {
         DateTimeOffset createdAt = timestamp ?? DateTimeOffset.Now;
 
-        string directoryPath = Path.Combine(scan.LibraryRoot, BackupConst.BuildDirectoryName(createdAt));
-        Directory.CreateDirectory(directoryPath);
+        string directoryPath = CreateUniqueDirectory(ResolveBackupRoot(scan.LibraryRoot), createdAt);
 
         TagSnapshot snapshot = new(
             BackupConst.SCHEMA_VERSION,
@@ -85,38 +106,150 @@ public sealed class SnapshotService
     }
 
     /// <summary>
-    /// ライブラリ直下のバックアップフォルダを新しい順に列挙する。
+    /// このライブラリのバックアップフォルダを新しい順に列挙する。
+    ///
+    /// **設定された保存先とライブラリ直下の両方を見る。** 保存先を変えたあとも、
+    /// 以前ライブラリ直下に取ったバックアップが一覧から消えないようにするため。
     /// </summary>
     /// <param name="libraryRoot">ライブラリのルート。</param>
     /// <returns>バックアップの一覧。</returns>
     public IReadOnlyList<BackupEntry> List(string libraryRoot)
     {
-        if (!Directory.Exists(libraryRoot))
+        List<BackupEntry> entries = [];
+        HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
+
+        // ライブラリ直下。ここにあるものは、マニフェストが読めなくても対象ライブラリのものと分かる。
+        Collect(libraryRoot, libraryRoot, requireMatchingManifest: false, seen, entries);
+
+        string? backupRoot = _backupRootProvider?.Invoke();
+
+        if (!string.IsNullOrWhiteSpace(backupRoot))
         {
-            return [];
+            // 共有の保存先には他のライブラリのバックアップも混ざりうるので、
+            // マニフェストで対象ライブラリを確かめられたものだけ採る。
+            Collect(backupRoot, libraryRoot, requireMatchingManifest: true, seen, entries);
         }
 
-        List<BackupEntry> entries = [];
+        // 保存先が 2 箇所になると同名フォルダが並びうるため、フォルダ名ではなく取得日時で並べる。
+        return
+        [
+            .. entries
+                .OrderByDescending(GetCreatedAt)
+                .ThenByDescending(entry => entry.DirectoryName, StringComparer.Ordinal),
+        ];
+    }
+
+    /// <summary>
+    /// 1 つのフォルダ配下からバックアップを集める。
+    /// </summary>
+    /// <param name="searchRoot">探すフォルダ。</param>
+    /// <param name="libraryRoot">対象ライブラリのルート。</param>
+    /// <param name="requireMatchingManifest">
+    /// マニフェストで対象ライブラリを確認できたものだけ採るか。
+    /// </param>
+    /// <param name="seen">採用済みのフォルダパス。保存先がライブラリ直下と重なる場合の二重採用を防ぐ。</param>
+    /// <param name="entries">集めた結果の追加先。</param>
+    private static void Collect(
+        string searchRoot,
+        string libraryRoot,
+        bool requireMatchingManifest,
+        HashSet<string> seen,
+        List<BackupEntry> entries)
+    {
+        if (!Directory.Exists(searchRoot))
+        {
+            return;
+        }
 
         foreach (string directoryPath in Directory.EnumerateDirectories(
-                     libraryRoot,
+                     searchRoot,
                      BackupConst.BACKUP_DIRECTORY_PREFIX + "*"))
         {
-            string snapshotPath = Path.Combine(directoryPath, BackupConst.SNAPSHOT_FILE_NAME);
-
             // 音声本体を複製しただけの過去の backup_* フォルダは対象外。
-            if (!File.Exists(snapshotPath))
+            if (!File.Exists(Path.Combine(directoryPath, BackupConst.SNAPSHOT_FILE_NAME)))
             {
                 continue;
             }
 
-            entries.Add(new BackupEntry(
-                directoryPath,
-                Path.GetFileName(directoryPath),
-                TryLoadManifest(directoryPath)));
+            if (!seen.Add(Path.GetFullPath(directoryPath)))
+            {
+                continue;
+            }
+
+            BackupManifest? manifest = TryLoadManifest(directoryPath);
+
+            if (requireMatchingManifest
+                && (manifest is null || !IsSameDirectory(manifest.LibraryRoot, libraryRoot)))
+            {
+                continue;
+            }
+
+            entries.Add(new BackupEntry(directoryPath, Path.GetFileName(directoryPath), manifest));
+        }
+    }
+
+    /// <summary>
+    /// 並べ替えに使う取得日時。マニフェストが読めない場合はフォルダ名から読む。
+    /// </summary>
+    private static DateTimeOffset GetCreatedAt(BackupEntry entry)
+    {
+        return entry.Manifest?.CreatedAt
+            ?? ParseTimestamp(entry.DirectoryName)
+            ?? DateTimeOffset.MinValue;
+    }
+
+    /// <summary>
+    /// 2 つのパスが同じフォルダを指すかを判定する。末尾の区切り文字と大小文字の差は無視する。
+    /// </summary>
+    private static bool IsSameDirectory(string? left, string? right)
+    {
+        if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right))
+        {
+            return false;
         }
 
-        return [.. entries.OrderByDescending(entry => entry.DirectoryName, StringComparer.Ordinal)];
+        return string.Equals(Normalize(left), Normalize(right), StringComparison.OrdinalIgnoreCase);
+
+        static string Normalize(string path)
+        {
+            return Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        }
+    }
+
+    /// <summary>
+    /// バックアップの出力先フォルダを決める。設定が無ければライブラリ直下。
+    /// </summary>
+    private string ResolveBackupRoot(string libraryRoot)
+    {
+        string? configured = _backupRootProvider?.Invoke();
+
+        return string.IsNullOrWhiteSpace(configured) ? libraryRoot : configured;
+    }
+
+    /// <summary>
+    /// バックアップフォルダを作る。同名が既にあれば連番を足す。
+    ///
+    /// 保存先を複数ライブラリで共有すると、同じ秒に取ったバックアップ同士が
+    /// ぶつかりうる（ライブラリごとに分かれていた頃は起こらなかった）。
+    /// </summary>
+    /// <param name="backupRoot">出力先の親フォルダ。</param>
+    /// <param name="createdAt">取得日時。</param>
+    /// <returns>作成したフォルダの絶対パス。</returns>
+    private static string CreateUniqueDirectory(string backupRoot, DateTimeOffset createdAt)
+    {
+        string baseName = BackupConst.BuildDirectoryName(createdAt);
+        string candidate = Path.Combine(backupRoot, baseName);
+
+        for (int sequence = DIRECTORY_SEQUENCE_START; Directory.Exists(candidate); sequence++)
+        {
+            candidate = Path.Combine(
+                backupRoot,
+                BackupConst.AppendSequence(baseName, sequence));
+        }
+
+        Directory.CreateDirectory(candidate);
+
+        return candidate;
     }
 
     /// <summary>
@@ -237,17 +370,24 @@ public sealed class SnapshotService
 
     /// <summary>
     /// バックアップフォルダ名から取得日時を読み取る。表示用。
+    /// 連番付き（<c>backup_20260803031500_2</c>）でも読める。
     /// </summary>
     /// <param name="directoryName">フォルダ名。</param>
     /// <returns>取得日時。読み取れない場合は null。</returns>
     public static DateTimeOffset? ParseTimestamp(string directoryName)
     {
+        ArgumentNullException.ThrowIfNull(directoryName);
+
         if (!directoryName.StartsWith(BackupConst.BACKUP_DIRECTORY_PREFIX, StringComparison.Ordinal))
         {
             return null;
         }
 
-        string timestamp = directoryName[BackupConst.BACKUP_DIRECTORY_PREFIX.Length..];
+        string remainder = directoryName[BackupConst.BACKUP_DIRECTORY_PREFIX.Length..];
+
+        // 衝突回避の連番は日時の後ろに付く。日時部分だけを取り出す。
+        int separator = remainder.IndexOf(BackupConst.SEQUENCE_SEPARATOR, StringComparison.Ordinal);
+        string timestamp = separator >= 0 ? remainder[..separator] : remainder;
 
         return DateTimeOffset.TryParseExact(
             timestamp,

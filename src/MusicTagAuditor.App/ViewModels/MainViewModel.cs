@@ -17,6 +17,7 @@ using MusicTagAuditor.Core.Inspection;
 using MusicTagAuditor.Core.Inspection.Rules;
 using MusicTagAuditor.Core.Models;
 using MusicTagAuditor.Core.Scanning;
+using MusicTagAuditor.Core.Settings;
 using MusicTagAuditor.TagIo;
 using Serilog;
 
@@ -29,6 +30,9 @@ namespace MusicTagAuditor.App.ViewModels;
 /// </summary>
 public sealed partial class MainViewModel : ObservableObject
 {
+    /// <summary>バックアップ先が書けるかを確かめる一時ファイルの接頭辞。</summary>
+    private const string WRITE_PROBE_FILE_PREFIX = ".musictagauditor_write_test_";
+
     /// <summary>ライブラリスキャナ。</summary>
     private readonly LibraryScanner _scanner;
 
@@ -46,6 +50,9 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>適用処理。</summary>
     private readonly ApplyService _applyService;
+
+    /// <summary>アプリ設定の保持と保存。</summary>
+    private readonly AppSettingsStore _settingsStore;
 
     /// <summary>直近の検査結果。適用対象はここから取る。</summary>
     private InspectionResult? _lastInspection;
@@ -71,6 +78,15 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(RescanCommand))]
     private string? _libraryRoot;
+
+    /// <summary>
+    /// バックアップの保存先。空欄ならライブラリ直下（従来の動作）。
+    /// **表示専用。** 変更は <see cref="ChangeBackupRootCommand"/> か
+    /// <see cref="ResetBackupRootCommand"/> を通す。検証を通さずに設定へ書きたくない。
+    /// </summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ResetBackupRootCommand))]
+    private string? _backupRoot;
 
     /// <summary>スキャン中かどうか。</summary>
     [ObservableProperty]
@@ -195,6 +211,7 @@ public sealed partial class MainViewModel : ObservableObject
     /// <param name="dictionaryStore">正規化辞書の保持と保存。</param>
     /// <param name="dictionaryViewModel">辞書タブ。</param>
     /// <param name="applyService">適用処理。</param>
+    /// <param name="settingsStore">アプリ設定の保持と保存。</param>
     public MainViewModel(
         LibraryScanner scanner,
         SnapshotService snapshotService,
@@ -202,9 +219,11 @@ public sealed partial class MainViewModel : ObservableObject
         InspectionEngine inspectionEngine,
         DictionaryStore dictionaryStore,
         DictionaryViewModel dictionaryViewModel,
-        ApplyService applyService)
+        ApplyService applyService,
+        AppSettingsStore settingsStore)
     {
         ArgumentNullException.ThrowIfNull(dictionaryViewModel);
+        ArgumentNullException.ThrowIfNull(settingsStore);
 
         _scanner = scanner;
         _snapshotService = snapshotService;
@@ -212,6 +231,9 @@ public sealed partial class MainViewModel : ObservableObject
         _inspectionEngine = inspectionEngine;
         _dictionaryStore = dictionaryStore;
         _applyService = applyService;
+        _settingsStore = settingsStore;
+
+        _backupRoot = settingsStore.Current.BackupRoot;
 
         Dictionary = dictionaryViewModel;
 
@@ -350,6 +372,133 @@ public sealed partial class MainViewModel : ObservableObject
     {
         _scanCancellation?.Cancel();
         StatusText = "スキャンを中止しています…";
+    }
+
+    /// <summary>
+    /// バックアップの保存先を選び直す。
+    /// </summary>
+    [RelayCommand]
+    private void ChangeBackupRoot()
+    {
+        OpenFolderDialog dialog = new()
+        {
+            Title = "バックアップの保存先を選択",
+            Multiselect = false,
+        };
+
+        if (!string.IsNullOrWhiteSpace(BackupRoot) && Directory.Exists(BackupRoot))
+        {
+            dialog.InitialDirectory = BackupRoot;
+        }
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        ApplyBackupRoot(dialog.FolderName);
+    }
+
+    /// <summary>
+    /// バックアップの保存先を未指定（ライブラリ直下）に戻す。
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanResetBackupRoot))]
+    private void ResetBackupRoot()
+    {
+        ApplyBackupRoot(null);
+    }
+
+    /// <summary>保存先が設定されているときだけ「既定に戻す」を押せる。</summary>
+    private bool CanResetBackupRoot()
+    {
+        return !string.IsNullOrWhiteSpace(BackupRoot);
+    }
+
+    /// <summary>
+    /// 保存先を検証して設定に書き込む。
+    ///
+    /// **書けない場所を設定に残さない。** 設定した時点では気づかず、
+    /// いざバックアップを取る段になって失敗するのが一番困る。
+    /// </summary>
+    /// <param name="root">新しい保存先。null なら未指定に戻す。</param>
+    private void ApplyBackupRoot(string? root)
+    {
+        if (root is not null)
+        {
+            string? error = ValidateBackupRoot(root);
+
+            if (error is not null)
+            {
+                StatusText = error;
+                Log.Warning("バックアップ先を採用しなかった path={Path} 理由={Reason}", root, error);
+                return;
+            }
+        }
+
+        try
+        {
+            _settingsStore.Save(_settingsStore.Current with { BackupRoot = root });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            StatusText = $"設定を保存できませんでした: {ex.Message}";
+            Log.Error(ex, "設定の保存に失敗した path={Path}", _settingsStore.FilePath);
+            return;
+        }
+
+        BackupRoot = root;
+
+        // 保存先が増減すると履歴の見え方が変わる。読み直して現状に合わせる。
+        RefreshBackups();
+
+        StatusText = root is null
+            ? "バックアップ先を既定（ライブラリ直下）に戻しました。"
+            : $"バックアップ先を変更しました: {root}";
+
+        Log.Information("バックアップ先を変更した path={Path}", root ?? "(既定)");
+    }
+
+    /// <summary>
+    /// 保存先として使えるかを確かめる。
+    /// </summary>
+    /// <param name="root">確かめる保存先。</param>
+    /// <returns>使えない理由。使えるなら null。</returns>
+    private string? ValidateBackupRoot(string root)
+    {
+        if (!string.IsNullOrEmpty(LibraryRoot) && IsSameDirectory(root, LibraryRoot))
+        {
+            return "ライブラリのルートそのものは指定できません（未指定のときと同じ動作になります）。";
+        }
+
+        try
+        {
+            Directory.CreateDirectory(root);
+
+            // 作れることと書けることは別。実際に 1 ファイル置いて確かめる。
+            string probePath = Path.Combine(root, WRITE_PROBE_FILE_PREFIX + Guid.NewGuid().ToString("N"));
+            File.WriteAllText(probePath, string.Empty);
+            File.Delete(probePath);
+        }
+        catch (Exception ex) when (ex is IOException
+                                       or UnauthorizedAccessException
+                                       or ArgumentException
+                                       or NotSupportedException)
+        {
+            return $"このフォルダはバックアップ先に使えません: {ex.Message}";
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// 2 つのパスが同じフォルダを指すかを判定する。末尾の区切り文字と大小文字の差は無視する。
+    /// </summary>
+    private static bool IsSameDirectory(string left, string right)
+    {
+        return string.Equals(
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(left)),
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(right)),
+            StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

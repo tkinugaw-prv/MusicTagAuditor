@@ -82,6 +82,25 @@ public sealed class LibraryScannerTests : IDisposable
     }
 
     /// <summary>
+    /// バックアップ先をライブラリ配下の任意フォルダに設定しても、
+    /// その中の音声ファイルがスキャン対象に入らないことを確認する。
+    ///
+    /// 保存先を選べるようになったため、<c>ライブラリ/_バックアップ/backup_*/…</c> という
+    /// 形が生まれる。除外は中間階層まで見ているのでこの形でも効く。
+    /// </summary>
+    [Fact]
+    public async Task ExcludesBackupDirectoriesUnderCustomBackupRoot()
+    {
+        CreateFile("ブルックナー 8/01.m4a");
+        CreateFile("_バックアップ置き場/backup_20260803031500/01.m4a");
+
+        ScanResult result = await new LibraryScanner(new FakeTagReader()).ScanAsync(_root);
+
+        TrackTags track = Assert.Single(result.Tracks);
+        Assert.Equal(Path.Combine("ブルックナー 8", "01.m4a"), track.RelativePath);
+    }
+
+    /// <summary>
     /// 1 件の読み取り失敗で全体を止めず、失敗一覧に残すことを確認する（docs/SPEC.md 11章）。
     /// </summary>
     [Fact]

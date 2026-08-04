@@ -148,6 +148,18 @@
                    Text="{Binding LibraryRoot, Mode=OneWay}" />
         </DockPanel>
 
+        <!-- バックアップ先行。未指定ならライブラリ直下（従来の動作） -->
+        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="バックアップ先" />
+        <DockPanel Margin="0,0,0,13">
+          <Button DockPanel.Dock="Right" Margin="8,0,0,0"
+                  Command="{Binding ResetBackupRootCommand}" Content="既定に戻す" />
+          <Button DockPanel.Dock="Right" Margin="10,0,0,0"
+                  Command="{Binding ChangeBackupRootCommand}" Content="変更..." />
+          <TextBox IsReadOnly="True"
+                   ctl:Placeholder.Text="未指定の場合はライブラリ直下の backup_ フォルダに保存します"
+                   Text="{Binding BackupRoot, Mode=OneWay}" />
+        </DockPanel>
+
         <!-- 検査行 -->
         <TextBlock Style="{StaticResource FieldLabelStyle}" Text="検査" />
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">

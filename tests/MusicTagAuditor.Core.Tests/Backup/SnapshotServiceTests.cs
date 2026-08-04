@@ -14,7 +14,10 @@ public sealed class SnapshotServiceTests : IDisposable
     /// <summary>テスト用ライブラリのルート。</summary>
     private readonly string _root;
 
-    /// <summary>テスト対象。</summary>
+    /// <summary>ライブラリの外に置くバックアップ保存先。</summary>
+    private readonly string _customBackupRoot;
+
+    /// <summary>テスト対象。保存先を設定していない状態。</summary>
     private readonly SnapshotService _service = new();
 
     /// <summary>
@@ -22,8 +25,13 @@ public sealed class SnapshotServiceTests : IDisposable
     /// </summary>
     public SnapshotServiceTests()
     {
-        _root = Path.Combine(Path.GetTempPath(), "musicTagger.tests", Guid.NewGuid().ToString("N"));
+        string baseDirectory = Path.Combine(Path.GetTempPath(), "musicTagger.tests", Guid.NewGuid().ToString("N"));
+
+        _root = Path.Combine(baseDirectory, "library");
+        _customBackupRoot = Path.Combine(baseDirectory, "backups");
+
         Directory.CreateDirectory(_root);
+        Directory.CreateDirectory(_customBackupRoot);
     }
 
     /// <summary>
@@ -31,9 +39,11 @@ public sealed class SnapshotServiceTests : IDisposable
     /// </summary>
     public void Dispose()
     {
-        if (Directory.Exists(_root))
+        string baseDirectory = Path.GetDirectoryName(_root)!;
+
+        if (Directory.Exists(baseDirectory))
         {
-            Directory.Delete(_root, recursive: true);
+            Directory.Delete(baseDirectory, recursive: true);
         }
     }
 
@@ -183,14 +193,143 @@ public sealed class SnapshotServiceTests : IDisposable
     }
 
     /// <summary>
+    /// 連番付きのフォルダ名からも取得日時を読み取れることを確認する。
+    /// 読めないと、共有の保存先で衝突した 2 件目だけ日時が空欄になる。
+    /// </summary>
+    [Fact]
+    public void ParsesTimestampFromSequencedDirectoryName()
+    {
+        DateTimeOffset? parsed = SnapshotService.ParseTimestamp("backup_20260803031500_2");
+
+        Assert.NotNull(parsed);
+        Assert.Equal(new DateTime(2026, 8, 3, 3, 15, 0), parsed.Value.DateTime);
+    }
+
+    /// <summary>
+    /// 保存先を設定していなければ、従来どおりライブラリ直下に置くことを確認する。
+    /// </summary>
+    [Fact]
+    public void WritesUnderLibraryRootWhenBackupRootNotConfigured()
+    {
+        string directory = _service.Create(BuildScan(), SnapshotReason.Manual);
+
+        Assert.Equal(_root, Path.GetDirectoryName(directory));
+    }
+
+    /// <summary>
+    /// 保存先を設定したら、ライブラリの外でもそこに置くことを確認する。
+    /// </summary>
+    [Fact]
+    public void WritesUnderConfiguredBackupRoot()
+    {
+        string directory = CreateServiceWithCustomRoot().Create(BuildScan(), SnapshotReason.Manual);
+
+        Assert.Equal(_customBackupRoot, Path.GetDirectoryName(directory));
+        Assert.True(File.Exists(Path.Combine(directory, BackupConst.SNAPSHOT_FILE_NAME)));
+    }
+
+    /// <summary>
+    /// 保存先を空欄に戻したら、ライブラリ直下に戻ることを確認する。
+    /// 設定は毎回読み直す（値を握り込まない）ことの確認でもある。
+    /// </summary>
+    [Fact]
+    public void FallsBackToLibraryRootWhenConfiguredRootIsBlank()
+    {
+        SnapshotService service = new(() => "   ");
+
+        string directory = service.Create(BuildScan(), SnapshotReason.Manual);
+
+        Assert.Equal(_root, Path.GetDirectoryName(directory));
+    }
+
+    /// <summary>
+    /// 同じ秒に取得しても上書きされないことを確認する。
+    /// 保存先を複数ライブラリで共有すると衝突しうる（ライブラリ直下では起こらなかった）。
+    /// </summary>
+    [Fact]
+    public void AppendsSequenceWhenDirectoryNameCollides()
+    {
+        DateTimeOffset timestamp = new(2026, 8, 3, 3, 15, 0, TimeSpan.FromHours(9));
+        SnapshotService service = CreateServiceWithCustomRoot();
+
+        string first = service.Create(BuildScan(), SnapshotReason.Manual, timestamp: timestamp);
+        string second = service.Create(
+            BuildScan(Path.Combine(_root, "別ライブラリ")),
+            SnapshotReason.Manual,
+            timestamp: timestamp);
+
+        Assert.Equal("backup_20260803031500", Path.GetFileName(first));
+        Assert.Equal("backup_20260803031500_2", Path.GetFileName(second));
+        Assert.True(File.Exists(Path.Combine(first, BackupConst.SNAPSHOT_FILE_NAME)));
+        Assert.True(File.Exists(Path.Combine(second, BackupConst.SNAPSHOT_FILE_NAME)));
+    }
+
+    /// <summary>
+    /// 一覧が設定した保存先とライブラリ直下の両方を拾い、他ライブラリのものは混ぜないことを確認する。
+    /// 保存先を変えたあとも過去の履歴が消えないことが要件。
+    /// </summary>
+    [Fact]
+    public void ListsBackupsFromBothRootsExcludingOtherLibraries()
+    {
+        // 設定前にライブラリ直下へ取ったぶん。
+        string legacy = _service.Create(
+            BuildScan(),
+            SnapshotReason.Manual,
+            timestamp: new DateTimeOffset(2026, 8, 1, 10, 0, 0, TimeSpan.FromHours(9)));
+
+        SnapshotService service = CreateServiceWithCustomRoot();
+
+        string current = service.Create(
+            BuildScan(),
+            SnapshotReason.Manual,
+            timestamp: new DateTimeOffset(2026, 8, 3, 10, 0, 0, TimeSpan.FromHours(9)));
+
+        // 保存先を共有している別ライブラリのぶん。一覧に出してはいけない。
+        service.Create(
+            BuildScan(Path.Combine(_root, "別ライブラリ")),
+            SnapshotReason.Manual,
+            timestamp: new DateTimeOffset(2026, 8, 4, 10, 0, 0, TimeSpan.FromHours(9)));
+
+        IReadOnlyList<BackupEntry> entries = service.List(_root);
+
+        Assert.Equal(2, entries.Count);
+        Assert.Equal(current, entries[0].DirectoryPath);
+        Assert.Equal(legacy, entries[1].DirectoryPath);
+    }
+
+    /// <summary>
+    /// 保存先がライブラリ直下と同じでも二重に数えないことを確認する。
+    /// </summary>
+    [Fact]
+    public void DoesNotDuplicateWhenBackupRootIsLibraryRoot()
+    {
+        SnapshotService service = new(() => _root);
+
+        string directory = service.Create(BuildScan(), SnapshotReason.Manual);
+
+        BackupEntry entry = Assert.Single(service.List(_root));
+        Assert.Equal(directory, entry.DirectoryPath);
+    }
+
+    /// <summary>
+    /// 設定した保存先を使うテスト対象を作る。
+    /// </summary>
+    private SnapshotService CreateServiceWithCustomRoot()
+    {
+        return new SnapshotService(() => _customBackupRoot);
+    }
+
+    /// <summary>
     /// テスト用のスキャン結果を組み立てる。
     /// </summary>
-    private ScanResult BuildScan()
+    /// <param name="libraryRoot">ライブラリのルート。省略時はテスト用ライブラリ。</param>
+    private ScanResult BuildScan(string? libraryRoot = null)
     {
+        string root = libraryRoot ?? _root;
         TrackTags bruckner = new()
         {
             RelativePath = "ブルックナー/01.m4a",
-            FullPath = Path.Combine(_root, "ブルックナー", "01.m4a"),
+            FullPath = Path.Combine(root, "ブルックナー", "01.m4a"),
             Format = AudioFormat.M4a,
             Fields = TrackTags.BuildFields(
             [
@@ -208,7 +347,7 @@ public sealed class SnapshotServiceTests : IDisposable
         TrackTags bach = new()
         {
             RelativePath = "バッハ/02.flac",
-            FullPath = Path.Combine(_root, "バッハ", "02.flac"),
+            FullPath = Path.Combine(root, "バッハ", "02.flac"),
             Format = AudioFormat.Flac,
             Fields = TrackTags.BuildFields(
             [
@@ -218,7 +357,7 @@ public sealed class SnapshotServiceTests : IDisposable
         };
 
         return new ScanResult(
-            _root,
+            root,
             [bruckner, bach],
             [new ScanFailure("壊れたファイル.mp3", "InvalidDataException: 読めない")],
             TimeSpan.FromSeconds(1));

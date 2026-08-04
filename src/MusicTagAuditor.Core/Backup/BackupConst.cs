@@ -17,6 +17,9 @@ public static class BackupConst
     /// <summary>バックアップフォルダ名の日時書式。</summary>
     public const string BACKUP_DIRECTORY_TIMESTAMP_FORMAT = "yyyyMMddHHmmss";
 
+    /// <summary>同名フォルダを避けるための連番の区切り。</summary>
+    public const string SEQUENCE_SEPARATOR = "_";
+
     /// <summary>タグのスナップショットファイル名。</summary>
     public const string SNAPSHOT_FILE_NAME = "tags_snapshot.json";
 
@@ -35,5 +38,18 @@ public static class BackupConst
     {
         return BACKUP_DIRECTORY_PREFIX
             + timestamp.ToString(BACKUP_DIRECTORY_TIMESTAMP_FORMAT, CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// フォルダ名に衝突回避の連番を足す。
+    /// </summary>
+    /// <param name="directoryName">連番なしのフォルダ名。</param>
+    /// <param name="sequence">連番。</param>
+    /// <returns>連番付きのフォルダ名（例: <c>backup_20260803031500_2</c>）。</returns>
+    public static string AppendSequence(string directoryName, int sequence)
+    {
+        return directoryName
+            + SEQUENCE_SEPARATOR
+            + sequence.ToString(CultureInfo.InvariantCulture);
     }
 }
