@@ -352,13 +352,15 @@ dotnet run --project tools/TagIoProbe/TagIoProbe.csproj -- "D:\Music Library for
 dotnet run --project src/MusicTagAuditor.App/MusicTagAuditor.App.csproj
 ```
 
-第 1 引数にライブラリのパスを渡すと、起動直後にそのフォルダを開いてスキャンする。
+最後に開いたライブラリは設定に残り、次回の起動で自動的に開いてスキャンまで行う。見つからない場合はステータスバーに出すだけで、設定からは消さない（外付けドライブを外しているだけかもしれない）。
+
+第 1 引数にライブラリのパスを渡すと、記憶しているライブラリより優先して、起動直後にそのフォルダを開いてスキャンする。
 
 ```bash
 dotnet run --project src/MusicTagAuditor.App/MusicTagAuditor.App.csproj -- "D:\Music Library for AIMP\Classic"
 ```
 
-ログは `%LOCALAPPDATA%\MusicTagAuditor\logs\` に日次で出力される。辞書は `%APPDATA%\MusicTagAuditor\dictionary.json`、設定は同フォルダの `settings.json`（現在の項目はバックアップ先のみ）。設定が壊れていても既定値で起動し、理由をログに残す。
+ログは `%LOCALAPPDATA%\MusicTagAuditor\logs\` に日次で出力される。辞書は `%APPDATA%\MusicTagAuditor\dictionary.json`、設定は同フォルダの `settings.json`（現在の項目はバックアップ先と前回のライブラリ）。設定が壊れていても既定値で起動し、理由をログに残す。
 
 ---
 

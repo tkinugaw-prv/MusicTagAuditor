@@ -290,14 +290,83 @@ public sealed partial class MainViewModel : ObservableObject
     public ObservableCollection<string> ApplyIssues { get; } = [];
 
     /// <summary>
-    /// 起動時に指定されたライブラリをそのまま開く。
-    /// 動作確認や再現手順の共有で、毎回フォルダを選び直さずに済ませるために使う。
+    /// 指定されたライブラリを開いてスキャンする。
+    ///
+    /// **ライブラリを開く経路はここに集約する。** フォルダ選択・コマンドライン引数・
+    /// 前回のライブラリのどれで開いても、次回のために記憶されるようにするため。
     /// </summary>
     /// <param name="libraryRoot">ライブラリのルートパス。</param>
     public async Task OpenAsync(string libraryRoot)
     {
         LibraryRoot = libraryRoot;
+        RememberLibraryRoot(libraryRoot);
         await ScanAsync();
+    }
+
+    /// <summary>
+    /// 起動時に開くライブラリを決めて開く。
+    ///
+    /// **コマンドライン引数を前回のライブラリより優先する。** 引数はその場の明示的な指示で、
+    /// 記憶しているパスは前回の名残にすぎない。
+    /// </summary>
+    /// <param name="argumentRoot">コマンドラインで渡されたライブラリのパス。渡されていなければ null。</param>
+    public async Task StartAsync(string? argumentRoot)
+    {
+        if (!string.IsNullOrWhiteSpace(argumentRoot))
+        {
+            if (Directory.Exists(argumentRoot))
+            {
+                await OpenAsync(argumentRoot);
+                return;
+            }
+
+            // 引数を指定したのに前回のライブラリが開くと、どちらを見ているのか分からなくなる。
+            StatusText = $"指定されたライブラリが見つかりません: {argumentRoot}";
+            Log.Warning("引数のライブラリを開けなかった path={Path}", argumentRoot);
+            return;
+        }
+
+        string? lastRoot = _settingsStore.Current.LastLibraryRoot;
+
+        if (string.IsNullOrWhiteSpace(lastRoot))
+        {
+            return;
+        }
+
+        if (!Directory.Exists(lastRoot))
+        {
+            // **見つからなくても設定からは消さない。** 外付けドライブを外しているだけかもしれず、
+            // 一度きりの不在で忘れると、次に繋いだときに選び直しになる。
+            StatusText = $"前回のライブラリが見つかりません: {lastRoot}";
+            Log.Information("前回のライブラリを開けなかった path={Path}", lastRoot);
+            return;
+        }
+
+        await OpenAsync(lastRoot);
+    }
+
+    /// <summary>
+    /// 次回の起動で開けるよう、ライブラリのパスを設定に残す。
+    ///
+    /// **保存に失敗しても操作は止めない。** 記憶できないのは次回が不便になるだけで、
+    /// いま開いたライブラリを扱えなくなる理由にはならない。
+    /// </summary>
+    /// <param name="libraryRoot">記憶するライブラリのルートパス。</param>
+    private void RememberLibraryRoot(string libraryRoot)
+    {
+        if (string.Equals(_settingsStore.Current.LastLibraryRoot, libraryRoot, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        try
+        {
+            _settingsStore.Save(_settingsStore.Current with { LastLibraryRoot = libraryRoot });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Warning(ex, "ライブラリを記憶できなかった path={Path}", _settingsStore.FilePath);
+        }
     }
 
     /// <summary>
@@ -322,8 +391,7 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        LibraryRoot = dialog.FolderName;
-        await ScanAsync();
+        await OpenAsync(dialog.FolderName);
     }
 
     /// <summary>

@@ -11,10 +11,13 @@ namespace MusicTagAuditor.Core.Settings;
 /// <param name="BackupRoot">
 /// バックアップの保存先。null ならライブラリ直下（従来の動作）。
 /// </param>
-public sealed record AppSettings(string? BackupRoot)
+/// <param name="LastLibraryRoot">
+/// 前回開いていたライブラリ。null なら未指定（起動時は何も開かない）。
+/// </param>
+public sealed record AppSettings(string? BackupRoot, string? LastLibraryRoot)
 {
     /// <summary>何も設定していない状態。</summary>
-    public static AppSettings Default { get; } = new(BackupRoot: null);
+    public static AppSettings Default { get; } = new(BackupRoot: null, LastLibraryRoot: null);
 }
 
 /// <summary>

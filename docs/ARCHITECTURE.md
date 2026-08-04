@@ -46,7 +46,7 @@ tools/TagIoProbe (net10.0, コンソール) … どこにも依存しない独�
 | `Models/` | ドメインモデル(`TrackTags` / `TagField` / `TagChange` / `AudioFormat` / `VerificationMismatch`) |
 | `Normalization/` | 正規化キーの生成(`NormalizationKey`)。NFKC・小文字化・ひらがな→カタカナ変換などを行う |
 | `Scanning/` | ライブラリのフォルダ・ファイル走査(`LibraryScanner`) |
-| `Settings/` | 利用者が選べる設定の保持と永続化(`AppSettings` / `AppSettingsStore`)。`%APPDATA%\MusicTagAuditor\settings.json` に読み書きする。現在の項目はバックアップ先のみ |
+| `Settings/` | 利用者が選べる設定の保持と永続化(`AppSettings` / `AppSettingsStore`)。`%APPDATA%\MusicTagAuditor\settings.json` に読み書きする。現在の項目はバックアップ先と前回開いていたライブラリ |
 
 検査ルールの各論(判定条件・除外規則など)は [docs/SPEC.md](SPEC.md) 6章、原則は [docs/TAGGING_POLICY.md](TAGGING_POLICY.md) を参照。
 

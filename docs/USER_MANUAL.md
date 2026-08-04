@@ -67,7 +67,13 @@
 dotnet run --project src/MusicTagAuditor.App/MusicTagAuditor.App.csproj
 ```
 
-起動時に対象フォルダを指定する場合（第1引数にライブラリのパスを渡すと、起動直後に自動でそのフォルダを開いてスキャンします）:
+**前回開いていたライブラリは記憶されます。** 2 回目以降の起動では、そのフォルダを自動で開いてスキャンまで行うので、「フォルダを開く...」を押し直す必要はありません。
+
+- 別のライブラリを扱いたいときは、これまでどおり「フォルダを開く...」で選び直してください。以後はそちらを記憶します
+- 記憶しているフォルダが見つからないとき（外付けドライブを外している場合など）は、ステータスバーにその旨が出るだけで何も開きません。記憶は消えないので、ドライブを繋ぎ直して起動すればまた開きます
+- 引き継がれるのはフォルダのパスだけです。検査結果や保留中の手編集は持ち越されません
+
+起動時に対象フォルダを指定する場合（第1引数にライブラリのパスを渡すと、記憶しているフォルダより優先して、起動直後にそのフォルダを開いてスキャンします）:
 
 ```bash
 dotnet run --project src/MusicTagAuditor.App/MusicTagAuditor.App.csproj -- "D:\Music Library for AIMP\Classic"
@@ -80,7 +86,7 @@ dotnet run --project src/MusicTagAuditor.App/MusicTagAuditor.App.csproj -- "D:\M
 | 内容 | 場所 |
 |---|---|
 | ログ（日次） | `%LOCALAPPDATA%\MusicTagAuditor\logs\` |
-| 設定（`settings.json`）・正規化辞書（`dictionary.json`） | `%APPDATA%\MusicTagAuditor\` |
+| 設定（`settings.json`／バックアップ先・前回のライブラリ）・正規化辞書（`dictionary.json`） | `%APPDATA%\MusicTagAuditor\` |
 | タグのバックアップ | 既定はライブラリ直下の `backup_{取得日時}\` フォルダ。「バックアップ先」で変更できる |
 
 正規化辞書（`dictionary.json`）は初回起動時にアプリ同梱の既定辞書からコピーされます。以後は利用者が育てていくものです（詳しくは [8. 辞書タブ](#8-辞書タブ)）。
