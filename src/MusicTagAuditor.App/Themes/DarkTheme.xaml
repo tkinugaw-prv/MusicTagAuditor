@@ -556,7 +556,7 @@
     <Style TargetType="ToolTip">
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
         <Setter Property="FontSize" Value="12" />
-        <Setter Property="MaxWidth" Value="420" />
+        <Setter Property="MaxWidth" Value="520" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ToolTip">
@@ -565,7 +565,19 @@
                             BorderThickness="1"
                             CornerRadius="5"
                             Padding="10,7">
-                        <ContentPresenter />
+                        <ContentPresenter>
+                            <ContentPresenter.Resources>
+                                <!--
+                                  文字列のツールチップは ContentPresenter が TextBlock を作る。
+                                  折り返しを付けないと 1 行のまま伸び、MaxWidth の外側が
+                                  ポップアップごと切り落とされて長い根拠が読めない。
+                                -->
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                    <Setter Property="TextWrapping" Value="Wrap" />
+                                    <Setter Property="FontSize" Value="12" />
+                                </Style>
+                            </ContentPresenter.Resources>
+                        </ContentPresenter>
                     </Border>
                 </ControlTemplate>
             </Setter.Value>
