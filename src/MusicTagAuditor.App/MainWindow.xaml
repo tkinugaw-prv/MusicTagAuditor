@@ -112,13 +112,11 @@
                Margin="0,0,9,0"
                VerticalAlignment="Center"
                Source="{StaticResource AppMarkImage}" />
+        <!--
+          アプリ名はここに出さない。OS のタイトルバーが "Music Tag Auditor" を
+          出しており、画面内にもう 1 つ名前を置くと表記が二重になる。
+        -->
         <TextBlock DockPanel.Dock="Left"
-                   VerticalAlignment="Center"
-                   FontSize="13" FontWeight="SemiBold"
-                   Foreground="#C9CDD6"
-                   Text="musicTagger" />
-        <TextBlock DockPanel.Dock="Right"
-                   Margin="16,0,0,0"
                    VerticalAlignment="Center"
                    FontSize="11.5"
                    Foreground="{StaticResource TextSecondaryBrush}"
@@ -312,7 +310,8 @@
                         SelectedItem="{Binding SelectedChange}"
                         RowStyle="{StaticResource ChangeRowStyle}"
                         CanUserSortColumns="True"
-                        EnableRowVirtualization="True">
+                        EnableRowVirtualization="True"
+                        HorizontalScrollBarVisibility="Auto">
                 <DataGrid.Columns>
                   <DataGridCheckBoxColumn Header="適用" Width="50"
                                           Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}"
@@ -321,18 +320,20 @@
                   <DataGridTextColumn Header="区分" Binding="{Binding Classification}" IsReadOnly="True" Width="68"
                                       ElementStyle="{StaticResource CenterCellTextStyle}" />
                   <!--
-                    幅は star で配分する。固定幅だと根拠列が画面外に出るが、
-                    自動判定の理由が読めないと承認できない（docs/SPEC.md 5.3）。
+                    幅は star ではなく実幅で与え、入り切らないぶんは横スクロールさせる。
+                    star で配分すると根拠列の実効幅が 255px ほどしか取れず、
+                    自動判定の理由が読めないまま承認することになる（docs/SPEC.md 5.3）。
+                    ファイル一覧タブの手編集差分も同じ幅体系に揃えること。
                   -->
-                  <DataGridTextColumn Header="パス" Binding="{Binding RelativePath}" IsReadOnly="True" Width="2*" MinWidth="180"
+                  <DataGridTextColumn Header="パス" Binding="{Binding RelativePath}" IsReadOnly="True" Width="300"
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
                   <DataGridTextColumn Header="タグ" Binding="{Binding Field}" IsReadOnly="True" Width="90"
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
-                  <DataGridTextColumn Header="変更前" Binding="{Binding BeforeText}" IsReadOnly="True" Width="1.5*" MinWidth="120"
+                  <DataGridTextColumn Header="変更前" Binding="{Binding BeforeText}" IsReadOnly="True" Width="190"
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
-                  <DataGridTextColumn Header="変更後" Binding="{Binding AfterText}" IsReadOnly="True" Width="1.5*" MinWidth="120"
+                  <DataGridTextColumn Header="変更後" Binding="{Binding AfterText}" IsReadOnly="True" Width="190"
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
-                  <DataGridTextColumn Header="根拠" Binding="{Binding Rationale}" IsReadOnly="True" Width="2*" MinWidth="160"
+                  <DataGridTextColumn Header="根拠" Binding="{Binding Rationale}" IsReadOnly="True" Width="460"
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
                 </DataGrid.Columns>
               </DataGrid>
@@ -542,21 +543,23 @@
                     Visibility="{Binding ManualEditChanges.Count, Converter={StaticResource CountToVisibility}}">
               <DataGrid ItemsSource="{Binding ManualEditChanges}"
                         CanUserSortColumns="True"
+                        HorizontalScrollBarVisibility="Auto"
                         MinHeight="100" MaxHeight="260">
                 <DataGrid.Columns>
+                  <!-- 幅は検査結果タブの差分明細と同じ体系。片方だけ直すと同じ苦情がこちらで再発する -->
                   <DataGridCheckBoxColumn Header="適用" Width="50"
                                           Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}"
                                           ElementStyle="{StaticResource GridCheckBoxStyle}"
                                           EditingElementStyle="{StaticResource GridCheckBoxStyle}" />
-                  <DataGridTextColumn Header="パス" Binding="{Binding RelativePath}" IsReadOnly="True" Width="2*" MinWidth="180"
+                  <DataGridTextColumn Header="パス" Binding="{Binding RelativePath}" IsReadOnly="True" Width="300"
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
-                  <DataGridTextColumn Header="タグ" Binding="{Binding Field}" IsReadOnly="True" Width="100"
+                  <DataGridTextColumn Header="タグ" Binding="{Binding Field}" IsReadOnly="True" Width="90"
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
-                  <DataGridTextColumn Header="変更前" Binding="{Binding BeforeText}" IsReadOnly="True" Width="1.5*" MinWidth="120"
+                  <DataGridTextColumn Header="変更前" Binding="{Binding BeforeText}" IsReadOnly="True" Width="190"
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
-                  <DataGridTextColumn Header="変更後" Binding="{Binding AfterText}" IsReadOnly="True" Width="1.5*" MinWidth="120"
+                  <DataGridTextColumn Header="変更後" Binding="{Binding AfterText}" IsReadOnly="True" Width="190"
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
-                  <DataGridTextColumn Header="根拠" Binding="{Binding Rationale}" IsReadOnly="True" Width="2*" MinWidth="160"
+                  <DataGridTextColumn Header="根拠" Binding="{Binding Rationale}" IsReadOnly="True" Width="460"
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
                 </DataGrid.Columns>
               </DataGrid>
