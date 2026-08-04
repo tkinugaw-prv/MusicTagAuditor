@@ -79,12 +79,12 @@ public partial class App : Application
 
         _services.GetRequiredService<MainWindow>().Show();
 
-        // 第 1 引数にライブラリのパスが渡されていればそのまま開く。
-        if (e.Args.Length > 0 && Directory.Exists(e.Args[0]))
-        {
-            MainViewModel viewModel = _services.GetRequiredService<MainViewModel>();
-            _ = Dispatcher.InvokeAsync(async () => await viewModel.OpenAsync(e.Args[0]));
-        }
+        // 開くライブラリの決定はビューモデルに任せる。
+        // 第 1 引数があればそれを、無ければ前回のライブラリを開く。
+        MainViewModel viewModel = _services.GetRequiredService<MainViewModel>();
+        string? argumentRoot = e.Args.Length > 0 ? e.Args[0] : null;
+
+        _ = Dispatcher.InvokeAsync(async () => await viewModel.StartAsync(argumentRoot));
     }
 
     /// <summary>

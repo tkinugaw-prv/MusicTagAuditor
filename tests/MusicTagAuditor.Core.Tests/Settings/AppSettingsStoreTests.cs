@@ -40,6 +40,7 @@ public sealed class AppSettingsStoreTests : IDisposable
         AppSettingsStore store = new(_directory);
 
         Assert.Null(store.Current.BackupRoot);
+        Assert.Null(store.Current.LastLibraryRoot);
         Assert.Null(store.LoadError);
     }
 
@@ -49,12 +50,55 @@ public sealed class AppSettingsStoreTests : IDisposable
     [Fact]
     public void RoundTripsSettings()
     {
-        new AppSettingsStore(_directory).Save(new AppSettings(@"D:\バックアップ置き場"));
+        new AppSettingsStore(_directory).Save(
+            AppSettings.Default with
+            {
+                BackupRoot = @"D:\バックアップ置き場",
+                LastLibraryRoot = @"D:\Music Library\Classic",
+            });
 
         AppSettingsStore reopened = new(_directory);
 
         Assert.Equal(@"D:\バックアップ置き場", reopened.Current.BackupRoot);
+        Assert.Equal(@"D:\Music Library\Classic", reopened.Current.LastLibraryRoot);
         Assert.Null(reopened.LoadError);
+    }
+
+    /// <summary>
+    /// 片方だけを書き換えても、もう片方が消えないことを確認する。
+    /// バックアップ先とライブラリは別々の操作で保存されるため、
+    /// 上書きし合うと直前に設定したほうが黙って失われる。
+    /// </summary>
+    [Fact]
+    public void KeepsBackupRootWhenLastLibraryRootChanges()
+    {
+        AppSettingsStore store = new(_directory);
+        store.Save(AppSettings.Default with { BackupRoot = @"D:\music backup" });
+
+        store.Save(store.Current with { LastLibraryRoot = @"D:\Music Library\Classic" });
+
+        AppSettingsStore reopened = new(_directory);
+
+        Assert.Equal(@"D:\music backup", reopened.Current.BackupRoot);
+        Assert.Equal(@"D:\Music Library\Classic", reopened.Current.LastLibraryRoot);
+    }
+
+    /// <summary>
+    /// ライブラリを記憶する前に書かれた設定も読めることを確認する。
+    /// 項目が増えるたびに既存の設定が捨てられるのでは、設定した意味がない。
+    /// </summary>
+    [Fact]
+    public void ReadsSettingsWrittenBeforeLastLibraryRootExisted()
+    {
+        File.WriteAllText(
+            AppSettingsStore.GetSettingsPath(_directory),
+            """{ "backupRoot": "D:\\music backup" }""");
+
+        AppSettingsStore store = new(_directory);
+
+        Assert.Equal(@"D:\music backup", store.Current.BackupRoot);
+        Assert.Null(store.Current.LastLibraryRoot);
+        Assert.Null(store.LoadError);
     }
 
     /// <summary>
@@ -65,7 +109,7 @@ public sealed class AppSettingsStoreTests : IDisposable
     {
         AppSettingsStore store = new(_directory);
 
-        store.Save(new AppSettings(@"E:\backups"));
+        store.Save(AppSettings.Default with { BackupRoot = @"E:\backups" });
 
         Assert.Equal(@"E:\backups", store.Current.BackupRoot);
     }
@@ -77,7 +121,7 @@ public sealed class AppSettingsStoreTests : IDisposable
     public void SavesNullBackupRoot()
     {
         AppSettingsStore store = new(_directory);
-        store.Save(new AppSettings(@"E:\backups"));
+        store.Save(AppSettings.Default with { BackupRoot = @"E:\backups" });
 
         store.Save(store.Current with { BackupRoot = null });
 
@@ -93,7 +137,7 @@ public sealed class AppSettingsStoreTests : IDisposable
     {
         AppSettingsStore store = new(_directory);
 
-        store.Save(new AppSettings(@"D:\音楽\バックアップ"));
+        store.Save(AppSettings.Default with { BackupRoot = @"D:\音楽\バックアップ" });
 
         string json = File.ReadAllText(store.FilePath);
 
@@ -124,7 +168,7 @@ public sealed class AppSettingsStoreTests : IDisposable
         File.WriteAllText(AppSettingsStore.GetSettingsPath(_directory), "壊れている");
         AppSettingsStore store = new(_directory);
 
-        store.Save(new AppSettings(@"F:\backups"));
+        store.Save(AppSettings.Default with { BackupRoot = @"F:\backups" });
 
         Assert.Null(store.LoadError);
         Assert.Equal(@"F:\backups", new AppSettingsStore(_directory).Current.BackupRoot);
@@ -138,7 +182,7 @@ public sealed class AppSettingsStoreTests : IDisposable
     {
         string nested = Path.Combine(_directory, "まだ無いフォルダ");
 
-        new AppSettingsStore(nested).Save(new AppSettings(@"G:\backups"));
+        new AppSettingsStore(nested).Save(AppSettings.Default with { BackupRoot = @"G:\backups" });
 
         Assert.True(File.Exists(AppSettingsStore.GetSettingsPath(nested)));
     }
