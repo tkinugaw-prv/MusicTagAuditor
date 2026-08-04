@@ -41,6 +41,19 @@
     <Color x:Key="RowEditedColor">#1E2733</Color>
     <Color x:Key="RowSelectedColor">#3A4A44</Color>
 
+    <!-- 重大度のバッジ（docs/SPEC.md 6章）。画面では記号ではなく文字で示す。
+         記号は実描画で単色の代替字形に置き換わり、塗りと線の違いしか出ないため意味が読めない。
+         淡色テーマの配色をそのまま暗くすると背景が沈んで読めないので、
+         文字は明るく・面は色味だけ残す配分に置き直している。 -->
+    <Color x:Key="SeverityErrorForegroundColor">#F0938A</Color>
+    <Color x:Key="SeverityErrorBackgroundColor">#3A2320</Color>
+    <Color x:Key="SeverityWarningForegroundColor">#E0B48C</Color>
+    <Color x:Key="SeverityWarningBackgroundColor">#37291D</Color>
+    <Color x:Key="SeverityInfoForegroundColor">#8FB8D8</Color>
+    <Color x:Key="SeverityInfoBackgroundColor">#1E2A36</Color>
+    <Color x:Key="SeverityManualForegroundColor">#B0B4CE</Color>
+    <Color x:Key="SeverityManualBackgroundColor">#282A38</Color>
+
     <SolidColorBrush x:Key="BgOuterBrush" Color="{StaticResource BgOuterColor}" />
     <SolidColorBrush x:Key="PanelInputBrush" Color="{StaticResource PanelInputColor}" />
     <SolidColorBrush x:Key="PanelBarBrush" Color="{StaticResource PanelBarColor}" />
@@ -70,6 +83,15 @@
     <SolidColorBrush x:Key="RowHoldBrush" Color="{StaticResource RowHoldColor}" />
     <SolidColorBrush x:Key="RowEditedBrush" Color="{StaticResource RowEditedColor}" />
     <SolidColorBrush x:Key="RowSelectedBrush" Color="{StaticResource RowSelectedColor}" />
+
+    <SolidColorBrush x:Key="SeverityErrorForeground" Color="{StaticResource SeverityErrorForegroundColor}" />
+    <SolidColorBrush x:Key="SeverityErrorBackground" Color="{StaticResource SeverityErrorBackgroundColor}" />
+    <SolidColorBrush x:Key="SeverityWarningForeground" Color="{StaticResource SeverityWarningForegroundColor}" />
+    <SolidColorBrush x:Key="SeverityWarningBackground" Color="{StaticResource SeverityWarningBackgroundColor}" />
+    <SolidColorBrush x:Key="SeverityInfoForeground" Color="{StaticResource SeverityInfoForegroundColor}" />
+    <SolidColorBrush x:Key="SeverityInfoBackground" Color="{StaticResource SeverityInfoBackgroundColor}" />
+    <SolidColorBrush x:Key="SeverityManualForeground" Color="{StaticResource SeverityManualForegroundColor}" />
+    <SolidColorBrush x:Key="SeverityManualBackground" Color="{StaticResource SeverityManualBackgroundColor}" />
 
     <FontFamily x:Key="AppFontFamily">Inter, Yu Gothic UI, Segoe UI</FontFamily>
     <FontFamily x:Key="AppMonoFontFamily">Consolas, Inter, Yu Gothic UI</FontFamily>
@@ -1090,16 +1112,6 @@
         <Setter Property="HorizontalAlignment" Value="Center" />
     </Style>
 
-    <!-- 重大度記号（⛔ / ⚠ / ❓ / ✎）。
-         記号 1 文字を省略記号に化けさせないため、この列だけ切り詰めを外す。 -->
-    <Style x:Key="SeverityMarkTextStyle" TargetType="TextBlock" BasedOn="{StaticResource CenterCellTextStyle}">
-        <!-- 書体はここで指定しない。Segoe MDL2 Assets を並べて書くと、この書体に無い
-             ⛔ / ❓ が後続へフォールバックせず豆腐になる。差し替える記号の側だけで切り替える。 -->
-        <Setter Property="FontSize" Value="16" />
-        <Setter Property="TextTrimming" Value="None" />
-        <Setter Property="ToolTip" Value="{x:Null}" />
-    </Style>
-
     <!-- セル編集用 TextBox。列の既定 EditingElementStyle は明るい背景を持つため、
          編集を許す列には必ずこれを指定する。 -->
     <Style x:Key="GridEditingTextBoxStyle" TargetType="TextBox">
@@ -1150,6 +1162,35 @@
         <Setter Property="TextWrapping" Value="Wrap" />
         <Setter Property="Margin" Value="0,1" />
     </Style>
+
+    <!-- ================================================================
+         develop（PR #12）の画面が参照しているキー。
+         淡色前提の値で App.xaml に置かれていたものを、暗い面向けに定義し直す。
+         **キー名は変えない。** 変えると向こうのマークアップが黙って既定の見た目に戻る。
+         ================================================================ -->
+
+    <!-- 件数の列。桁を揃えて読むため右寄せにする。 -->
+    <Style x:Key="NumericCell" TargetType="TextBlock" BasedOn="{StaticResource NumericCellTextStyle}" />
+
+    <!-- 右寄せした件数列の見出し。値と縦線が揃わないと桁が読みにくい。 -->
+    <Style x:Key="NumericColumnHeader" TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+        <Setter Property="HorizontalContentAlignment" Value="Right" />
+    </Style>
+
+    <!-- 一覧や右ペインが空のときに出す案内。何をすれば埋まるのかを示す。
+         入力欄のヒント（ctl:Placeholder.Text）とは別物。あちらは欄の中に出る薄い文字。 -->
+    <Style x:Key="PlaceholderText" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+        <Setter Property="FontSize" Value="12.5" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="TextAlignment" Value="Center" />
+        <Setter Property="LineHeight" Value="20" />
+    </Style>
+
+    <!-- 入力欄の見出し。 -->
+    <Style x:Key="FieldLabel" TargetType="TextBlock" BasedOn="{StaticResource FieldLabelStyle}" />
 
     <!-- 操作バー（一覧の上下に置く動線の帯） -->
     <Style x:Key="ActionBarBorderStyle" TargetType="Border">

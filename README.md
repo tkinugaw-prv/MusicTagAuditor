@@ -48,20 +48,16 @@ OS のタイトルバーは `Interop/DwmDarkTitleBar.cs` で着色する。DWM �
 | 適用の失敗・不一致 | `DangerPanelBrush` |
 | 手編集の気づき・辞書の検証結果 | `NoticePanelBrush` |
 
-検査結果タブの重大度記号は `SeverityToBrushConverter` で色を付ける。**記号（⛔ / ⚠ / ❓ / ✎）はどれも同じ濃さの字形で出るため、形の違いだけでは一覧のまま重大度を読み分けられない。**
+重大度は画面では**文字ラベル**で示す（`エラー` / `警告` / `要確認` / `手編集`）。**記号に戻さないこと。** 記号は実描画で単色の代替字形に置き換わり、塗りと線の違いしか出ないため意味が読めない。
 
-| 重大度 | 記号 | トークン |
+淡色テーマのバッジ配色をそのまま持ってくると、暗い面では背景が沈んで文字だけが浮く。文字を明るく・面は色味だけ残す配分に置き直している。
+
+| 重大度 | ラベル | トークン |
 |---|---|---|
-| error | ⛔ | `DangerBrush` |
-| warning | ⚠ | `WarningBrush` |
-| info | ❓ | `InfoBrush` |
-| manual（手編集） | ✎ | `AccentBrush` |
-
-**色は C# に書かず、テーマのリソースから引く**（`Application.Current.TryFindResource`）。値を持たせると `Themes/DarkTheme.xaml` と二重管理になる。
-
-⚠（U+26A0）だけは輪郭だけの細い三角で描かれ、塗り潰しの ⛔ / ❓ と並ぶと一段沈む。`SeverityGlyphConverter` で Segoe MDL2 Assets の塗り潰し字形（U+E814）へ差し替えている。置き換え表に無い記号はそのまま通すので、ビューモデル側の記号が増減しても表示は欠けない。
-
-**書体の切り替えは警告の行だけに閉じる。** `FontFamily` に `Segoe MDL2 Assets, Segoe UI Symbol, ...` と並べて書いても、この書体に無い ⛔ / ❓ は後続へフォールバックせず豆腐になる。列全体ではなく `DataTrigger` で該当行だけ差し替えること。
+| error | エラー | `SeverityErrorForeground` / `SeverityErrorBackground` |
+| warning | 警告 | `SeverityWarningForeground` / `SeverityWarningBackground` |
+| info | 要確認 | `SeverityInfoForeground` / `SeverityInfoBackground` |
+| manual | 手編集 | `SeverityManualForeground` / `SeverityManualBackground` |
 
 **判定区分の色は選択色より先に書く。** `DataGridRow` のスタイルはトリガの記述順で後勝ちになるため、順序を入れ替えると区分の色が選択色を上書きし、どの行を選んでいるか分からなくなる。
 
@@ -75,6 +71,8 @@ WPF の `TextBox` は placeholder を持たない。ラベルを置けない検�
 ```
 
 `xmlns:ctl="clr-namespace:MusicTagger.App.Controls"` を宣言して使う。表示・非表示はテンプレートの `Text` トリガで切り替わるので、**バインドは `UpdateSourceTrigger=PropertyChanged` にすること。** 既定の `LostFocus` だと入力中にプレースホルダが消えない。
+
+一覧や右ペインが空のときに出す案内は別物で、`PlaceholderText` スタイル（テーマ）を当てた `TextBlock` で書く。名前が似ているので取り違えないこと。
 
 ### アイコン
 
@@ -137,6 +135,8 @@ dotnet test
 ## 検査ルール
 
 `docs/SPEC.md` 6.1 の 24 ルールをすべて実装している。
+
+重大度は画面上で **`エラー` / `警告` / `要確認`** の文字と色で示す。SPEC が使っている記号（⛔ ⚠ ❓）は**実描画では単色の代替字形に置き換わり、塗りと線の違いしか出ないため意味が読めない**。記号に戻さないこと。
 
 実装で外せない前提が 5 つある。いずれも `docs/library-baseline-2026-08-03.md` の実測から導かれたもので、守らないと誤検出だらけになる。
 
