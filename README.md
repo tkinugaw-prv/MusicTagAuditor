@@ -1,4 +1,4 @@
-# musicTagger
+# Music Tag Auditor
 
 クラシック音楽ライブラリ向け タグ検査・編集デスクトップアプリケーション（Windows / WPF）。
 
@@ -237,7 +237,7 @@ Excel が日本語を Shift-JIS と誤認しないよう、BOM 付き UTF-8 で�
 
 ## 正規化辞書
 
-`%APPDATA%\musicTagger\dictionary.json`。初回起動時に同梱の既定辞書がコピーされる。
+`%APPDATA%\MusicTagAuditor\dictionary.json`。初回起動時に同梱の既定辞書がコピーされる。
 
 照合は正規化キー（NFKC・小文字化・ひらがな→カタカナ・ダイアクリティカルマーク除去・記号と空白の除去）で行うため、中黒やピリオドの有無、大文字小文字の違いは登録不要。
 
@@ -342,16 +342,16 @@ dotnet run --project tools/TagIoProbe/TagIoProbe.csproj -- "D:\Music Library for
 ## 実行
 
 ```bash
-dotnet run --project src/MusicTagger.App/MusicTagger.App.csproj
+dotnet run --project src/MusicTagAuditor.App/MusicTagAuditor.App.csproj
 ```
 
 第 1 引数にライブラリのパスを渡すと、起動直後にそのフォルダを開いてスキャンする。
 
 ```bash
-dotnet run --project src/MusicTagger.App/MusicTagger.App.csproj -- "D:\Music Library for AIMP\Classic"
+dotnet run --project src/MusicTagAuditor.App/MusicTagAuditor.App.csproj -- "D:\Music Library for AIMP\Classic"
 ```
 
-ログは `%LOCALAPPDATA%\musicTagger\logs\` に日次で出力される。設定・辞書は `%APPDATA%\musicTagger\`。
+ログは `%LOCALAPPDATA%\MusicTagAuditor\logs\` に日次で出力される。設定・辞書は `%APPDATA%\MusicTagAuditor\`。
 
 ---
 

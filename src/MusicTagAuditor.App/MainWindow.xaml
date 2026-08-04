@@ -1,0 +1,1083 @@
+<Window x:Class="MusicTagAuditor.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:MusicTagAuditor.App.ViewModels"
+        xmlns:conv="clr-namespace:MusicTagAuditor.App.Converters"
+        xmlns:ctl="clr-namespace:MusicTagAuditor.App.Controls"
+        Title="Music Tag Auditor" Height="900" Width="1440"
+        MinHeight="680" MinWidth="1120"
+        Icon="/Assets/app_icon.ico"
+        Background="{StaticResource BgOuterBrush}"
+        FontFamily="{StaticResource AppFontFamily}"
+        FontSize="13"
+        WindowStartupLocation="CenterScreen">
+
+  <Window.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+    <conv:CountToVisibilityConverter x:Key="CountToVisibility" />
+    <conv:TagFieldLabelConverter x:Key="TagFieldLabel" />
+
+    <!-- フォルダツリー。子フォルダを再帰的に展開する。 -->
+    <HierarchicalDataTemplate DataType="{x:Type vm:FolderNodeViewModel}"
+                              ItemsSource="{Binding Children}">
+      <TextBlock Text="{Binding DisplayText}" FontSize="12.5" TextTrimming="CharacterEllipsis" />
+    </HierarchicalDataTemplate>
+
+    <!--
+      重大度のバッジ。既定は「要確認」の配色にし、他の重大度をトリガで上書きする。
+      記号 1 文字では実描画で区別が付かないため、必ず文字ラベルを出すこと。
+    -->
+    <DataTemplate x:Key="SeverityBadge">
+      <Border x:Name="Badge" CornerRadius="3" Padding="7,2" Margin="0,1"
+              HorizontalAlignment="Left" VerticalAlignment="Center"
+              Background="{StaticResource SeverityInfoBackground}">
+        <TextBlock x:Name="Label" Text="{Binding SeverityLabel}" FontSize="11" FontWeight="SemiBold"
+                   Foreground="{StaticResource SeverityInfoForeground}" />
+      </Border>
+      <DataTemplate.Triggers>
+        <DataTrigger Binding="{Binding Severity}" Value="Error">
+          <Setter TargetName="Badge" Property="Background" Value="{StaticResource SeverityErrorBackground}" />
+          <Setter TargetName="Label" Property="Foreground" Value="{StaticResource SeverityErrorForeground}" />
+        </DataTrigger>
+        <DataTrigger Binding="{Binding Severity}" Value="Warning">
+          <Setter TargetName="Badge" Property="Background" Value="{StaticResource SeverityWarningBackground}" />
+          <Setter TargetName="Label" Property="Foreground" Value="{StaticResource SeverityWarningForeground}" />
+        </DataTrigger>
+        <DataTrigger Binding="{Binding Severity}" Value="Manual">
+          <Setter TargetName="Badge" Property="Background" Value="{StaticResource SeverityManualBackground}" />
+          <Setter TargetName="Label" Property="Foreground" Value="{StaticResource SeverityManualForeground}" />
+        </DataTrigger>
+      </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <!-- 差分明細の行。判定区分で色を変える（docs/SPEC.md 5.3）。
+         選択とホバーの指定は判定区分より後に置くこと。順序を入れ替えると
+         区分の色が選択色を上書きし、どの行を選んでいるか分からなくなる。 -->
+    <Style x:Key="ChangeRowStyle" TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding Classification}" Value="確定">
+          <Setter Property="Background" Value="{StaticResource RowConfirmedBrush}" />
+        </DataTrigger>
+        <DataTrigger Binding="{Binding Classification}" Value="要確認">
+          <Setter Property="Background" Value="{StaticResource RowReviewBrush}" />
+        </DataTrigger>
+        <DataTrigger Binding="{Binding Classification}" Value="保留">
+          <Setter Property="Background" Value="{StaticResource RowHoldBrush}" />
+          <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+        </DataTrigger>
+        <Trigger Property="IsMouseOver" Value="True">
+          <Setter Property="Background" Value="{StaticResource RowHoverBrush}" />
+        </Trigger>
+        <Trigger Property="IsSelected" Value="True">
+          <Setter Property="Background" Value="{StaticResource RowSelectedBrush}" />
+          <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+
+    <!-- ファイル一覧の行。複数値・保留中の編集を色で区別する。 -->
+    <Style x:Key="TrackRowStyle" TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+      <Setter Property="ToolTip" Value="{Binding SplitValueSummary}" />
+      <Style.Triggers>
+        <!-- 複数値として格納されている行は、表示上は連結されて見えるため色で区別する -->
+        <DataTrigger Binding="{Binding HasSplitValues}" Value="True">
+          <Setter Property="Background" Value="{StaticResource RowReviewBrush}" />
+        </DataTrigger>
+        <!-- 保留中の編集がある行。まだファイルには書き込まれていない -->
+        <DataTrigger Binding="{Binding IsEdited}" Value="True">
+          <Setter Property="Background" Value="{StaticResource RowEditedBrush}" />
+          <Setter Property="FontWeight" Value="SemiBold" />
+        </DataTrigger>
+        <Trigger Property="IsMouseOver" Value="True">
+          <Setter Property="Background" Value="{StaticResource RowHoverBrush}" />
+        </Trigger>
+        <Trigger Property="IsSelected" Value="True">
+          <Setter Property="Background" Value="{StaticResource RowSelectedBrush}" />
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+  </Window.Resources>
+
+  <DockPanel>
+
+    <!-- ============ A. タイトルバー ============ -->
+    <Border DockPanel.Dock="Top"
+            Background="{StaticResource PanelBarBrush}"
+            BorderBrush="{StaticResource BorderBrush}"
+            BorderThickness="0,0,0,1"
+            Padding="18,9">
+      <DockPanel>
+        <Image DockPanel.Dock="Left"
+               Width="19" Height="19"
+               Margin="0,0,9,0"
+               VerticalAlignment="Center"
+               Source="{StaticResource AppMarkImage}" />
+        <TextBlock DockPanel.Dock="Left"
+                   VerticalAlignment="Center"
+                   FontSize="13" FontWeight="SemiBold"
+                   Foreground="#C9CDD6"
+                   Text="musicTagger" />
+        <TextBlock DockPanel.Dock="Right"
+                   Margin="16,0,0,0"
+                   VerticalAlignment="Center"
+                   FontSize="11.5"
+                   Foreground="{StaticResource TextSecondaryBrush}"
+                   Text="タグ検査・編集" />
+        <TextBlock Text="" />
+      </DockPanel>
+    </Border>
+
+    <!-- ============ B. 入力エリア ============ -->
+    <Border DockPanel.Dock="Top"
+            Background="{StaticResource PanelInputBrush}"
+            BorderBrush="{StaticResource BorderBrush}"
+            BorderThickness="0,0,0,1"
+            Padding="18,14">
+      <StackPanel>
+        <!-- ライブラリ行 -->
+        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="ライブラリ" />
+        <DockPanel Margin="0,0,0,13">
+          <Button DockPanel.Dock="Right" Margin="8,0,0,0"
+                  Command="{Binding CancelScanCommand}" Content="中止" />
+          <Button DockPanel.Dock="Right" Margin="8,0,0,0"
+                  Command="{Binding RescanCommand}" Content="再スキャン" />
+          <Button DockPanel.Dock="Right" Margin="10,0,0,0"
+                  Command="{Binding OpenLibraryCommand}" Content="フォルダを開く..." />
+          <TextBox IsReadOnly="True"
+                   ctl:Placeholder.Text="「フォルダを開く...」でライブラリのフォルダを選びます"
+                   Text="{Binding LibraryRoot, Mode=OneWay}" />
+        </DockPanel>
+
+        <!-- 検査行 -->
+        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="検査" />
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+          <Button Command="{Binding InspectCommand}"
+                  Content="検査"
+                  Style="{StaticResource AccentButtonStyle}" />
+          <Button Margin="10,0,0,0"
+                  Command="{Binding CreateBackupCommand}"
+                  Content="バックアップ" />
+          <CheckBox Margin="22,0,0,0"
+                    VerticalAlignment="Center"
+                    Content="発音区別符号も検査"
+                    IsChecked="{Binding EnableDiacriticCheck}"
+                    ToolTip="R-304。誤検出が増えるため既定では無効です" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
+    <!-- ============ D. ステータスバー ============ -->
+    <Border DockPanel.Dock="Bottom"
+            Background="{StaticResource PanelBarBrush}"
+            BorderBrush="{StaticResource BorderBrush}"
+            BorderThickness="0,1,0,0"
+            Padding="18,8">
+      <DockPanel>
+        <ProgressBar DockPanel.Dock="Right"
+                     Width="180" Height="4"
+                     Margin="16,0,0,0"
+                     VerticalAlignment="Center"
+                     Minimum="0"
+                     Maximum="{Binding ProgressMaximum}"
+                     Value="{Binding ProgressValue}"
+                     Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisibility}}" />
+        <TextBlock Style="{StaticResource StatusTextStyle}"
+                   Text="{Binding StatusText}"
+                   TextTrimming="CharacterEllipsis" />
+      </DockPanel>
+    </Border>
+
+    <!-- ============ C. ツリー ＋ タブ ============ -->
+    <Grid>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="280" MinWidth="180" />
+        <ColumnDefinition Width="5" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+
+      <DockPanel Grid.Column="0" Background="{StaticResource PanelInputBrush}">
+        <Border DockPanel.Dock="Top"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="14,9">
+          <TextBlock Style="{StaticResource FieldLabelStyle}" Margin="0" Text="フォルダ" />
+        </Border>
+        <TreeView ItemsSource="{Binding FolderTree}"
+                  SelectedItemChanged="OnFolderSelectionChanged">
+          <TreeView.ItemContainerStyle>
+            <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
+              <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=OneTime}" />
+            </Style>
+          </TreeView.ItemContainerStyle>
+        </TreeView>
+      </DockPanel>
+
+      <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" />
+
+      <TabControl Grid.Column="2">
+
+        <TabItem Header="検査結果">
+          <Grid Margin="14,12,14,12">
+            <Grid.RowDefinitions>
+              <!-- 24 ルールを一望できる高さを既定で確保し、スプリッタで下段と融通する -->
+              <RowDefinition Height="*" MinHeight="140" />
+              <RowDefinition Height="10" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" MinHeight="140" />
+            </Grid.RowDefinitions>
+
+            <!-- 上段: ルール別の集計 -->
+            <Border Grid.Row="0" Style="{StaticResource CardBorderStyle}" Padding="1">
+              <DataGrid ItemsSource="{Binding RuleResults}"
+                        SelectedItem="{Binding SelectedRule}"
+                        SelectionMode="Single">
+                <DataGrid.Columns>
+                  <DataGridCheckBoxColumn Header="適用" Width="50"
+                                          Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}"
+                                          ElementStyle="{StaticResource GridCheckBoxStyle}"
+                                          EditingElementStyle="{StaticResource GridCheckBoxStyle}" />
+                  <DataGridTemplateColumn Header="重大度" CellTemplate="{StaticResource SeverityBadge}"
+                                          IsReadOnly="True" Width="80" SortMemberPath="Severity" />
+                  <DataGridTextColumn Header="ID" Binding="{Binding RuleId}" IsReadOnly="True" Width="70"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                  <!-- 件数は ID の隣にまとめる。「内容」の後ろに置くと右端まで目線が飛ぶ -->
+                  <DataGridTextColumn Header="検出" Binding="{Binding Count, StringFormat=N0}" IsReadOnly="True" Width="70"
+                                      ElementStyle="{StaticResource NumericCell}"
+                                      HeaderStyle="{StaticResource NumericColumnHeader}" />
+                  <DataGridTextColumn Header="修正可" Binding="{Binding FixableCount, StringFormat=N0}" IsReadOnly="True" Width="70"
+                                      ElementStyle="{StaticResource NumericCell}"
+                                      HeaderStyle="{StaticResource NumericColumnHeader}" />
+                  <DataGridTextColumn Header="保留" Binding="{Binding HoldCount, StringFormat=N0}" IsReadOnly="True" Width="70"
+                                      ElementStyle="{StaticResource NumericCell}"
+                                      HeaderStyle="{StaticResource NumericColumnHeader}" />
+                  <DataGridTextColumn Header="内容" Binding="{Binding Description}" IsReadOnly="True" Width="*" MinWidth="240"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                </DataGrid.Columns>
+              </DataGrid>
+            </Border>
+
+            <GridSplitter Grid.Row="1" Height="10" HorizontalAlignment="Stretch" VerticalAlignment="Center" />
+
+            <Border Grid.Row="2" Style="{StaticResource ActionBarBorderStyle}" Margin="0,0,0,12">
+              <DockPanel>
+                <Button DockPanel.Dock="Left" Content="チェックした項目を適用"
+                        Command="{Binding ApplyCommand}"
+                        Style="{StaticResource AccentButtonStyle}" Margin="0,0,8,0" />
+                <Button DockPanel.Dock="Left" Content="CSV出力"
+                        Command="{Binding ExportCsvCommand}" Margin="0,0,8,0"
+                        ToolTip="明細と集計の 2 ファイルを書き出します" />
+                <Button DockPanel.Dock="Left" Content="選択行を辞書に追加"
+                        Command="{Binding AddSelectedChangeToDictionaryCommand}" Margin="0,0,14,0"
+                        ToolTip="修正案を出せなかった行を辞書に登録して再検査します" />
+                <TextBlock Style="{StaticResource StatusTextStyle}"
+                           Text="{Binding InspectionSummary}" TextWrapping="Wrap" />
+              </DockPanel>
+            </Border>
+
+            <!-- 適用で問題が起きた項目。不一致が 1 件でもあれば必ず見せる（docs/SPEC.md 9章） -->
+            <Border Grid.Row="3" Style="{StaticResource DangerPanelBorderStyle}" Margin="0,0,0,12"
+                    Visibility="{Binding ApplyIssues.Count, Converter={StaticResource CountToVisibility}}">
+              <ItemsControl ItemsSource="{Binding ApplyIssues}" MaxHeight="120">
+                <ItemsControl.Template>
+                  <ControlTemplate TargetType="ItemsControl">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="10,8">
+                      <ItemsPresenter />
+                    </ScrollViewer>
+                  </ControlTemplate>
+                </ItemsControl.Template>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <TextBlock Style="{StaticResource DangerItemTextStyle}" Text="{Binding}" />
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </Border>
+
+            <!-- 下段: 差分プレビュー。根拠列を必ず持つ（docs/SPEC.md 5.3） -->
+            <Border Grid.Row="4" Style="{StaticResource CardBorderStyle}" Padding="1">
+              <DataGrid ItemsSource="{Binding InspectionChanges}"
+                        SelectedItem="{Binding SelectedChange}"
+                        RowStyle="{StaticResource ChangeRowStyle}"
+                        CanUserSortColumns="True"
+                        EnableRowVirtualization="True">
+                <DataGrid.Columns>
+                  <DataGridCheckBoxColumn Header="適用" Width="50"
+                                          Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}"
+                                          ElementStyle="{StaticResource GridCheckBoxStyle}"
+                                          EditingElementStyle="{StaticResource GridCheckBoxStyle}" />
+                  <DataGridTextColumn Header="区分" Binding="{Binding Classification}" IsReadOnly="True" Width="68"
+                                      ElementStyle="{StaticResource CenterCellTextStyle}" />
+                  <!--
+                    幅は star で配分する。固定幅だと根拠列が画面外に出るが、
+                    自動判定の理由が読めないと承認できない（docs/SPEC.md 5.3）。
+                  -->
+                  <DataGridTextColumn Header="パス" Binding="{Binding RelativePath}" IsReadOnly="True" Width="2*" MinWidth="180"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                  <DataGridTextColumn Header="タグ" Binding="{Binding Field}" IsReadOnly="True" Width="90"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                  <DataGridTextColumn Header="変更前" Binding="{Binding BeforeText}" IsReadOnly="True" Width="1.5*" MinWidth="120"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                  <DataGridTextColumn Header="変更後" Binding="{Binding AfterText}" IsReadOnly="True" Width="1.5*" MinWidth="120"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                  <DataGridTextColumn Header="根拠" Binding="{Binding Rationale}" IsReadOnly="True" Width="2*" MinWidth="160"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                </DataGrid.Columns>
+              </DataGrid>
+            </Border>
+          </Grid>
+        </TabItem>
+
+        <!-- 辞書に無い値。docs/SPEC.md 7.3 が「最も使用頻度が高い」とする導線 -->
+        <TabItem Header="辞書に無い値">
+          <Grid Margin="14,12,14,12">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Border Grid.Row="0" Style="{StaticResource ActionBarBorderStyle}" Margin="0,0,0,12">
+              <DockPanel>
+                <Button DockPanel.Dock="Left" Content="辞書に追加"
+                        Command="{Binding AddUnknownValueToDictionaryCommand}"
+                        Style="{StaticResource AccentButtonStyle}" Margin="0,0,14,0" />
+                <TextBlock Style="{StaticResource StatusTextStyle}"
+                           Text="{Binding UnknownValueSummary}" TextWrapping="Wrap" />
+              </DockPanel>
+            </Border>
+
+            <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Padding="1">
+              <DataGrid ItemsSource="{Binding UnknownValues}"
+                        SelectedItem="{Binding SelectedUnknownValue}"
+                        IsReadOnly="True"
+                        SelectionMode="Single"
+                        CanUserSortColumns="True">
+                <DataGrid.Columns>
+                  <DataGridTextColumn Header="件数" Binding="{Binding Count, StringFormat=N0}" Width="70"
+                                      ElementStyle="{StaticResource NumericCell}"
+                                      HeaderStyle="{StaticResource NumericColumnHeader}" />
+                  <DataGridTextColumn Header="値" Binding="{Binding Value}" Width="2*" MinWidth="180"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                  <DataGridTextColumn Header="登録先" Binding="{Binding CategoryText}" Width="80"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                  <DataGridTextColumn Header="フィールド" Binding="{Binding FieldsText}" Width="150"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                  <DataGridTextColumn Header="ルール" Binding="{Binding RuleIdsText}" Width="80"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                  <DataGridTextColumn Header="代表ファイル" Binding="{Binding SampleRelativePath}" Width="3*" MinWidth="200"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                </DataGrid.Columns>
+              </DataGrid>
+            </Border>
+          </Grid>
+        </TabItem>
+
+        <!-- ファイル一覧。手編集はここで行う（docs/SPEC.md 5.2） -->
+        <TabItem Header="ファイル一覧">
+          <Grid Margin="14,12,14,12">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" MinHeight="160" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <!-- 保留中の編集。0 件のときは畳んで一覧に高さを譲る -->
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!--
+              絞り込みと一括入力。DockPanel だと右端の要素が幅不足で欠けるため、
+              列を明示した Grid で組む。2 段の入力欄は同じ列に揃える。
+            -->
+            <Grid Grid.Row="0" Margin="0,0,0,12">
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" MinWidth="160" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+
+              <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource FieldLabel}"
+                         Text="絞り込み" VerticalAlignment="Center" Margin="0,0,10,0" MinWidth="52" />
+              <TextBox Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2"
+                       ctl:Placeholder.Text="パスとすべてのタグを対象に検索"
+                       Text="{Binding TrackFilterText, UpdateSourceTrigger=PropertyChanged}"
+                       ToolTip="パスとすべてのタグを対象に検索します" />
+              <StackPanel Grid.Row="0" Grid.Column="3" Orientation="Horizontal" Margin="14,0,0,0">
+                <CheckBox Content="空欄のある行のみ" VerticalAlignment="Center"
+                          IsChecked="{Binding ShowOnlyEmptyFields}" Margin="0,0,14,0" />
+                <CheckBox Content="編集した行のみ" VerticalAlignment="Center"
+                          IsChecked="{Binding ShowOnlyEditedTracks}" />
+              </StackPanel>
+
+              <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource FieldLabel}"
+                         Text="一括入力" VerticalAlignment="Center" Margin="0,8,10,0" MinWidth="52" />
+              <ComboBox Grid.Row="1" Grid.Column="1" Width="160" Margin="0,8,8,0"
+                        ItemsSource="{Binding EditableFields}"
+                        SelectedItem="{Binding BulkField}">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate>
+                    <TextBlock Text="{Binding Converter={StaticResource TagFieldLabel}}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <TextBox Grid.Row="1" Grid.Column="2" Margin="0,8,0,0"
+                       ctl:Placeholder.Text="選択行に入れる値（空のまま実行するとタグを消します）"
+                       Text="{Binding BulkValue, UpdateSourceTrigger=PropertyChanged}" />
+              <Button Grid.Row="1" Grid.Column="3" Content="選択行に一括入力"
+                      Command="{Binding BulkInputCommand}"
+                      CommandParameter="{Binding SelectedItems, ElementName=TrackGrid}"
+                      Margin="14,8,0,0"
+                      ToolTip="選択した行すべてに同じ値を入れます。空欄のまま押すとタグを消します" />
+            </Grid>
+
+            <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Padding="1">
+              <DataGrid x:Name="TrackGrid"
+                        ItemsSource="{Binding Tracks}"
+                        RowStyle="{StaticResource TrackRowStyle}"
+                        CanUserSortColumns="True"
+                        EnableRowVirtualization="True"
+                        EnableColumnVirtualization="True"
+                        SelectionMode="Extended"
+                        SelectionUnit="FullRow">
+                <DataGrid.Columns>
+                  <!--
+                    13 列を 1 画面に収めきることはできないため横スクロールは残す。
+                    幅は star にして、ウィンドウを広げた分が文字列の列に回るようにする。
+                    MinWidth は見出しが欠けない下限。star 列の MinWidth 合計が表示幅を超えると
+                    固定幅の列まで削られて見出しごと消えるため、固定幅の列にも下限を入れる。
+                  -->
+                  <!-- ファイル名・フォルダ・形式は編集できない。リネームは対象外（docs/SPEC.md 2.2） -->
+                  <DataGridTextColumn Header="ファイル" Binding="{Binding FileName}" IsReadOnly="True" Width="1.6*" MinWidth="160"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                  <DataGridTextColumn Header="フォルダ" Binding="{Binding FolderPath}" IsReadOnly="True" Width="1.2*" MinWidth="120"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                  <DataGridTextColumn Header="形式" Binding="{Binding Format}" IsReadOnly="True" Width="64" MinWidth="64"
+                                      ElementStyle="{StaticResource CenterCellTextStyle}" />
+                  <DataGridTextColumn Header="タイトル" Binding="{Binding Title}" Width="2*" MinWidth="180"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}"
+                                      EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
+                  <DataGridTextColumn Header="作曲家" Binding="{Binding Composer}" Width="1.2*" MinWidth="120"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}"
+                                      EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
+                  <DataGridTextColumn Header="アーティスト" Binding="{Binding Artist}" Width="1.2*" MinWidth="120"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}"
+                                      EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
+                  <DataGridTextColumn Header="指揮者" Binding="{Binding Conductor}" Width="1.2*" MinWidth="120"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}"
+                                      EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
+                  <DataGridTextColumn Header="アルバムアーティスト" Binding="{Binding AlbumArtist}" Width="1.4*" MinWidth="150"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}"
+                                      EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
+                  <DataGridTextColumn Header="アルバム" Binding="{Binding Album}" Width="1.6*" MinWidth="160"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}"
+                                      EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
+                  <DataGridTextColumn Header="ジャンル" Binding="{Binding Genre}" Width="72" MinWidth="72"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}"
+                                      EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
+                  <DataGridTextColumn Header="年" Binding="{Binding Date}" Width="56" MinWidth="56"
+                                      ElementStyle="{StaticResource NumericCellTextStyle}"
+                                      EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
+                  <DataGridTextColumn Header="トラック" Binding="{Binding TrackNumber}" Width="66" MinWidth="66"
+                                      ElementStyle="{StaticResource NumericCellTextStyle}"
+                                      EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
+                  <DataGridTextColumn Header="ディスク" Binding="{Binding DiscNumber}" Width="66" MinWidth="66"
+                                      ElementStyle="{StaticResource NumericCellTextStyle}"
+                                      EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
+                </DataGrid.Columns>
+              </DataGrid>
+            </Border>
+
+            <Border Grid.Row="2" Style="{StaticResource ActionBarBorderStyle}" Margin="0,12">
+              <DockPanel>
+                <Button DockPanel.Dock="Left" Content="編集内容を適用"
+                        Command="{Binding ApplyManualEditsCommand}"
+                        Style="{StaticResource AccentButtonStyle}" Margin="0,0,8,0" />
+                <Button DockPanel.Dock="Left" Content="編集を破棄"
+                        Command="{Binding DiscardManualEditsCommand}" Margin="0,0,14,0" />
+                <TextBlock Style="{StaticResource StatusTextStyle}"
+                           Text="{Binding ManualEditSummary}" TextWrapping="Wrap" />
+              </DockPanel>
+            </Border>
+
+            <!-- 気づいてほしい点。止めはしないが黙って通しもしない -->
+            <Border Grid.Row="3" Style="{StaticResource NoticePanelBorderStyle}" Margin="0,0,0,12"
+                    Visibility="{Binding ManualEditWarnings.Count, Converter={StaticResource CountToVisibility}}">
+              <ItemsControl ItemsSource="{Binding ManualEditWarnings}" MaxHeight="110">
+                <ItemsControl.Template>
+                  <ControlTemplate TargetType="ItemsControl">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="10,8">
+                      <ItemsPresenter />
+                    </ScrollViewer>
+                  </ControlTemplate>
+                </ItemsControl.Template>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <TextBlock Style="{StaticResource NoticeItemTextStyle}" Text="{Binding Summary}" />
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </Border>
+
+            <!--
+              保留中の編集。適用前に必ずここで差分を確認できる。
+              1 件も無いうちは畳んで一覧に高さを譲る（編集が入った時点で現れる）。
+            -->
+            <Border Grid.Row="4" Style="{StaticResource CardBorderStyle}" Padding="1"
+                    Visibility="{Binding ManualEditChanges.Count, Converter={StaticResource CountToVisibility}}">
+              <DataGrid ItemsSource="{Binding ManualEditChanges}"
+                        CanUserSortColumns="True"
+                        MinHeight="100" MaxHeight="260">
+                <DataGrid.Columns>
+                  <DataGridCheckBoxColumn Header="適用" Width="50"
+                                          Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}"
+                                          ElementStyle="{StaticResource GridCheckBoxStyle}"
+                                          EditingElementStyle="{StaticResource GridCheckBoxStyle}" />
+                  <DataGridTextColumn Header="パス" Binding="{Binding RelativePath}" IsReadOnly="True" Width="2*" MinWidth="180"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                  <DataGridTextColumn Header="タグ" Binding="{Binding Field}" IsReadOnly="True" Width="100"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                  <DataGridTextColumn Header="変更前" Binding="{Binding BeforeText}" IsReadOnly="True" Width="1.5*" MinWidth="120"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                  <DataGridTextColumn Header="変更後" Binding="{Binding AfterText}" IsReadOnly="True" Width="1.5*" MinWidth="120"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                  <DataGridTextColumn Header="根拠" Binding="{Binding Rationale}" IsReadOnly="True" Width="2*" MinWidth="160"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                </DataGrid.Columns>
+              </DataGrid>
+            </Border>
+          </Grid>
+        </TabItem>
+
+        <!-- 辞書（docs/SPEC.md 7.3） -->
+        <TabItem Header="辞書" DataContext="{Binding Dictionary}">
+          <Grid Margin="14,12,14,12">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- ツールバー -->
+            <StackPanel Grid.Row="0" Margin="0,0,0,12">
+              <DockPanel>
+                <Button DockPanel.Dock="Left" Content="保存" Command="{Binding SaveCommand}"
+                        Style="{StaticResource AccentButtonStyle}" Margin="0,0,8,0" />
+                <Button DockPanel.Dock="Left" Content="検証だけ実行" Command="{Binding ValidateCommand}"
+                        Margin="0,0,8,0" />
+                <Button DockPanel.Dock="Left" Content="編集を破棄" Command="{Binding RevertCommand}"
+                        Margin="0,0,8,0" />
+                <Button DockPanel.Dock="Left" Content="既定辞書から取り込む" Command="{Binding MergeFromDefaultCommand}"
+                        Margin="0,0,8,0"
+                        ToolTip="アプリ側に追加されたエントリや設定を、この辞書へ取り込みます">
+                  <Button.Style>
+                    <Style TargetType="Button" BasedOn="{StaticResource OutlineButtonStyle}">
+                      <Style.Triggers>
+                        <!-- 取り込めるものがあるときだけ目立たせる -->
+                        <DataTrigger Binding="{Binding PendingMergeCount, Converter={StaticResource CountToVisibility}}" Value="Visible">
+                          <Setter Property="FontWeight" Value="SemiBold" />
+                          <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+                          <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </Button.Style>
+                </Button>
+                <Button DockPanel.Dock="Left" Content="既定辞書として書き出し" Command="{Binding ExportCommand}"
+                        Margin="0,0,14,0"
+                        ToolTip="リポジトリ同梱の default-dictionary.json へ書き戻します" />
+                <TextBlock DockPanel.Dock="Right" Margin="12,0,0,0"
+                           VerticalAlignment="Center"
+                           FontSize="11.5" FontWeight="SemiBold"
+                           Foreground="{StaticResource WarningBrush}"
+                           Text="● 未保存"
+                           Visibility="{Binding IsDirty, Converter={StaticResource BoolToVisibility}}" />
+                <!-- ラベルが無いと右上の空欄が何なのか分からない -->
+                <TextBlock DockPanel.Dock="Left" Style="{StaticResource FieldLabel}"
+                           Text="絞り込み" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <TextBox MinWidth="200"
+                         ctl:Placeholder.Text="正規形・別名・実体 ID で絞り込む"
+                         Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
+                         ToolTip="正規形・別名・実体 ID で絞り込む" />
+              </DockPanel>
+
+              <TextBlock Style="{StaticResource StatusTextStyle}" Margin="0,10,0,0"
+                         Text="{Binding StatusText}" TextWrapping="Wrap" />
+              <DockPanel Margin="0,3,0,0">
+                <TextBlock DockPanel.Dock="Left" Style="{StaticResource HintTextStyle}"
+                           Text="辞書ファイル" Margin="0,0,8,0" />
+                <TextBlock Style="{StaticResource HintTextStyle}"
+                           Text="{Binding FilePath}" TextTrimming="CharacterEllipsis"
+                           ToolTip="{Binding FilePath}" />
+              </DockPanel>
+            </StackPanel>
+
+            <TabControl Grid.Row="1">
+
+              <!-- 作曲家 -->
+              <TabItem Header="作曲家">
+                <Grid Margin="12">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="260" MinWidth="160" />
+                    <ColumnDefinition Width="5" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+
+                  <DockPanel Grid.Column="0">
+                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0">
+                      <Button Content="追加" Command="{Binding AddComposerCommand}"
+                              Style="{StaticResource SmallOutlineButtonStyle}" Margin="0,0,6,0" />
+                      <Button Content="削除" Command="{Binding RemoveComposerCommand}"
+                              Style="{StaticResource SmallOutlineButtonStyle}" />
+                    </StackPanel>
+                    <ListBox ItemsSource="{Binding Composers}" SelectedItem="{Binding SelectedComposer}"
+                             DisplayMemberPath="Canonical" />
+                  </DockPanel>
+
+                  <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" />
+
+                  <Grid Grid.Column="2" Margin="12,0,0,0">
+                    <!--
+                      別名と日本語表記は横並びにする。縦に積むと 1 行の正規形に対して
+                      入力欄だけが極端に縦長になり、釣り合いが崩れる。
+                    -->
+                    <Grid MaxWidth="900" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                      <Grid.Style>
+                        <Style TargetType="Grid">
+                          <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedComposer}" Value="{x:Null}">
+                              <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </Grid.Style>
+                      <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                      </Grid.RowDefinitions>
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="12" />
+                        <ColumnDefinition Width="*" />
+                      </Grid.ColumnDefinitions>
+
+                      <TextBlock Grid.Row="0" Grid.ColumnSpan="3" Text="正規形" Style="{StaticResource FieldLabel}" />
+                      <TextBox Grid.Row="1" Grid.ColumnSpan="3"
+                               Text="{Binding SelectedComposer.Canonical, UpdateSourceTrigger=PropertyChanged}" />
+
+                      <TextBlock Grid.Row="2" Grid.Column="0" Text="別名（1 行 1 件）"
+                                 Style="{StaticResource FieldLabel}" Margin="0,14,0,5" />
+                      <TextBlock Grid.Row="2" Grid.Column="2" Text="日本語表記（1 行 1 件）"
+                                 Style="{StaticResource FieldLabel}" Margin="0,14,0,5" />
+                      <!-- 高さを上限で止める。画面いっぱいに伸ばすと 1 行の正規形との対比が崩れる -->
+                      <TextBox Grid.Row="3" Grid.Column="0" Height="240"
+                               Style="{StaticResource DarkMultilineTextBoxStyle}"
+                               Text="{Binding SelectedComposer.AliasesText, UpdateSourceTrigger=PropertyChanged}" />
+                      <TextBox Grid.Row="3" Grid.Column="2" Height="240"
+                               Style="{StaticResource DarkMultilineTextBoxStyle}"
+                               Text="{Binding SelectedComposer.AliasesJaText, UpdateSourceTrigger=PropertyChanged}" />
+                    </Grid>
+
+                    <TextBlock Text="左の一覧から作曲家を選ぶと、ここで編集できます。&#x0a;新しく登録するときは「追加」を押してください。">
+                      <TextBlock.Style>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource PlaceholderText}">
+                          <Setter Property="Visibility" Value="Collapsed" />
+                          <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedComposer}" Value="{x:Null}">
+                              <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </TextBlock.Style>
+                    </TextBlock>
+                  </Grid>
+                </Grid>
+              </TabItem>
+
+              <!-- 人物 -->
+              <TabItem Header="人物">
+                <Grid Margin="12">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="260" MinWidth="160" />
+                    <ColumnDefinition Width="5" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+
+                  <DockPanel Grid.Column="0">
+                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0">
+                      <Button Content="追加" Command="{Binding AddPersonCommand}"
+                              Style="{StaticResource SmallOutlineButtonStyle}" Margin="0,0,6,0" />
+                      <Button Content="削除" Command="{Binding RemovePersonCommand}"
+                              Style="{StaticResource SmallOutlineButtonStyle}" />
+                    </StackPanel>
+                    <ListBox ItemsSource="{Binding Persons}" SelectedItem="{Binding SelectedPerson}"
+                             DisplayMemberPath="Canonical" />
+                  </DockPanel>
+
+                  <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" />
+
+                  <Grid Grid.Column="2" Margin="12,0,0,0">
+                    <Grid MaxWidth="900" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                      <Grid.Style>
+                        <Style TargetType="Grid">
+                          <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedPerson}" Value="{x:Null}">
+                              <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </Grid.Style>
+                      <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                      </Grid.RowDefinitions>
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="12" />
+                        <ColumnDefinition Width="*" />
+                      </Grid.ColumnDefinitions>
+
+                      <TextBlock Grid.Row="0" Grid.ColumnSpan="3" Text="正規形" Style="{StaticResource FieldLabel}" />
+                      <TextBox Grid.Row="1" Grid.ColumnSpan="3"
+                               Text="{Binding SelectedPerson.Canonical, UpdateSourceTrigger=PropertyChanged}" />
+                      <StackPanel Grid.Row="2" Grid.ColumnSpan="3" Orientation="Horizontal" Margin="0,10,0,0">
+                        <CheckBox Content="指揮者" IsChecked="{Binding SelectedPerson.IsConductor}" Margin="0,0,18,0" />
+                        <CheckBox Content="ソリスト" IsChecked="{Binding SelectedPerson.IsSoloist}" />
+                      </StackPanel>
+
+                      <TextBlock Grid.Row="3" Grid.Column="0" Text="別名（1 行 1 件）"
+                                 Style="{StaticResource FieldLabel}" Margin="0,14,0,5" />
+                      <TextBlock Grid.Row="3" Grid.Column="2" Text="日本語表記（1 行 1 件）"
+                                 Style="{StaticResource FieldLabel}" Margin="0,14,0,5" />
+                      <!-- 高さを上限で止める。画面いっぱいに伸ばすと 1 行の正規形との対比が崩れる -->
+                      <TextBox Grid.Row="4" Grid.Column="0" Height="240"
+                               Style="{StaticResource DarkMultilineTextBoxStyle}"
+                               Text="{Binding SelectedPerson.AliasesText, UpdateSourceTrigger=PropertyChanged}" />
+                      <TextBox Grid.Row="4" Grid.Column="2" Height="240"
+                               Style="{StaticResource DarkMultilineTextBoxStyle}"
+                               Text="{Binding SelectedPerson.AliasesJaText, UpdateSourceTrigger=PropertyChanged}" />
+                    </Grid>
+
+                    <TextBlock Text="左の一覧から人物を選ぶと、ここで編集できます。&#x0a;新しく登録するときは「追加」を押してください。">
+                      <TextBlock.Style>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource PlaceholderText}">
+                          <Setter Property="Visibility" Value="Collapsed" />
+                          <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedPerson}" Value="{x:Null}">
+                              <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </TextBlock.Style>
+                    </TextBlock>
+                  </Grid>
+                </Grid>
+              </TabItem>
+
+              <!-- 団体 -->
+              <TabItem Header="団体">
+                <Grid Margin="12">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="260" MinWidth="160" />
+                    <ColumnDefinition Width="5" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+
+                  <DockPanel Grid.Column="0">
+                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0">
+                      <Button Content="追加" Command="{Binding AddEnsembleCommand}"
+                              Style="{StaticResource SmallOutlineButtonStyle}" Margin="0,0,6,0" />
+                      <Button Content="削除" Command="{Binding RemoveEnsembleCommand}"
+                              Style="{StaticResource SmallOutlineButtonStyle}" />
+                    </StackPanel>
+                    <ListBox ItemsSource="{Binding Ensembles}" SelectedItem="{Binding SelectedEnsemble}"
+                             DisplayMemberPath="DisplayName" />
+                  </DockPanel>
+
+                  <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" />
+
+                  <Grid Grid.Column="2" Margin="12,0,0,0">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                      <ScrollViewer.Style>
+                        <Style TargetType="ScrollViewer">
+                          <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedEnsemble}" Value="{x:Null}">
+                              <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </ScrollViewer.Style>
+                      <StackPanel MaxWidth="900" HorizontalAlignment="Stretch" Margin="0,0,10,0">
+                        <TextBlock Text="実体 ID（改名をまたいで同一の団体を指す。名前の類似で束ねないこと）"
+                                   Style="{StaticResource FieldLabel}" TextWrapping="Wrap" />
+                        <TextBox Text="{Binding SelectedEnsemble.EntityId, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Text="正規形（時代分割しない場合）" Style="{StaticResource FieldLabel}" Margin="0,14,0,5" />
+                        <TextBox Text="{Binding SelectedEnsemble.Canonical, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <CheckBox Content="時代分割を行わない（個別例外。TAGGING_POLICY 5.3.2）"
+                                  IsChecked="{Binding SelectedEnsemble.NoEraSplit}" Margin="0,10,0,0" />
+
+                        <DockPanel Margin="0,14,0,6">
+                          <Button DockPanel.Dock="Right" Content="区分を削除" Command="{Binding RemoveEraCommand}"
+                                  Style="{StaticResource SmallOutlineButtonStyle}" />
+                          <Button DockPanel.Dock="Right" Content="区分を追加" Command="{Binding AddEraCommand}"
+                                  Style="{StaticResource SmallOutlineButtonStyle}" Margin="0,0,6,0" />
+                          <TextBlock Text="時代分割（収録時点の名称を採用する。TAGGING_POLICY 5.3.1）"
+                                     Style="{StaticResource FieldLabel}" Margin="0" VerticalAlignment="Center" />
+                        </DockPanel>
+                        <Border Style="{StaticResource CardBorderStyle}" Padding="1">
+                          <DataGrid ItemsSource="{Binding SelectedEnsemble.Eras}"
+                                    SelectedItem="{Binding SelectedEra}"
+                                    SelectionMode="Single"
+                                    MinHeight="72"
+                                    MaxHeight="180">
+                            <DataGrid.Columns>
+                              <DataGridTextColumn Header="この年以降" Binding="{Binding FromText, UpdateSourceTrigger=PropertyChanged}" Width="90"
+                                                  ElementStyle="{StaticResource NumericCellTextStyle}"
+                                                  EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
+                              <DataGridTextColumn Header="この年より前" Binding="{Binding UntilText, UpdateSourceTrigger=PropertyChanged}" Width="100"
+                                                  ElementStyle="{StaticResource NumericCellTextStyle}"
+                                                  EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
+                              <DataGridTextColumn Header="正規形" Binding="{Binding Canonical, UpdateSourceTrigger=PropertyChanged}" Width="*"
+                                                  ElementStyle="{StaticResource EllipsisTextStyle}"
+                                                  EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
+                            </DataGrid.Columns>
+                          </DataGrid>
+                        </Border>
+
+                        <!-- 別名と日本語表記は横並びにする。作曲家・人物タブと同じ組み方 -->
+                        <Grid Margin="0,14,0,0">
+                          <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                          </Grid.RowDefinitions>
+                          <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition Width="*" />
+                          </Grid.ColumnDefinitions>
+                          <TextBlock Grid.Row="0" Grid.Column="0" Text="別名（1 行 1 件）" Style="{StaticResource FieldLabel}" />
+                          <TextBlock Grid.Row="0" Grid.Column="2" Text="日本語表記（1 行 1 件）" Style="{StaticResource FieldLabel}" />
+                          <TextBox Grid.Row="1" Grid.Column="0" Height="110"
+                                   Style="{StaticResource DarkMultilineTextBoxStyle}"
+                                   Text="{Binding SelectedEnsemble.AliasesText, UpdateSourceTrigger=PropertyChanged}" />
+                          <TextBox Grid.Row="1" Grid.Column="2" Height="110"
+                                   Style="{StaticResource DarkMultilineTextBoxStyle}"
+                                   Text="{Binding SelectedEnsemble.AliasesJaText, UpdateSourceTrigger=PropertyChanged}" />
+                        </Grid>
+                      </StackPanel>
+                    </ScrollViewer>
+
+                    <TextBlock Text="左の一覧から団体を選ぶと、ここで編集できます。&#x0a;新しく登録するときは「追加」を押してください。">
+                      <TextBlock.Style>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource PlaceholderText}">
+                          <Setter Property="Visibility" Value="Collapsed" />
+                          <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedEnsemble}" Value="{x:Null}">
+                              <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </TextBlock.Style>
+                    </TextBlock>
+                  </Grid>
+                </Grid>
+              </TabItem>
+
+              <!-- 誤記 -->
+              <TabItem Header="誤記">
+                <Grid Margin="12">
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                  </Grid.RowDefinitions>
+
+                  <DockPanel Grid.Row="0" Margin="0,0,0,10">
+                    <Button DockPanel.Dock="Left" Content="追加" Command="{Binding AddTypoCommand}"
+                            Style="{StaticResource SmallOutlineButtonStyle}" Margin="0,0,6,0" />
+                    <Button DockPanel.Dock="Left" Content="削除" Command="{Binding RemoveTypoCommand}"
+                            Style="{StaticResource SmallOutlineButtonStyle}" Margin="0,0,14,0" />
+                    <TextBlock Style="{StaticResource HintTextStyle}" VerticalAlignment="Center"
+                               Text="照合は正規表現で行う。団体名には適用しない（Münchener Bach-Chor の -ener は正しい表記）。" />
+                  </DockPanel>
+
+                  <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Padding="1">
+                    <DataGrid ItemsSource="{Binding Typos}"
+                              SelectedItem="{Binding SelectedTypo}"
+                              SelectionMode="Single">
+                      <DataGrid.Columns>
+                        <DataGridTextColumn Header="パターン" Binding="{Binding Pattern, UpdateSourceTrigger=PropertyChanged}" Width="240"
+                                            ElementStyle="{StaticResource EllipsisTextStyle}"
+                                            EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
+                        <DataGridTextColumn Header="置換後" Binding="{Binding Replacement, UpdateSourceTrigger=PropertyChanged}" Width="200"
+                                            ElementStyle="{StaticResource EllipsisTextStyle}"
+                                            EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
+                        <DataGridTextColumn Header="メモ" Binding="{Binding Note, UpdateSourceTrigger=PropertyChanged}" Width="*"
+                                            ElementStyle="{StaticResource EllipsisTextStyle}"
+                                            EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
+                        <DataGridTextColumn Header="正規表現" Binding="{Binding ValidityMark}" IsReadOnly="True" Width="80"
+                                            ElementStyle="{StaticResource CenterCellTextStyle}" />
+                      </DataGrid.Columns>
+                    </DataGrid>
+                  </Border>
+
+                  <!-- その場で試せるテスト欄（docs/SPEC.md 7.3） -->
+                  <Border Grid.Row="2" Style="{StaticResource CardBorderStyle}" Padding="12" Margin="0,10,0,0">
+                    <StackPanel>
+                      <TextBlock Text="選択中のパターンを試す" Style="{StaticResource FieldLabel}" />
+                      <TextBox ctl:Placeholder.Text="パターンに当てる文字列を入力すると、一致の有無と置換結果が出ます"
+                               Text="{Binding TypoTestInput, UpdateSourceTrigger=PropertyChanged}" />
+                      <TextBlock Style="{StaticResource StatusTextStyle}" Margin="0,8,0,0"
+                                 Text="{Binding TypoTestResult}" TextWrapping="Wrap" />
+                    </StackPanel>
+                  </Border>
+                </Grid>
+              </TabItem>
+
+              <!-- 保護対象 -->
+              <TabItem Header="保護対象">
+                <Grid Margin="12">
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                  </Grid.RowDefinitions>
+
+                  <StackPanel Grid.Row="0" Margin="0,0,0,10">
+                    <TextBlock Style="{StaticResource HintTextStyle}"
+                               Text="配役情報を含むため書き換えない albumartist（TAGGING_POLICY 2.3）。ここに載っている値は全ルールの検査前に除外される。" />
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                      <Button Content="追加" Command="{Binding AddProtectedValueCommand}"
+                              Style="{StaticResource SmallOutlineButtonStyle}" Margin="0,0,6,0" />
+                      <Button Content="削除" Command="{Binding RemoveProtectedValueCommand}"
+                              Style="{StaticResource SmallOutlineButtonStyle}" />
+                    </StackPanel>
+                  </StackPanel>
+
+                  <ListBox Grid.Row="1"
+                           ItemsSource="{Binding ProtectedValues}"
+                           SelectedItem="{Binding SelectedProtectedValue}"
+                           DisplayMemberPath="Value"
+                           HorizontalContentAlignment="Stretch" />
+
+                  <StackPanel Grid.Row="2" Margin="0,10,0,0">
+                    <TextBlock Text="選択中の値" Style="{StaticResource FieldLabel}" />
+                    <TextBox Height="72" TextWrapping="Wrap"
+                             Style="{StaticResource DarkMultilineTextBoxStyle}"
+                             Text="{Binding SelectedProtectedValue.Value, UpdateSourceTrigger=PropertyChanged}" />
+                  </StackPanel>
+                </Grid>
+              </TabItem>
+
+            </TabControl>
+
+            <!-- 検証結果。エラーは保存を止める -->
+            <Border Grid.Row="2" Style="{StaticResource NoticePanelBorderStyle}" Margin="0,12,0,0"
+                    Visibility="{Binding Issues.Count, Converter={StaticResource CountToVisibility}}">
+              <ItemsControl ItemsSource="{Binding Issues}" MaxHeight="130">
+                <ItemsControl.Template>
+                  <ControlTemplate TargetType="ItemsControl">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="10,8">
+                      <ItemsPresenter />
+                    </ScrollViewer>
+                  </ControlTemplate>
+                </ItemsControl.Template>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <TextBlock Style="{StaticResource NoticeItemTextStyle}" Text="{Binding Summary}" />
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </Border>
+          </Grid>
+        </TabItem>
+
+        <TabItem Header="バックアップ履歴">
+          <Grid Margin="14,12,14,12">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="180" MinHeight="100" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Border Grid.Row="0" Style="{StaticResource CardBorderStyle}" Padding="1">
+              <DataGrid ItemsSource="{Binding Backups}"
+                        SelectedItem="{Binding SelectedBackup}"
+                        IsReadOnly="True"
+                        SelectionMode="Single">
+                <DataGrid.Columns>
+                  <DataGridTextColumn Header="取得日時" Binding="{Binding CreatedAtText}" Width="160"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                  <DataGridTextColumn Header="理由" Binding="{Binding ReasonText}" Width="120"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                  <DataGridTextColumn Header="件数" Binding="{Binding TrackCountText}" Width="80"
+                                      ElementStyle="{StaticResource NumericCell}"
+                                      HeaderStyle="{StaticResource NumericColumnHeader}" />
+                  <DataGridTextColumn Header="補足" Binding="{Binding Note}" Width="*" MinWidth="140"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                  <DataGridTextColumn Header="フォルダ" Binding="{Binding DirectoryPath}" Width="2*" MinWidth="220"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                </DataGrid.Columns>
+              </DataGrid>
+            </Border>
+
+            <Border Grid.Row="1" Style="{StaticResource ActionBarBorderStyle}" Margin="0,12">
+              <DockPanel>
+                <Button DockPanel.Dock="Left" Content="差分を確認"
+                        Command="{Binding PreviewRestoreCommand}" Margin="0,0,8,0" />
+                <Button DockPanel.Dock="Left" Content="選択した項目を復元"
+                        Command="{Binding RestoreCommand}"
+                        Style="{StaticResource AccentButtonStyle}" Margin="0,0,14,0" />
+                <TextBlock Style="{StaticResource StatusTextStyle}"
+                           Text="{Binding RestoreSummary}" TextWrapping="Wrap" />
+              </DockPanel>
+            </Border>
+
+            <Border Grid.Row="2" Style="{StaticResource CardBorderStyle}" Padding="1">
+              <DataGrid ItemsSource="{Binding RestoreItems}" CanUserSortColumns="True">
+                <DataGrid.Columns>
+                  <DataGridCheckBoxColumn Header="戻す" Width="50"
+                                          Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}"
+                                          ElementStyle="{StaticResource GridCheckBoxStyle}"
+                                          EditingElementStyle="{StaticResource GridCheckBoxStyle}" />
+                  <DataGridTextColumn Header="パス" Binding="{Binding RelativePath}" IsReadOnly="True" Width="2*" MinWidth="200"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                  <DataGridTextColumn Header="フィールド" Binding="{Binding Field}" IsReadOnly="True" Width="110"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                  <DataGridTextColumn Header="現在の値" Binding="{Binding CurrentText}" IsReadOnly="True" Width="1.5*" MinWidth="150"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                  <DataGridTextColumn Header="戻す値" Binding="{Binding SnapshotText}" IsReadOnly="True" Width="1.5*" MinWidth="150"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                </DataGrid.Columns>
+              </DataGrid>
+            </Border>
+          </Grid>
+        </TabItem>
+
+        <TabItem Header="読み取り失敗">
+          <Border Margin="14,12,14,12" Style="{StaticResource CardBorderStyle}" Padding="1">
+            <DataGrid ItemsSource="{Binding Failures}" IsReadOnly="True">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="パス" Binding="{Binding RelativePath}" Width="2*" MinWidth="240"
+                                    ElementStyle="{StaticResource EllipsisTextStyle}" />
+                <DataGridTextColumn Header="内容" Binding="{Binding Message}" Width="3*" MinWidth="240"
+                                    ElementStyle="{StaticResource EllipsisTextStyle}" />
+              </DataGrid.Columns>
+            </DataGrid>
+          </Border>
+        </TabItem>
+
+      </TabControl>
+    </Grid>
+  </DockPanel>
+</Window>

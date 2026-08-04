@@ -1,4 +1,4 @@
-# musicTagger 仕様書
+# Music Tag Auditor 仕様書
 
 クラシック音楽ライブラリ向け タグ検査・編集デスクトップアプリケーション
 
@@ -183,7 +183,7 @@ V1 が不一致だった場合の対処案:
 
 ### 7.1 保存場所
 
-`%APPDATA%\musicTagger\dictionary.json`。初回起動時にアプリ同梱の既定辞書をコピーする。
+`%APPDATA%\MusicTagAuditor\dictionary.json`。初回起動時にアプリ同梱の既定辞書をコピーする。
 
 ### 7.2 スキーマ
 
