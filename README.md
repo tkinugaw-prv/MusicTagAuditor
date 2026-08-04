@@ -14,6 +14,7 @@
 
 | ファイル | 内容 |
 |---|---|
+| [docs/USER_MANUAL.md](docs/USER_MANUAL.md) | エンドユーザー向け操作マニュアル |
 | [docs/TAGGING_POLICY.md](docs/TAGGING_POLICY.md) | タグ付けの原則。実装の唯一の基準 |
 | [docs/SPEC.md](docs/SPEC.md) | アプリケーション仕様 |
 | [docs/adr/0001-tag-io-library.md](docs/adr/0001-tag-io-library.md) | タグ入出力ライブラリの選定記録 |
@@ -27,7 +28,7 @@
 
 **配色とコントロールの見た目は「音楽フォルダー時間フィッター」（MusicFolderTimeFitter）に合わせている。** 同じ人が同じ音楽ライブラリに対して使う道具なので、2 つのアプリが別物に見えないようにする。
 
-デザイントークン（背景・枠・文字・アクセント緑 `#5EC2A5`・角丸 5px・フォント `Inter, Yu Gothic UI, Segoe UI`）は向こうの `Themes/DarkTheme.xaml` と同じ値を `src/MusicTagger.App/Themes/DarkTheme.xaml` に置いている。**片方だけ変えないこと。**
+デザイントークン（背景・枠・文字・アクセント緑 `#5EC2A5`・角丸 5px・フォント `Inter, Yu Gothic UI, Segoe UI`）は向こうの `Themes/DarkTheme.xaml` と同じ値を `src/MusicTagAuditor.App/Themes/DarkTheme.xaml` に置いている。**片方だけ変えないこと。**
 
 | 領域 | 面 |
 |---|---|
@@ -70,7 +71,7 @@ WPF の `TextBox` は placeholder を持たない。ラベルを置けない検�
          Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}" />
 ```
 
-`xmlns:ctl="clr-namespace:MusicTagger.App.Controls"` を宣言して使う。表示・非表示はテンプレートの `Text` トリガで切り替わるので、**バインドは `UpdateSourceTrigger=PropertyChanged` にすること。** 既定の `LostFocus` だと入力中にプレースホルダが消えない。
+`xmlns:ctl="clr-namespace:MusicTagAuditor.App.Controls"` を宣言して使う。表示・非表示はテンプレートの `Text` トリガで切り替わるので、**バインドは `UpdateSourceTrigger=PropertyChanged` にすること。** 既定の `LostFocus` だと入力中にプレースホルダが消えない。
 
 一覧や右ペインが空のときに出す案内は別物で、`PlaceholderText` スタイル（テーマ）を当てた `TextBlock` で書く。名前が似ているので取り違えないこと。
 
@@ -80,9 +81,9 @@ WPF の `TextBox` は placeholder を持たない。ラベルを置けない検�
 
 | ファイル | 用途 |
 |---|---|
-| `src/MusicTagger.App/Assets/app_icon.ico` | 実行ファイルとウィンドウのアイコン（16〜256px の 9 サイズ） |
-| `src/MusicTagger.App/Assets/icon_source_small.svg` | 上記の元データ。**形を変えるときはこちらを直してから .ico を作り直す** |
-| `src/MusicTagger.App/Assets/icon_source_detail.svg` | 説明資料向けの大きいサイズ（タグを 2 枚重ねた版） |
+| `src/MusicTagAuditor.App/Assets/app_icon.ico` | 実行ファイルとウィンドウのアイコン（16〜256px の 9 サイズ） |
+| `src/MusicTagAuditor.App/Assets/icon_source_small.svg` | 上記の元データ。**形を変えるときはこちらを直してから .ico を作り直す** |
+| `src/MusicTagAuditor.App/Assets/icon_source_detail.svg` | 説明資料向けの大きいサイズ（タグを 2 枚重ねた版） |
 
 タイトルバーの見出しにも同じ形を出す。こちらは `Themes/DarkTheme.xaml` の `AppMarkImage`（`DrawingImage`）で描いており、SVG とは別に持っている。**符頭と符幹が重なるので `GeometryGroup` の `FillRule` は `Nonzero` にすること。** 既定の `EvenOdd` だと重なった部分が打ち消し合って穴になる。
 
@@ -111,11 +112,11 @@ dotnet test
 
 | プロジェクト | TFM | 役割 |
 |---|---|---|
-| `src/MusicTagger.Core` | `net10.0` | ドメイン。正規化・辞書・検査ルール。UI とタグライブラリに依存しない |
-| `src/MusicTagger.TagIo` | `net10.0` | タグ読み書きの抽象（`ITagReader` / `ITagWriter`）と実装 |
-| `src/MusicTagger.App` | `net10.0-windows` | WPF アプリケーション（MVVM） |
-| `tests/MusicTagger.Core.Tests` | `net10.0` | ドメインのテスト |
-| `tests/MusicTagger.TagIo.Tests` | `net10.0` | タグ読み書きの往復テスト |
+| `src/MusicTagAuditor.Core` | `net10.0` | ドメイン。正規化・辞書・検査ルール。UI とタグライブラリに依存しない |
+| `src/MusicTagAuditor.TagIo` | `net10.0` | タグ読み書きの抽象（`ITagReader` / `ITagWriter`）と実装 |
+| `src/MusicTagAuditor.App` | `net10.0-windows` | WPF アプリケーション（MVVM） |
+| `tests/MusicTagAuditor.Core.Tests` | `net10.0` | ドメインのテスト |
+| `tests/MusicTagAuditor.TagIo.Tests` | `net10.0` | タグ読み書きの往復テスト |
 | `tools/TagIoProbe` | `net10.0` | タグライブラリ選定の検証スパイク（選定後は破棄可） |
 
 ---
@@ -302,7 +303,7 @@ Excel が日本語を Shift-JIS と誤認しないよう、BOM 付き UTF-8 で�
 
 ### 既定辞書への書き戻し
 
-辞書タブの「既定辞書として書き出し」で、育てた辞書をリポジトリ同梱の `src/MusicTagger.Core/Dictionary/default-dictionary.json` へ書き戻せる。開発中は書き出し先が既定で埋まる（実行ディレクトリから上へ辿ってソースを探す）。配布物では見つからないので保存先を選ぶ。
+辞書タブの「既定辞書として書き出し」で、育てた辞書をリポジトリ同梱の `src/MusicTagAuditor.Core/Dictionary/default-dictionary.json` へ書き戻せる。開発中は書き出し先が既定で埋まる（実行ディレクトリから上へ辿ってソースを探す）。配布物では見つからないので保存先を選ぶ。
 
 `_comment` などの注意書きは読み書きで往復して残る（出力位置は末尾になる）。**これを落とすと、辞書を編集する人が前提を知らないまま値を足せるようになる。**
 
