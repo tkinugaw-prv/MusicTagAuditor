@@ -5,6 +5,7 @@
     <Project Path="src/MusicTagAuditor.TagIo/MusicTagAuditor.TagIo.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/MusicTagAuditor.Core.Tests/MusicTagAuditor.Core.Tests.csproj" />
     <Project Path="tests/MusicTagAuditor.TagIo.Tests/MusicTagAuditor.TagIo.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">

@@ -37,7 +37,7 @@ tools/TagIoProbe (net10.0, コンソール) … どこにも依存しない独�
 |---|---|
 | `Abstractions/` | `ITagReader` / `ITagWriter`。タグ入出力の抽象インターフェース。`TagIo` プロジェクトが実装する |
 | `Applying/` | 検査結果・手編集の差分をタグへ適用する処理(`ApplyService`)とその入出力モデル |
-| `Backup/` | タグのスナップショット取得(`SnapshotService`)・復元(`RestoreService`)。音声ファイル本体は複製せず、タグのみを JSON化する |
+| `Backup/` | タグのスナップショット取得(`SnapshotService`)・復元(`RestoreService`)。音声ファイル本体は複製せず、タグのみを JSON化する。保存先は注入された取得関数で解決し(既定はライブラリ直下)、`Settings/` への依存は持たない |
 | `Dictionary/` | 正規化辞書のロード・編集・検証・マージ・保存(`DictionaryLoader` / `DictionaryEditor` / `DictionaryValidator` / `DictionaryMerger` / `DictionaryWriter` など)。辞書に無い値の収集(`UnknownValueCollector`)も含む |
 | `Editing/` | 手編集セットの保持・検証(`ManualEditSet` / `ManualEditValidator`) |
 | `Export/` | 検査結果差分の CSV 出力(`ChangeCsvExporter`) |
@@ -46,6 +46,7 @@ tools/TagIoProbe (net10.0, コンソール) … どこにも依存しない独�
 | `Models/` | ドメインモデル(`TrackTags` / `TagField` / `TagChange` / `AudioFormat` / `VerificationMismatch`) |
 | `Normalization/` | 正規化キーの生成(`NormalizationKey`)。NFKC・小文字化・ひらがな→カタカナ変換などを行う |
 | `Scanning/` | ライブラリのフォルダ・ファイル走査(`LibraryScanner`) |
+| `Settings/` | 利用者が選べる設定の保持と永続化(`AppSettings` / `AppSettingsStore`)。`%APPDATA%\MusicTagAuditor\settings.json` に読み書きする。現在の項目はバックアップ先のみ |
 
 検査ルールの各論(判定条件・除外規則など)は [docs/SPEC.md](SPEC.md) 6章、原則は [docs/TAGGING_POLICY.md](TAGGING_POLICY.md) を参照。
 
