@@ -3,47 +3,15 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <Application.Resources>
-
-    <!--
-      重大度の配色。記号（⛔ ⚠ ❓）は実描画で単色の代替字形になり区別が付かないため、
-      文字ラベルと淡色の背景で示す。文字色は背景に対して十分な明度差を持たせること。
-    -->
-    <SolidColorBrush x:Key="SeverityErrorForeground" Color="#B3261E" />
-    <SolidColorBrush x:Key="SeverityErrorBackground" Color="#FCE9E7" />
-    <SolidColorBrush x:Key="SeverityWarningForeground" Color="#8A4B00" />
-    <SolidColorBrush x:Key="SeverityWarningBackground" Color="#FFF3E0" />
-    <SolidColorBrush x:Key="SeverityInfoForeground" Color="#0B5FA5" />
-    <SolidColorBrush x:Key="SeverityInfoBackground" Color="#E7F0FA" />
-    <SolidColorBrush x:Key="SeverityManualForeground" Color="#4A4A6A" />
-    <SolidColorBrush x:Key="SeverityManualBackground" Color="#EDEDF5" />
-
-    <!-- 件数の列。桁を揃えて読むため右寄せにする。 -->
-    <Style x:Key="NumericCell" TargetType="TextBlock">
-      <Setter Property="HorizontalAlignment" Value="Right" />
-      <Setter Property="VerticalAlignment" Value="Center" />
-      <Setter Property="Margin" Value="0,0,8,0" />
-    </Style>
-
-    <!-- 右寄せした件数列の見出し。値と縦線が揃わないと桁が読みにくい。 -->
-    <Style x:Key="NumericColumnHeader" TargetType="DataGridColumnHeader">
-      <Setter Property="HorizontalContentAlignment" Value="Right" />
-      <Setter Property="Padding" Value="0,0,8,0" />
-    </Style>
-
-    <!-- 一覧の空欄に出す案内。何をすれば表が埋まるのかを示す。 -->
-    <Style x:Key="PlaceholderText" TargetType="TextBlock">
-      <Setter Property="Foreground" Value="#888888" />
-      <Setter Property="TextWrapping" Value="Wrap" />
-      <Setter Property="HorizontalAlignment" Value="Center" />
-      <Setter Property="VerticalAlignment" Value="Center" />
-      <Setter Property="TextAlignment" Value="Center" />
-    </Style>
-
-    <!-- 入力欄の見出し。 -->
-    <Style x:Key="FieldLabel" TargetType="TextBlock">
-      <Setter Property="FontWeight" Value="Bold" />
-      <Setter Property="Margin" Value="0,0,0,4" />
-    </Style>
-
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <!--
+          配色・コントロールの見た目は「音楽フォルダー時間フィッター」と同じ定義に揃える。
+          重大度のバッジ・件数列・入力欄の見出しなど、画面が参照するスタイルも
+          すべてこの 1 枚に集約している。App.xaml には値を置かないこと。
+        -->
+        <ResourceDictionary Source="Themes/DarkTheme.xaml" />
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
   </Application.Resources>
 </Application>

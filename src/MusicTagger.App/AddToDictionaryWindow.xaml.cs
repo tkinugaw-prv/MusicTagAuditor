@@ -1,4 +1,5 @@
 using System.Windows;
+using MusicTagger.App.Interop;
 using MusicTagger.App.ViewModels;
 
 namespace MusicTagger.App;
@@ -21,6 +22,16 @@ public partial class AddToDictionaryWindow : Window
 
         _viewModel = viewModel;
         DataContext = viewModel;
+    }
+
+    /// <summary>
+    /// HWND 確定後に OS のタイトルバーをダークテーマへ合わせる。
+    /// </summary>
+    /// <param name="e">イベント引数。</param>
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        DwmDarkTitleBar.Apply(this);
     }
 
     /// <summary>
