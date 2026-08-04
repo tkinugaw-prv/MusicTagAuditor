@@ -9,15 +9,20 @@ namespace MusicTagger.App.ViewModels;
 /// </summary>
 public sealed partial class RuleResultViewModel : ObservableObject
 {
-    /// <summary>重大度の記号（docs/SPEC.md 6章）。</summary>
-    private static readonly Dictionary<Severity, string> SEVERITY_MARKS = new()
+    /// <summary>
+    /// 重大度の表示名（docs/SPEC.md 6章）。
+    ///
+    /// SPEC が記号（⛔ ⚠ ❓）で書いているものを文字にしてある。実描画では単色の代替字形に
+    /// 置き換わり、塗りと線の違いしか出ないため意味が読めない。色は XAML 側で付ける。
+    /// </summary>
+    private static readonly Dictionary<Severity, string> SEVERITY_LABELS = new()
     {
-        [Severity.Error] = "⛔",
-        [Severity.Warning] = "⚠",
-        [Severity.Info] = "❓",
+        [Severity.Error] = "エラー",
+        [Severity.Warning] = "警告",
+        [Severity.Info] = "要確認",
 
-        // 手編集はルールの結果として現れないが、記号表を引けない重大度を残さない。
-        [Severity.Manual] = "✎",
+        // 手編集はルールの結果として現れないが、表を引けない重大度を残さない。
+        [Severity.Manual] = "手編集",
     };
 
     /// <summary>このルールを一括で選択するか。</summary>
@@ -44,8 +49,11 @@ public sealed partial class RuleResultViewModel : ObservableObject
     /// <summary>ルール ID。</summary>
     public string RuleId => Result.RuleId;
 
-    /// <summary>重大度の記号。</summary>
-    public string SeverityMark => SEVERITY_MARKS[Result.Severity];
+    /// <summary>重大度。表示色の切り替えと並べ替えに使う。</summary>
+    public Severity Severity => Result.Severity;
+
+    /// <summary>重大度の表示名。</summary>
+    public string SeverityLabel => SEVERITY_LABELS[Result.Severity];
 
     /// <summary>説明。</summary>
     public string Description => Result.Description;
