@@ -77,7 +77,7 @@ ATL は AIMP と同じ「`;` で複数値に分割する」挙動を持つ。`TA
 M4A については以下の構成にする。
 
 - **書き込み**: TagLib# の `AppleTag.SetText(©con, value)` を使う。汎用の `Tag.Conductor` は**使わない**（`cond` に書かれ、AIMP から見えなくなる）。既存ファイルに `cond` が残っていれば削除する。
-- **読み取り**: **自前の MP4 atom リーダーを使う**（`tools/TagIoProbe/Mp4AtomDumper.cs` を `MusicTagger.TagIo` に移す）。data ボックス単位の値をそのまま取得できるため、`;` の分割状態を正しく検出できる。
+- **読み取り**: **自前の MP4 atom リーダーを使う**（`tools/TagIoProbe/Mp4AtomDumper.cs` を `MusicTagAuditor.TagIo` に移す）。data ボックス単位の値をそのまま取得できるため、`;` の分割状態を正しく検出できる。
 
 FLAC / MP3 / AIFF は TagLib# の標準 API で読み書きする（V5・V6・V7 いずれも問題なし）。
 
@@ -93,8 +93,8 @@ FLAC / MP3 / AIFF は TagLib# の標準 API で読み書きする（V5・V6・V7
 | リスク | 対処 |
 |---|---|
 | TagLib# 2.3.0 は 2021 年公開で更新が停滞 | `net10.0` での動作は実測済み。読み書きは `ITagReader` / `ITagWriter` の背後に隔離し、差し替え可能にしておく |
-| 自前 MP4 リーダーの実装バグ | `MusicTagger.TagIo.Tests` で往復テストを行う。書き込みは TagLib# に任せ、読み取りのみ自前とすることで実装範囲を絞る |
-| `Tag.Conductor` を誤って使う | `MusicTagger.TagIo` 内で MP4 用の書き込み経路を 1 か所に集約し、テストで `cond` が生成されないことを確認する |
+| 自前 MP4 リーダーの実装バグ | `MusicTagAuditor.TagIo.Tests` で往復テストを行う。書き込みは TagLib# に任せ、読み取りのみ自前とすることで実装範囲を絞る |
+| `Tag.Conductor` を誤って使う | `MusicTagAuditor.TagIo` 内で MP4 用の書き込み経路を 1 か所に集約し、テストで `cond` が生成されないことを確認する |
 
 ---
 

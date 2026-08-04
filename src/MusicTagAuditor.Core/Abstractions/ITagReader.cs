@@ -5,7 +5,7 @@ namespace MusicTagAuditor.Core.Abstractions;
 /// <summary>
 /// 音声ファイルからタグを読み取る。
 ///
-/// 本インターフェイスを Core 側に置き、実装（どのライブラリを使うか）を MusicTagger.TagIo に閉じ込める。
+/// 本インターフェイスを Core 側に置き、実装（どのライブラリを使うか）を MusicTagAuditor.TagIo に閉じ込める。
 /// TagLib# の更新が停滞している点への備えであり、差し替え可能にしておくためである
 /// （docs/adr/0001-tag-io-library.md の「残るリスク」）。
 /// </summary>
