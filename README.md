@@ -17,6 +17,8 @@
 | [docs/USER_MANUAL.md](docs/USER_MANUAL.md) | エンドユーザー向け操作マニュアル |
 | [docs/TAGGING_POLICY.md](docs/TAGGING_POLICY.md) | タグ付けの原則。実装の唯一の基準 |
 | [docs/SPEC.md](docs/SPEC.md) | アプリケーション仕様 |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | モジュール構成の詳細解説 |
+| [docs/TAG_IO_PROBE.md](docs/TAG_IO_PROBE.md) | `tools/TagIoProbe`(タグ入出力ライブラリ選定の検証ツール)の説明 |
 | [docs/adr/0001-tag-io-library.md](docs/adr/0001-tag-io-library.md) | タグ入出力ライブラリの選定記録 |
 | [docs/library-baseline-2026-08-03.md](docs/library-baseline-2026-08-03.md) | 実ライブラリの実態。検査ルール実装時の答え合わせ用 |
 | [docs/branch_strategy.md](docs/branch_strategy.md) | ブランチ戦略 |
