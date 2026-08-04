@@ -21,7 +21,7 @@ public sealed class DictionaryStore
     /// <summary>
     /// 辞書を読み込んでストアを作る。ファイルが無ければ同梱の既定辞書がコピーされる。
     /// </summary>
-    /// <param name="directory">辞書を置くフォルダ（<c>%APPDATA%\musicTagger</c>）。</param>
+    /// <param name="directory">辞書を置くフォルダ（<c>%APPDATA%\MusicTagAuditor</c>）。</param>
     public DictionaryStore(string directory)
     {
         _directory = directory;

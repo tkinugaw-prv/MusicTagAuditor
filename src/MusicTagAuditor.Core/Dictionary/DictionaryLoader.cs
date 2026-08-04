@@ -6,7 +6,7 @@ namespace MusicTagAuditor.Core.Dictionary;
 /// <summary>
 /// 正規化辞書の読み込み。
 ///
-/// 保存場所は <c>%APPDATA%\musicTagger\dictionary.json</c>。
+/// 保存場所は <c>%APPDATA%\MusicTagAuditor\dictionary.json</c>。
 /// 初回起動時にアプリ同梱の既定辞書をコピーする（docs/SPEC.md 7.1）。
 /// </summary>
 public sealed class DictionaryLoader
@@ -48,7 +48,7 @@ public sealed class DictionaryLoader
     /// <summary>
     /// 利用者辞書のパスを組み立てる。
     /// </summary>
-    /// <param name="directory">辞書を置くフォルダ（<c>%APPDATA%\musicTagger</c>）。</param>
+    /// <param name="directory">辞書を置くフォルダ（<c>%APPDATA%\MusicTagAuditor</c>）。</param>
     /// <returns>辞書ファイルの絶対パス。</returns>
     public static string GetUserDictionaryPath(string directory)
     {
@@ -58,7 +58,7 @@ public sealed class DictionaryLoader
     /// <summary>
     /// 利用者辞書を読み込む。存在しなければ既定辞書をコピーして作る。
     /// </summary>
-    /// <param name="directory">辞書を置くフォルダ（<c>%APPDATA%\musicTagger</c>）。</param>
+    /// <param name="directory">辞書を置くフォルダ（<c>%APPDATA%\MusicTagAuditor</c>）。</param>
     /// <returns>読み込んだ辞書。</returns>
     public static TagDictionary LoadOrCreate(string directory)
     {
