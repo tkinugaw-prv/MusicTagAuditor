@@ -77,6 +77,14 @@ WPF の `TextBox` は placeholder を持たない。ラベルを置けない検�
 
 一覧や右ペインが空のときに出す案内は別物で、`PlaceholderText` スタイル（テーマ）を当てた `TextBlock` で書く。名前が似ているので取り違えないこと。
 
+### 派生コントロールにはスタイルを明示する
+
+**WPF の暗黙スタイルは派生型には当たらない。** `<Style TargetType="TextBox">` のキーは `typeof(TextBox)` なので、`TextBox` を継承した `Controls/SuggestBox.cs`（辞書の入力候補）には届かず、指定しないと **OS 既定の白い入力欄**が出て周囲から浮く。
+
+テーマに `ctl:SuggestBox` のスタイルを `BasedOn="{StaticResource DarkTextBoxStyle}"` で置き、テンプレートごと引き継いでいる。候補一覧のポップアップもそのテンプレートに含める（`PART_Popup` / `PART_Suggestions`）。**配色をコードビハインドで拾わないこと。** 見た目は `Themes/DarkTheme.xaml` の 1 枚に集約する。
+
+DataGrid のセル編集で使う場合は `GridEditingSuggestBoxStyle` を当てる。`GridEditingTextBoxStyle` をそのまま当てると**テンプレートが既定に戻り、候補が出なくなる**。
+
 ### アイコン
 
 音符とタグを組み合わせたマーク。配色は「音楽フォルダー時間フィッター」のアイコンと同じ 4 色で、並べたときに同じ組の道具に見えるようにしている。

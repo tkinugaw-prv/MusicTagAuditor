@@ -251,6 +251,73 @@
     <Style TargetType="TextBox" BasedOn="{StaticResource DarkTextBoxStyle}" />
 
     <!-- ================================================================
+         候補付き入力欄（辞書からの入力候補）
+
+         **暗黙スタイルは派生型には当たらない。** 上の TextBox のスタイルは
+         キーが typeof(TextBox) なので SuggestBox には届かず、指定しないと
+         OS 既定の白い入力欄が出て周囲から浮く。テンプレートごと引き継ぐ。
+         ================================================================ -->
+    <Style TargetType="ctl:SuggestBox" BasedOn="{StaticResource DarkTextBoxStyle}">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ctl:SuggestBox">
+                    <Grid>
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="5">
+                            <Grid>
+                                <TextBlock x:Name="Placeholder"
+                                           Margin="{TemplateBinding Padding}"
+                                           HorizontalAlignment="Left"
+                                           VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           FontSize="{TemplateBinding FontSize}"
+                                           IsHitTestVisible="False"
+                                           Text="{Binding (ctl:Placeholder.Text), RelativeSource={RelativeSource TemplatedParent}}"
+                                           TextTrimming="CharacterEllipsis"
+                                           Visibility="Collapsed" />
+                                <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" />
+                            </Grid>
+                        </Border>
+
+                        <!-- 候補一覧。見た目は ComboBox のドロップダウンにそろえる -->
+                        <Popup x:Name="PART_Popup"
+                               AllowsTransparency="True"
+                               Focusable="False"
+                               Placement="Bottom"
+                               PopupAnimation="Fade">
+                            <Border Margin="0,4,0,0"
+                                    MinWidth="{TemplateBinding ActualWidth}"
+                                    Background="{StaticResource PanelBarBrush}"
+                                    BorderBrush="{StaticResource BorderStrongBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="5">
+                                <ListBox x:Name="PART_Suggestions"
+                                         MaxHeight="260"
+                                         Background="Transparent"
+                                         BorderThickness="0"
+                                         DisplayMemberPath="DisplayText" />
+                            </Border>
+                        </Popup>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Text" Value="">
+                            <Setter TargetName="Placeholder" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.45" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ================================================================
          ボタン（アウトライン）
          ================================================================ -->
     <Style x:Key="OutlineButtonStyle" TargetType="Button">
@@ -1127,6 +1194,20 @@
     <!-- セル編集用 TextBox。列の既定 EditingElementStyle は明るい背景を持つため、
          編集を許す列には必ずこれを指定する。 -->
     <Style x:Key="GridEditingTextBoxStyle" TargetType="TextBox">
+        <Setter Property="Background" Value="{StaticResource InputBgBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="CaretBrush" Value="{StaticResource AccentBrush}" />
+        <Setter Property="SelectionBrush" Value="{StaticResource AccentBrush}" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="FontSize" Value="12.5" />
+    </Style>
+
+    <!-- セル編集用の候補付き入力欄。上と同じ調整を、候補一覧を持つテンプレートの上に重ねる。
+         GridEditingTextBoxStyle をそのまま当てるとテンプレートが既定に戻り、候補が出なくなる。 -->
+    <Style x:Key="GridEditingSuggestBoxStyle" TargetType="ctl:SuggestBox"
+           BasedOn="{StaticResource {x:Type ctl:SuggestBox}}">
         <Setter Property="Background" Value="{StaticResource InputBgBrush}" />
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
         <Setter Property="BorderThickness" Value="0" />
