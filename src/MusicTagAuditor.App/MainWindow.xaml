@@ -502,7 +502,7 @@
                     </DataGridTemplateColumn.CellTemplate>
                     <DataGridTemplateColumn.CellEditingTemplate>
                       <DataTemplate>
-                        <ctl:SuggestBox Style="{StaticResource GridEditingTextBoxStyle}" FocusOnLoad="True"
+                        <ctl:SuggestBox Style="{StaticResource GridEditingSuggestBoxStyle}" FocusOnLoad="True"
                                         Text="{Binding Composer, UpdateSourceTrigger=LostFocus}"
                                         Suggestions="{Binding DataContext.ComposerSuggestions, RelativeSource={RelativeSource AncestorType=DataGrid}}" />
                       </DataTemplate>
@@ -516,7 +516,7 @@
                     </DataGridTemplateColumn.CellTemplate>
                     <DataGridTemplateColumn.CellEditingTemplate>
                       <DataTemplate>
-                        <ctl:SuggestBox Style="{StaticResource GridEditingTextBoxStyle}" FocusOnLoad="True"
+                        <ctl:SuggestBox Style="{StaticResource GridEditingSuggestBoxStyle}" FocusOnLoad="True"
                                         Text="{Binding Artist, UpdateSourceTrigger=LostFocus}"
                                         Suggestions="{Binding DataContext.PersonSuggestions, RelativeSource={RelativeSource AncestorType=DataGrid}}" />
                       </DataTemplate>
@@ -530,7 +530,7 @@
                     </DataGridTemplateColumn.CellTemplate>
                     <DataGridTemplateColumn.CellEditingTemplate>
                       <DataTemplate>
-                        <ctl:SuggestBox Style="{StaticResource GridEditingTextBoxStyle}" FocusOnLoad="True"
+                        <ctl:SuggestBox Style="{StaticResource GridEditingSuggestBoxStyle}" FocusOnLoad="True"
                                         Text="{Binding Conductor, UpdateSourceTrigger=LostFocus}"
                                         Suggestions="{Binding DataContext.PersonSuggestions, RelativeSource={RelativeSource AncestorType=DataGrid}}" />
                       </DataTemplate>
@@ -544,7 +544,7 @@
                     </DataGridTemplateColumn.CellTemplate>
                     <DataGridTemplateColumn.CellEditingTemplate>
                       <DataTemplate>
-                        <ctl:SuggestBox Style="{StaticResource GridEditingTextBoxStyle}" FocusOnLoad="True"
+                        <ctl:SuggestBox Style="{StaticResource GridEditingSuggestBoxStyle}" FocusOnLoad="True"
                                         Text="{Binding AlbumArtist, UpdateSourceTrigger=LostFocus}"
                                         Suggestions="{Binding DataContext.EnsembleSuggestions, RelativeSource={RelativeSource AncestorType=DataGrid}}" />
                       </DataTemplate>

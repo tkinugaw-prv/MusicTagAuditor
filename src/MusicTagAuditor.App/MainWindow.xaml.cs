@@ -62,17 +62,22 @@ public partial class MainWindow : Window
     /// <summary>
     /// ファイル一覧タブへ切り替えて、指定された行を選択・スクロール表示する。
     ///
-    /// 選択とスクロールはレイアウト後に回す。タブを切り替えた直後は行のコンテナが
-    /// まだ作られておらず、<c>ScrollIntoView</c> がその場では効かない。
+    /// **一連の操作は入力イベントを抜けてから行う。** ここへ来るのはダブルクリックの
+    /// 処理中で、そのあと DataGrid が明細のセルへフォーカスを戻す。その場でタブを
+    /// 切り替えると、<c>TabItem</c> がフォーカスの移動に追従して検査結果へ選び直され、
+    /// 切り替えが即座に取り消される。
     /// </summary>
     private void OnTrackRevealRequested(object? sender, TrackRowViewModel row)
     {
-        MainTabs.SelectedItem = FileListTab;
-
         _ = Dispatcher.BeginInvoke(
             DispatcherPriority.Background,
             () =>
             {
+                MainTabs.SelectedItem = FileListTab;
+
+                // 行のコンテナはタブを描き直すまで作られず、ScrollIntoView が空振りする。
+                MainTabs.UpdateLayout();
+
                 // 複数選択のままだと、どの行へ飛んだのか分からなくなる。
                 TrackGrid.UnselectAll();
                 TrackGrid.SelectedItem = row;

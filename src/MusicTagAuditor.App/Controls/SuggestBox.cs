@@ -10,17 +10,23 @@ namespace MusicTagAuditor.App.Controls;
 /// <summary>
 /// 辞書の候補を絞り込みながら出す入力欄。
 ///
-/// <see cref="TextBox"/> を継承しているので、テーマの入力欄テンプレート・
-/// <see cref="Placeholder"/>・セル編集用スタイルがそのまま効く。
+/// <see cref="TextBox"/> を継承しているので <see cref="Placeholder"/> がそのまま効く。
+/// **見た目はテーマ側（Themes/DarkTheme.xaml）が持つ。** 暗黙スタイルは派生型に当たらないため、
+/// テーマに <c>ctl:SuggestBox</c> のスタイルが無いと OS 既定の白い入力欄が出て周囲から浮く。
 ///
 /// **候補は入力を助けるだけで、入力を縛らない。** 辞書に無い名前も自由に入れられる
 /// （原則の例外や、これから辞書に足す値を先に入れることがある）。確定して入るのは
 /// 常に正規形で、別名や日本語表記は探すための手掛かりにすぎない。
 /// </summary>
+[TemplatePart(Name = POPUP_PART_NAME, Type = typeof(Popup))]
+[TemplatePart(Name = LIST_PART_NAME, Type = typeof(ListBox))]
 public sealed class SuggestBox : TextBox
 {
-    /// <summary>候補一覧の高さの上限。画面を覆わない程度に留める。</summary>
-    private const double POPUP_MAX_HEIGHT = 260;
+    /// <summary>候補一覧を出すポップアップのテンプレート部品名。</summary>
+    private const string POPUP_PART_NAME = "PART_Popup";
+
+    /// <summary>候補一覧のテンプレート部品名。</summary>
+    private const string LIST_PART_NAME = "PART_Suggestions";
 
     /// <summary>候補の母集合。</summary>
     public static readonly DependencyProperty SuggestionsProperty =
@@ -38,11 +44,11 @@ public sealed class SuggestBox : TextBox
             typeof(SuggestBox),
             new PropertyMetadata(false));
 
-    /// <summary>候補一覧を出すポップアップ。</summary>
-    private readonly Popup _popup;
+    /// <summary>候補一覧を出すポップアップ。テンプレートから受け取る。</summary>
+    private Popup? _popup;
 
-    /// <summary>候補一覧。</summary>
-    private readonly ListBox _list;
+    /// <summary>候補一覧。テンプレートから受け取る。</summary>
+    private ListBox? _list;
 
     /// <summary>候補の確定でテキストを書き換えている最中か。書き換えを入力と取り違えないための印。</summary>
     private bool _isAccepting;
@@ -52,37 +58,6 @@ public sealed class SuggestBox : TextBox
     /// </summary>
     public SuggestBox()
     {
-        _list = new ListBox
-        {
-            DisplayMemberPath = nameof(DictionarySuggestion.DisplayText),
-            MaxHeight = POPUP_MAX_HEIGHT,
-            BorderThickness = new Thickness(0),
-            Background = Brushes.Transparent,
-        };
-
-        _list.PreviewMouseLeftButtonDown += OnSuggestionMouseDown;
-
-        _popup = new Popup
-        {
-            AllowsTransparency = true,
-            Focusable = false,
-            Placement = PlacementMode.Bottom,
-            PlacementTarget = this,
-            PopupAnimation = PopupAnimation.Fade,
-
-            // 明示的に閉じる。false にすると候補をクリックした瞬間に閉じてしまい、選べない。
-            StaysOpen = true,
-            Child = new Border
-            {
-                Margin = new Thickness(0, 2, 0, 0),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(5),
-                Child = _list,
-            },
-        };
-
-        AddLogicalChild(_popup);
-
         Loaded += OnLoaded;
         IsVisibleChanged += OnIsVisibleChanged;
     }
@@ -105,6 +80,35 @@ public sealed class SuggestBox : TextBox
     {
         get => (bool)GetValue(FocusOnLoadProperty);
         set => SetValue(FocusOnLoadProperty, value);
+    }
+
+    /// <summary>
+    /// テンプレートから候補一覧の部品を受け取る。
+    /// </summary>
+    public override void OnApplyTemplate()
+    {
+        base.OnApplyTemplate();
+
+        if (_list is not null)
+        {
+            _list.PreviewMouseLeftButtonDown -= OnSuggestionMouseDown;
+        }
+
+        _popup = GetTemplateChild(POPUP_PART_NAME) as Popup;
+        _list = GetTemplateChild(LIST_PART_NAME) as ListBox;
+
+        if (_popup is not null)
+        {
+            _popup.PlacementTarget = this;
+
+            // 明示的に閉じる。false にすると候補をクリックした瞬間に閉じてしまい、選べない。
+            _popup.StaysOpen = true;
+        }
+
+        if (_list is not null)
+        {
+            _list.PreviewMouseLeftButtonDown += OnSuggestionMouseDown;
+        }
     }
 
     /// <summary>
@@ -144,32 +148,32 @@ public sealed class SuggestBox : TextBox
 
         switch (e.Key)
         {
-            case Key.Down when !_popup.IsOpen:
+            case Key.Down when !IsOpen:
                 Refresh();
-                e.Handled = _popup.IsOpen;
+                e.Handled = IsOpen;
                 break;
 
-            case Key.Down when _popup.IsOpen:
+            case Key.Down when IsOpen:
                 Move(1);
                 e.Handled = true;
                 break;
 
-            case Key.Up when _popup.IsOpen:
+            case Key.Up when IsOpen:
                 Move(-1);
                 e.Handled = true;
                 break;
 
-            case Key.Enter when _popup.IsOpen:
+            case Key.Enter when IsOpen:
                 Accept();
                 e.Handled = true;
                 break;
 
             // Tab は確定したうえで通す。次のセルへ移る動きはそのまま残す。
-            case Key.Tab when _popup.IsOpen:
+            case Key.Tab when IsOpen:
                 Accept();
                 break;
 
-            case Key.Escape when _popup.IsOpen:
+            case Key.Escape when IsOpen:
                 Close();
                 e.Handled = true;
                 break;
@@ -191,6 +195,9 @@ public sealed class SuggestBox : TextBox
         Close();
     }
 
+    /// <summary>候補一覧が出ているか。</summary>
+    private bool IsOpen => _popup is { IsOpen: true };
+
     /// <summary>
     /// 候補の母集合が変わったら、出したままの候補を閉じる。
     /// 一括入力で対象フィールドを切り替えたときに、前のフィールドの候補が残らないようにする。
@@ -201,16 +208,10 @@ public sealed class SuggestBox : TextBox
     }
 
     /// <summary>
-    /// 表示時の見た目を整え、必要なら入力を受け取る。
+    /// 必要なら入力を受け取る。
     /// </summary>
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        if (_popup.Child is Border border)
-        {
-            border.Background = TryFindResource("PanelBarBrush") as Brush ?? border.Background;
-            border.BorderBrush = TryFindResource("BorderStrongBrush") as Brush ?? border.BorderBrush;
-        }
-
         if (FocusOnLoad)
         {
             _ = Focus();
@@ -244,7 +245,7 @@ public sealed class SuggestBox : TextBox
             current = VisualTreeHelper.GetParent(current);
         }
 
-        if (current is not ListBoxItem item)
+        if (current is not ListBoxItem item || _list is null)
         {
             return;
         }
@@ -261,7 +262,7 @@ public sealed class SuggestBox : TextBox
     {
         IReadOnlyList<SuggestionEntry> candidates = Suggestions ?? [];
 
-        if (candidates.Count == 0)
+        if (candidates.Count == 0 || _popup is null || _list is null)
         {
             Close();
             return;
@@ -280,7 +281,6 @@ public sealed class SuggestBox : TextBox
         _list.ItemsSource = suggestions;
         _list.SelectedIndex = 0;
 
-        _popup.MinWidth = ActualWidth;
         _popup.IsOpen = true;
     }
 
@@ -290,9 +290,9 @@ public sealed class SuggestBox : TextBox
     /// <param name="offset">動かす向きと幅。</param>
     private void Move(int offset)
     {
-        int count = _list.Items.Count;
+        int count = _list?.Items.Count ?? 0;
 
-        if (count == 0)
+        if (_list is null || count == 0)
         {
             return;
         }
@@ -306,7 +306,7 @@ public sealed class SuggestBox : TextBox
     /// </summary>
     private void Accept()
     {
-        if (_list.SelectedItem is not DictionarySuggestion suggestion)
+        if (_list?.SelectedItem is not DictionarySuggestion suggestion)
         {
             Close();
             return;
@@ -332,6 +332,9 @@ public sealed class SuggestBox : TextBox
     /// </summary>
     private void Close()
     {
-        _popup.IsOpen = false;
+        if (_popup is not null)
+        {
+            _popup.IsOpen = false;
+        }
     }
 }
