@@ -438,9 +438,11 @@
                   </DataTemplate>
                 </ComboBox.ItemTemplate>
               </ComboBox>
-              <TextBox Grid.Row="1" Grid.Column="2" Margin="0,8,0,0"
-                       ctl:Placeholder.Text="選択行に入れる値（空のまま実行するとタグを消します）"
-                       Text="{Binding BulkValue, UpdateSourceTrigger=PropertyChanged}" />
+              <!-- 対象フィールドが辞書の扱う名前なら、打つそばから候補が出る -->
+              <ctl:SuggestBox Grid.Row="1" Grid.Column="2" Margin="0,8,0,0"
+                              ctl:Placeholder.Text="選択行に入れる値（空のまま実行するとタグを消します）"
+                              Suggestions="{Binding BulkSuggestions}"
+                              Text="{Binding BulkValue, UpdateSourceTrigger=PropertyChanged}" />
               <Button Grid.Row="1" Grid.Column="3" Content="選択行に一括入力"
                       Command="{Binding BulkInputCommand}"
                       CommandParameter="{Binding SelectedItems, ElementName=TrackGrid}"
@@ -474,18 +476,69 @@
                   <DataGridTextColumn Header="タイトル" Binding="{Binding Title}" Width="2*" MinWidth="180"
                                       ElementStyle="{StaticResource EllipsisTextStyle}"
                                       EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
-                  <DataGridTextColumn Header="作曲家" Binding="{Binding Composer}" Width="1.2*" MinWidth="120"
-                                      ElementStyle="{StaticResource EllipsisTextStyle}"
-                                      EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
-                  <DataGridTextColumn Header="アーティスト" Binding="{Binding Artist}" Width="1.2*" MinWidth="120"
-                                      ElementStyle="{StaticResource EllipsisTextStyle}"
-                                      EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
-                  <DataGridTextColumn Header="指揮者" Binding="{Binding Conductor}" Width="1.2*" MinWidth="120"
-                                      ElementStyle="{StaticResource EllipsisTextStyle}"
-                                      EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
-                  <DataGridTextColumn Header="アルバムアーティスト" Binding="{Binding AlbumArtist}" Width="1.4*" MinWidth="150"
-                                      ElementStyle="{StaticResource EllipsisTextStyle}"
-                                      EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
+                  <!--
+                    名前を扱う 4 列は辞書の候補を出す。辞書は composer / artist / conductor /
+                    albumartist の正規形を持っているのに、手打ちだと表記が揺れて次の検査で
+                    跳ね返る。**候補は入力を助けるだけで縛らない。** 辞書に無い名前も入る。
+                    SortMemberPath を落とすと並べ替えが黙って効かなくなる（TemplateColumn は
+                    どの値で並べるかを自分では知らない）。
+                  -->
+                  <DataGridTemplateColumn Header="作曲家" Width="1.2*" MinWidth="120" SortMemberPath="Composer">
+                    <DataGridTemplateColumn.CellTemplate>
+                      <DataTemplate>
+                        <TextBlock Style="{StaticResource EllipsisTextStyle}" Text="{Binding Composer}" />
+                      </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                    <DataGridTemplateColumn.CellEditingTemplate>
+                      <DataTemplate>
+                        <ctl:SuggestBox Style="{StaticResource GridEditingTextBoxStyle}" FocusOnLoad="True"
+                                        Text="{Binding Composer, UpdateSourceTrigger=LostFocus}"
+                                        Suggestions="{Binding DataContext.ComposerSuggestions, RelativeSource={RelativeSource AncestorType=DataGrid}}" />
+                      </DataTemplate>
+                    </DataGridTemplateColumn.CellEditingTemplate>
+                  </DataGridTemplateColumn>
+                  <DataGridTemplateColumn Header="アーティスト" Width="1.2*" MinWidth="120" SortMemberPath="Artist">
+                    <DataGridTemplateColumn.CellTemplate>
+                      <DataTemplate>
+                        <TextBlock Style="{StaticResource EllipsisTextStyle}" Text="{Binding Artist}" />
+                      </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                    <DataGridTemplateColumn.CellEditingTemplate>
+                      <DataTemplate>
+                        <ctl:SuggestBox Style="{StaticResource GridEditingTextBoxStyle}" FocusOnLoad="True"
+                                        Text="{Binding Artist, UpdateSourceTrigger=LostFocus}"
+                                        Suggestions="{Binding DataContext.PersonSuggestions, RelativeSource={RelativeSource AncestorType=DataGrid}}" />
+                      </DataTemplate>
+                    </DataGridTemplateColumn.CellEditingTemplate>
+                  </DataGridTemplateColumn>
+                  <DataGridTemplateColumn Header="指揮者" Width="1.2*" MinWidth="120" SortMemberPath="Conductor">
+                    <DataGridTemplateColumn.CellTemplate>
+                      <DataTemplate>
+                        <TextBlock Style="{StaticResource EllipsisTextStyle}" Text="{Binding Conductor}" />
+                      </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                    <DataGridTemplateColumn.CellEditingTemplate>
+                      <DataTemplate>
+                        <ctl:SuggestBox Style="{StaticResource GridEditingTextBoxStyle}" FocusOnLoad="True"
+                                        Text="{Binding Conductor, UpdateSourceTrigger=LostFocus}"
+                                        Suggestions="{Binding DataContext.PersonSuggestions, RelativeSource={RelativeSource AncestorType=DataGrid}}" />
+                      </DataTemplate>
+                    </DataGridTemplateColumn.CellEditingTemplate>
+                  </DataGridTemplateColumn>
+                  <DataGridTemplateColumn Header="アルバムアーティスト" Width="1.4*" MinWidth="150" SortMemberPath="AlbumArtist">
+                    <DataGridTemplateColumn.CellTemplate>
+                      <DataTemplate>
+                        <TextBlock Style="{StaticResource EllipsisTextStyle}" Text="{Binding AlbumArtist}" />
+                      </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                    <DataGridTemplateColumn.CellEditingTemplate>
+                      <DataTemplate>
+                        <ctl:SuggestBox Style="{StaticResource GridEditingTextBoxStyle}" FocusOnLoad="True"
+                                        Text="{Binding AlbumArtist, UpdateSourceTrigger=LostFocus}"
+                                        Suggestions="{Binding DataContext.EnsembleSuggestions, RelativeSource={RelativeSource AncestorType=DataGrid}}" />
+                      </DataTemplate>
+                    </DataGridTemplateColumn.CellEditingTemplate>
+                  </DataGridTemplateColumn>
                   <DataGridTextColumn Header="アルバム" Binding="{Binding Album}" Width="1.6*" MinWidth="160"
                                       ElementStyle="{StaticResource EllipsisTextStyle}"
                                       EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />

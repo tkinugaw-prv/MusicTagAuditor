@@ -241,6 +241,8 @@ public sealed partial class MainViewModel : ObservableObject
         Dictionary.Saved += OnDictionarySaved;
 
         _manualEdits.Changed += OnManualEditsChanged;
+
+        RefreshSuggestions();
     }
 
     /// <summary>辞書タブ。</summary>
@@ -248,6 +250,18 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>一括入力で選べるフィールド。</summary>
     public IReadOnlyList<TagField> EditableFields => ManualEditConst.EDITABLE_FIELDS;
+
+    /// <summary>作曲家欄に出す候補。</summary>
+    public IReadOnlyList<SuggestionEntry> ComposerSuggestions { get; private set; } = [];
+
+    /// <summary>アーティスト欄・指揮者欄に出す候補。</summary>
+    public IReadOnlyList<SuggestionEntry> PersonSuggestions { get; private set; } = [];
+
+    /// <summary>アルバムアーティスト欄に出す候補。</summary>
+    public IReadOnlyList<SuggestionEntry> EnsembleSuggestions { get; private set; } = [];
+
+    /// <summary>一括入力の欄に出す候補。対象フィールドに追従する。</summary>
+    public IReadOnlyList<SuggestionEntry> BulkSuggestions { get; private set; } = [];
 
     /// <summary>保留中の手編集の差分。**適用前に必ずここで確認できる。**</summary>
     public ObservableCollection<TagChange> ManualEditChanges { get; } = [];
@@ -865,6 +879,9 @@ public sealed partial class MainViewModel : ObservableObject
     /// </summary>
     private void OnDictionarySaved(object? sender, EventArgs e)
     {
+        // 候補は検査結果と無関係に作れる。スキャン前でも辞書に足した名前は選べるようにする。
+        RefreshSuggestions();
+
         if (_lastScan is null)
         {
             return;
@@ -1091,6 +1108,52 @@ public sealed partial class MainViewModel : ObservableObject
             CultureInfo.CurrentCulture,
             $"{ManualEditConst.Label(BulkField)} に一括入力しました（{applied:N0} / {rows.Length:N0} 行）。")
             + " 変更が無かった行は編集になりません。";
+    }
+
+    /// <summary>
+    /// 一括入力の対象フィールドが変わったら、出す候補を入れ替える。
+    /// </summary>
+    partial void OnBulkFieldChanged(TagField value)
+    {
+        RefreshBulkSuggestions();
+    }
+
+    /// <summary>
+    /// 入力欄に出す候補を作り直す。
+    ///
+    /// **索引と同じく握り込まない。** 辞書は編集できるので、保存のたびに作り直さないと
+    /// 辞書に足した名前がいつまでも候補に出てこない。
+    /// </summary>
+    private void RefreshSuggestions()
+    {
+        TagDictionary dictionary = _dictionaryStore.Dictionary;
+
+        ComposerSuggestions = DictionarySuggester.BuildCandidates(dictionary, DictionaryCategory.Composer);
+        PersonSuggestions = DictionarySuggester.BuildCandidates(dictionary, DictionaryCategory.Person);
+        EnsembleSuggestions = DictionarySuggester.BuildCandidates(dictionary, DictionaryCategory.Ensemble);
+
+        OnPropertyChanged(nameof(ComposerSuggestions));
+        OnPropertyChanged(nameof(PersonSuggestions));
+        OnPropertyChanged(nameof(EnsembleSuggestions));
+
+        RefreshBulkSuggestions();
+    }
+
+    /// <summary>
+    /// 一括入力の欄に出す候補を、対象フィールドに合わせて選び直す。
+    /// 辞書が扱わないフィールド（曲名・年など）では候補を出さない。
+    /// </summary>
+    private void RefreshBulkSuggestions()
+    {
+        BulkSuggestions = DictionarySuggester.CategoryFor(BulkField) switch
+        {
+            DictionaryCategory.Composer => ComposerSuggestions,
+            DictionaryCategory.Person => PersonSuggestions,
+            DictionaryCategory.Ensemble => EnsembleSuggestions,
+            _ => [],
+        };
+
+        OnPropertyChanged(nameof(BulkSuggestions));
     }
 
     /// <summary>
