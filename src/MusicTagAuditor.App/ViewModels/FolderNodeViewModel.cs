@@ -1,15 +1,28 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace MusicTagAuditor.App.ViewModels;
 
 /// <summary>
 /// フォルダツリーの 1 ノード。
+///
+/// 展開状態と選択状態は双方向にバインドする。**片方向だと画面からしか動かせない。**
+/// 検査結果からファイル一覧の行へ飛ぶとき、ツリーの表示を対象フォルダへ追随させる必要がある
+/// （追随させないと、一覧の中身とツリーのハイライトが食い違う）。
 /// </summary>
 /// <param name="name">表示名（フォルダ名）。</param>
 /// <param name="relativePath">ライブラリルートからの相対パス。ルート自身は空文字。</param>
-public sealed class FolderNodeViewModel(string name, string relativePath)
+public sealed partial class FolderNodeViewModel(string name, string relativePath) : ObservableObject
 {
+    /// <summary>ツリーで展開されているか。</summary>
+    [ObservableProperty]
+    private bool _isExpanded;
+
+    /// <summary>ツリーで選択されているか。</summary>
+    [ObservableProperty]
+    private bool _isSelected;
+
     /// <summary>表示名。</summary>
     public string Name { get; } = name;
 
@@ -24,9 +37,6 @@ public sealed class FolderNodeViewModel(string name, string relativePath)
 
     /// <summary>ツリーに出す表示文字列。</summary>
     public string DisplayText => $"{Name} ({FileCount})";
-
-    /// <summary>ルート直下のノードは既定で開いた状態にする。</summary>
-    public bool IsExpanded { get; set; }
 
     /// <summary>
     /// 走査結果の相対パスからフォルダツリーを組み立てる。
@@ -72,6 +82,43 @@ public sealed class FolderNodeViewModel(string name, string relativePath)
         SortRecursively(root);
 
         return root;
+    }
+
+    /// <summary>
+    /// 相対パスに対応するノードを、このノードを起点に探す。
+    ///
+    /// **辿った経路のノードは展開する。** 畳まれたままだと TreeViewItem が生成されず、
+    /// 選択状態のバインドが画面に届かない。
+    /// </summary>
+    /// <param name="folderRelativePath">探すフォルダの相対パス。空文字ならこのノード自身。</param>
+    /// <returns>見つかったノード。無ければ null。</returns>
+    public FolderNodeViewModel? Locate(string folderRelativePath)
+    {
+        if (string.IsNullOrEmpty(folderRelativePath))
+        {
+            return this;
+        }
+
+        FolderNodeViewModel current = this;
+
+        foreach (string segment in folderRelativePath.Split(
+                     Path.DirectorySeparatorChar,
+                     Path.AltDirectorySeparatorChar,
+                     StringSplitOptions.RemoveEmptyEntries))
+        {
+            FolderNodeViewModel? child = current.Children
+                .FirstOrDefault(node => node.Name.Equals(segment, StringComparison.OrdinalIgnoreCase));
+
+            if (child is null)
+            {
+                return null;
+            }
+
+            current.IsExpanded = true;
+            current = child;
+        }
+
+        return current;
     }
 
     /// <summary>

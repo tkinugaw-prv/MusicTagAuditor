@@ -243,6 +243,13 @@ public sealed partial class MainViewModel : ObservableObject
         _manualEdits.Changed += OnManualEditsChanged;
     }
 
+    /// <summary>
+    /// ファイル一覧で特定の行を見せてほしいという要求。
+    ///
+    /// タブの切り替えとスクロールは View の仕事なので、ビューモデルからは要求だけを出す。
+    /// </summary>
+    public event EventHandler<TrackRowViewModel>? TrackRevealRequested;
+
     /// <summary>辞書タブ。</summary>
     public DictionaryViewModel Dictionary { get; }
 
@@ -1323,6 +1330,94 @@ public sealed partial class MainViewModel : ObservableObject
     partial void OnShowOnlyEditedTracksChanged(bool value)
     {
         _trackView?.Refresh();
+    }
+
+    /// <summary>
+    /// 相対パスに対応する行を、ファイル一覧で選べる状態にする。
+    ///
+    /// 検査結果の差分明細から手編集へ移るための導線（docs/SPEC.md 5.3）。
+    /// ツリーの選択も絞り込みも、**対象行が隠れる場合だけ**動かす。利用者が組み立てた
+    /// 絞り込みを毎回捨てると、明細を 1 行ずつ確認していく作業が成り立たなくなる。
+    ///
+    /// タブの切り替えと一覧のスクロールは <see cref="TrackRevealRequested"/> を受けた View が行う。
+    /// </summary>
+    /// <param name="relativePath">見せたいファイルの相対パス。</param>
+    public void RevealTrack(string relativePath)
+    {
+        TrackRowViewModel? row = _allTracks
+            .FirstOrDefault(track => track.RelativePath.Equals(relativePath, StringComparison.OrdinalIgnoreCase));
+
+        if (row is null)
+        {
+            StatusText = $"「{relativePath}」はファイル一覧にありません。再スキャンで消えた可能性があります。";
+            return;
+        }
+
+        SelectFolderFor(row);
+
+        List<string> released = ReleaseFiltersHiding(row);
+
+        StatusText = released.Count == 0
+            ? $"ファイル一覧で「{row.FileName}」を選びました。"
+            : $"ファイル一覧で「{row.FileName}」を選びました。 絞り込みを解除しました（{string.Join(" / ", released)}）。";
+
+        TrackRevealRequested?.Invoke(this, row);
+    }
+
+    /// <summary>
+    /// 対象行を含むフォルダをツリーで選び直す。見つからなければライブラリ全体に戻す。
+    /// </summary>
+    /// <param name="row">対象の行。</param>
+    private void SelectFolderFor(TrackRowViewModel row)
+    {
+        FolderNodeViewModel? root = FolderTree.FirstOrDefault();
+
+        if (root is null)
+        {
+            return;
+        }
+
+        FolderNodeViewModel target = root.Locate(row.FolderPath) ?? root;
+
+        // 同じフォルダを選び直しても ApplyFolderFilter は走らない（値が変わらないため）。
+        // その場合は既に対象行が Tracks に入っているので、選択状態だけ合わせれば足りる。
+        SelectedFolder = target;
+        target.IsSelected = true;
+    }
+
+    /// <summary>
+    /// 対象行を隠している絞り込みだけを解除する。
+    /// </summary>
+    /// <param name="row">対象の行。</param>
+    /// <returns>解除した絞り込みの名前。何も解除しなかった場合は空。</returns>
+    private List<string> ReleaseFiltersHiding(TrackRowViewModel row)
+    {
+        List<string> released = [];
+
+        if (MatchesTrackFilter(row))
+        {
+            return released;
+        }
+
+        if (ShowOnlyEditedTracks && !row.IsEdited)
+        {
+            ShowOnlyEditedTracks = false;
+            released.Add("編集した行のみ");
+        }
+
+        if (ShowOnlyEmptyFields && !row.HasEmptyField)
+        {
+            ShowOnlyEmptyFields = false;
+            released.Add("空欄のある行のみ");
+        }
+
+        if (!MatchesTrackFilter(row))
+        {
+            TrackFilterText = string.Empty;
+            released.Add("検索文字列");
+        }
+
+        return released;
     }
 
     /// <summary>
