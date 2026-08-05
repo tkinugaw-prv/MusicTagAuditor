@@ -54,6 +54,12 @@
          選択とホバーの指定は判定区分より後に置くこと。順序を入れ替えると
          区分の色が選択色を上書きし、どの行を選んでいるか分からなくなる。 -->
     <Style x:Key="ChangeRowStyle" TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+      <!--
+        ダブルクリックでファイル一覧の当該行へ飛ぶ。DataGrid 側に付けるとヘッダの
+        ダブルクリックまで拾うため、行のスタイルに付ける。この Style は検査結果タブの
+        差分明細だけが使っており、対象がそこに限定される。
+      -->
+      <EventSetter Event="MouseDoubleClick" Handler="OnInspectionChangeRowDoubleClick" />
       <Style.Triggers>
         <DataTrigger Binding="{Binding Classification}" Value="確定">
           <Setter Property="Background" Value="{StaticResource RowConfirmedBrush}" />
@@ -212,11 +218,16 @@
                 Padding="14,9">
           <TextBlock Style="{StaticResource FieldLabelStyle}" Margin="0" Text="フォルダ" />
         </Border>
+        <!--
+          展開・選択は双方向にする。片方向だと画面からしか動かせず、
+          検査結果からファイル一覧の行へ飛んだときにツリーが追随しない。
+        -->
         <TreeView ItemsSource="{Binding FolderTree}"
                   SelectedItemChanged="OnFolderSelectionChanged">
           <TreeView.ItemContainerStyle>
             <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
-              <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=OneTime}" />
+              <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+              <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
             </Style>
           </TreeView.ItemContainerStyle>
         </TreeView>
@@ -224,7 +235,7 @@
 
       <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" />
 
-      <TabControl Grid.Column="2">
+      <TabControl x:Name="MainTabs" Grid.Column="2">
 
         <TabItem Header="検査結果">
           <Grid Margin="14,12,14,12">
@@ -387,7 +398,7 @@
         </TabItem>
 
         <!-- ファイル一覧。手編集はここで行う（docs/SPEC.md 5.2） -->
-        <TabItem Header="ファイル一覧">
+        <TabItem x:Name="FileListTab" Header="ファイル一覧">
           <Grid Margin="14,12,14,12">
             <Grid.RowDefinitions>
               <RowDefinition Height="Auto" />
