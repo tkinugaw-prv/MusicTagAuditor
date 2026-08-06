@@ -328,26 +328,44 @@ V1 が不一致だった場合の対処案:
 
 ## 10. データモデル（概略）
 
+実装は `src/MusicTagAuditor.Core/Models/` 配下。以下は概略であり、フィールドの意味は実装のドキュメントコメントを正とする。
+
 ```csharp
-record TrackTags(
+sealed record TrackTags(
     string RelativePath,
+    string FullPath,             // ファイルの絶対パス
     AudioFormat Format,          // M4a, Flac, Id3
-    string? Title, string? Artist, string? AlbumArtist,
-    string? Composer, string? Conductor, string? Album,
-    string? Genre, string? Date,
-    string? TrackNumber, string? DiscNumber,
+    IReadOnlyDictionary<TagField, IReadOnlyList<string>> Fields,
+        // フィールドごとの格納値。2 値以上あるのは AIMP が `;` で分割した状態で、
+        // 検査ルールが検出する対象になる（TAGGING_POLICY.md 3.4）。1 値へ丸めずに保持する
     IReadOnlyDictionary<string, string[]> RawTags);   // 未知タグの保持用
 
-record TagChange(
+// Title / Artist / Composer 等は Fields から GetSingle(TagField.X) で導出する
+// 計算プロパティ（複数値は "; " で連結して 1 文字列にする）。HasMultipleValues(field) で
+// 連結されたかどうかを判別できる
+
+enum Severity { Error, Warning, Info, Manual }
+    // Error/Warning/Info はルールの重大度（6章）。Manual は手編集（段階6）で入った値を表す
+    // 独立区分で、原則違反の重さを持たない
+
+enum HoldReason { None, EraUnknown }
+    // 修正を保留する理由。重大度の3段階とは別軸（TAGGING_POLICY.md 7.5）。
+    // EraUnknown は date が未設定で収録時点の団体名を決められない状態（HOLD_ERA_UNKNOWN）。
+    // date が埋まれば自動的に再判定できる
+
+sealed record TagChange(
     string RelativePath,
     TagField Field,
-    string? Before,
-    string? After,
+    IReadOnlyList<string> BeforeValues,   // 現在の値
+    IReadOnlyList<string> AfterValues,    // 修正後の値。修正案が無ければ現在の値と同じ
     string RuleId,
     string Rationale,            // 「フォルダ名から特定」等。UI に必ず出す
     Severity Severity,
-    bool IsSelected);
+    HoldReason HoldReason = HoldReason.None,
+    bool ClearsValue = false);   // 値を消すことが目的の変更か。手編集だけが立てる
 ```
+
+`IsSelected`（適用対象にするか）と `Classification`（確定/要確認/保留の判定区分）は `TagChange` の位置パラメータではなく、`Severity` / `HasFix` / `HoldReason` から導出する計算プロパティ。既定値は9.1節の表と同じ条件で決まる。
 
 `RawTags` は必須。読み取ったが編集対象でないタグ（`iTunNORM`、`iTunSMPB`、CDDB ID 等）を保存時に失わないため。
 
