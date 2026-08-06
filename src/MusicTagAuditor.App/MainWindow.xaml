@@ -469,7 +469,10 @@
                         EnableRowVirtualization="True"
                         EnableColumnVirtualization="True"
                         SelectionMode="Extended"
-                        SelectionUnit="FullRow">
+                        SelectionUnit="FullRow"
+                        CellEditEnding="OnTrackCellEditEnding"
+                        RowEditEnding="OnTrackRowEditEnding"
+                        IsKeyboardFocusWithinChanged="OnTrackGridKeyboardFocusWithinChanged">
                 <DataGrid.Columns>
                   <!--
                     13 列を 1 画面に収めきることはできないため横スクロールは残す。

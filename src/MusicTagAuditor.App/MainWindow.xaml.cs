@@ -85,4 +85,58 @@ public partial class MainWindow : Window
                 _ = TrackGrid.Focus();
             });
     }
+
+    /// <summary>
+    /// セルの編集が終わったら、見送っていた絞り込みを掛け直させる。
+    /// </summary>
+    private void OnTrackCellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
+    {
+        ScheduleTrackEditFinished();
+    }
+
+    /// <summary>
+    /// 行の編集が終わったら、見送っていた絞り込みを掛け直させる。確定でも取り消しでも上がる。
+    /// </summary>
+    private void OnTrackRowEditEnding(object sender, DataGridRowEditEndingEventArgs e)
+    {
+        ScheduleTrackEditFinished();
+    }
+
+    /// <summary>
+    /// ファイル一覧から入力が離れたら、編集中の行をその場で確定させる。
+    ///
+    /// **DataGrid は入力が離れても行の編集を開いたままにする。** 開いたままだとビューの
+    /// 編集トランザクションも開き続け、絞り込みの掛け直しも一覧の作り直しもできない。
+    /// タブを切り替えるとその状態のまま視界から外れ、戻るまで絞り込みが黙って効かなくなる。
+    /// 手編集はファイルへ書き込まれず保留されるだけなので、ここで確定させて失うものは無い。
+    ///
+    /// **ウィンドウが非アクティブになっただけなら確定しない。** 別のアプリへ切り替えると
+    /// キーボードフォーカスは一旦アプリの外へ出る。そこで確定すると、戻ってきたときに
+    /// 打ちかけの編集が閉じている。
+    /// </summary>
+    private void OnTrackGridKeyboardFocusWithinChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (TrackGrid.IsKeyboardFocusWithin || !IsActive)
+        {
+            return;
+        }
+
+        _ = TrackGrid.CommitEdit(DataGridEditingUnit.Row, exitEditingMode: true);
+    }
+
+    /// <summary>
+    /// 編集トランザクションが閉じたあとに、保留していた絞り込みを掛け直させる。
+    ///
+    /// **その場では呼ばない。** ここへ来るのは DataGrid が確定処理を行う前で、
+    /// ビューの編集トランザクションはまだ開いている。
+    /// </summary>
+    private void ScheduleTrackEditFinished()
+    {
+        if (DataContext is not MainViewModel viewModel)
+        {
+            return;
+        }
+
+        _ = Dispatcher.BeginInvoke(DispatcherPriority.Background, () => viewModel.NotifyTrackEditFinished());
+    }
 }

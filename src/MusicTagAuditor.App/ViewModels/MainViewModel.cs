@@ -71,6 +71,11 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>ファイル一覧の絞り込みビュー。</summary>
     private ICollectionView? _trackView;
 
+    /// <summary>
+    /// ファイル一覧の絞り込みを掛け直す係。**編集中は掛け直さない**（<see cref="TrackViewRefresher"/>）。
+    /// </summary>
+    private TrackViewRefresher? _trackRefresher;
+
     /// <summary>実行中のスキャンをキャンセルするためのトークンソース。</summary>
     private CancellationTokenSource? _scanCancellation;
 
@@ -1355,7 +1360,7 @@ public sealed partial class MainViewModel : ObservableObject
                 + $" 気づいてほしい点 {ManualEditWarnings.Count:N0} 件。");
 
         // 編集済みだけを表示している場合、絞り込みの結果が変わる。
-        _trackView?.Refresh();
+        _trackRefresher?.Request();
     }
 
     /// <summary>
@@ -1368,7 +1373,19 @@ public sealed partial class MainViewModel : ObservableObject
             row.NotifyEditsChanged();
         }
 
-        _trackView?.Refresh();
+        _trackRefresher?.Request();
+    }
+
+    /// <summary>
+    /// ファイル一覧の行の編集が終わったことを受けて、見送っていた絞り込みを掛け直す。
+    ///
+    /// **編集トランザクションが閉じてから呼ぶ。** DataGrid の RowEditEnding は確定処理の
+    /// 前に上がるため、そこから直に呼んでも見送られるだけになる。入力イベントを抜けてから
+    /// 呼ぶ段取りは View が持つ（<see cref="TrackRevealRequested"/> と同じ役割分担）。
+    /// </summary>
+    public void NotifyTrackEditFinished()
+    {
+        _trackRefresher?.Resume();
     }
 
     /// <summary>
@@ -1376,7 +1393,7 @@ public sealed partial class MainViewModel : ObservableObject
     /// </summary>
     partial void OnTrackFilterTextChanged(string value)
     {
-        _trackView?.Refresh();
+        _trackRefresher?.Request();
     }
 
     /// <summary>
@@ -1384,7 +1401,7 @@ public sealed partial class MainViewModel : ObservableObject
     /// </summary>
     partial void OnShowOnlyEmptyFieldsChanged(bool value)
     {
-        _trackView?.Refresh();
+        _trackRefresher?.Request();
     }
 
     /// <summary>
@@ -1392,7 +1409,7 @@ public sealed partial class MainViewModel : ObservableObject
     /// </summary>
     partial void OnShowOnlyEditedTracksChanged(bool value)
     {
-        _trackView?.Refresh();
+        _trackRefresher?.Request();
     }
 
     /// <summary>
@@ -1876,6 +1893,7 @@ public sealed partial class MainViewModel : ObservableObject
 
         _trackView = CollectionViewSource.GetDefaultView(Tracks);
         _trackView.Filter = MatchesTrackFilter;
+        _trackRefresher = new TrackViewRefresher(_trackView);
     }
 
     /// <summary>
