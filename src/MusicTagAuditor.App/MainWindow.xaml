@@ -102,6 +102,21 @@
         </Trigger>
       </Style.Triggers>
     </Style>
+
+    <!--
+      適用チェックは「書き込むものがある行」だけ操作できるようにする。
+      修正案を持たない行はチェックしても ApplyService が読み飛ばすため、
+      操作できると「選択 N 件」と実際の適用件数が食い違う（docs/SPEC.md 9章）。
+      ElementStyle と EditingElementStyle の両方に要る。片方だけだと、
+      セルが編集モードに入った瞬間に操作できてしまう。
+    -->
+    <Style x:Key="RuleApplyCheckBoxStyle" TargetType="CheckBox" BasedOn="{StaticResource GridCheckBoxStyle}">
+      <Setter Property="IsEnabled" Value="{Binding HasFixableChanges}" />
+    </Style>
+
+    <Style x:Key="ChangeApplyCheckBoxStyle" TargetType="CheckBox" BasedOn="{StaticResource GridCheckBoxStyle}">
+      <Setter Property="IsEnabled" Value="{Binding HasFix}" />
+    </Style>
   </Window.Resources>
 
   <DockPanel>
@@ -250,14 +265,20 @@
 
             <!-- 上段: ルール別の集計 -->
             <Border Grid.Row="0" Style="{StaticResource CardBorderStyle}" Padding="1">
-              <DataGrid ItemsSource="{Binding RuleResults}"
-                        SelectedItem="{Binding SelectedRule}"
-                        SelectionMode="Single">
+              <DockPanel>
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="8,6,8,4">
+                  <Button Content="全選択" Command="{Binding SelectAllRuleChangesCommand}" Margin="0,0,8,0" />
+                  <Button Content="全選択解除" Command="{Binding DeselectAllRuleChangesCommand}" Margin="0,0,8,0" />
+                  <Button Content="選択反転" Command="{Binding InvertRuleChangesCommand}" />
+                </StackPanel>
+                <DataGrid ItemsSource="{Binding RuleResults}"
+                          SelectedItem="{Binding SelectedRule}"
+                          SelectionMode="Single">
                 <DataGrid.Columns>
                   <DataGridCheckBoxColumn Header="適用" Width="50"
                                           Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}"
-                                          ElementStyle="{StaticResource GridCheckBoxStyle}"
-                                          EditingElementStyle="{StaticResource GridCheckBoxStyle}" />
+                                          ElementStyle="{StaticResource RuleApplyCheckBoxStyle}"
+                                          EditingElementStyle="{StaticResource RuleApplyCheckBoxStyle}" />
                   <DataGridTemplateColumn Header="重大度" CellTemplate="{StaticResource SeverityBadge}"
                                           IsReadOnly="True" Width="80" SortMemberPath="Severity" />
                   <DataGridTextColumn Header="ID" Binding="{Binding RuleId}" IsReadOnly="True" Width="70"
@@ -275,7 +296,8 @@
                   <DataGridTextColumn Header="内容" Binding="{Binding Description}" IsReadOnly="True" Width="*" MinWidth="240"
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
                 </DataGrid.Columns>
-              </DataGrid>
+                </DataGrid>
+              </DockPanel>
             </Border>
 
             <GridSplitter Grid.Row="1" Height="10" HorizontalAlignment="Stretch" VerticalAlignment="Center" />
@@ -317,17 +339,23 @@
 
             <!-- 下段: 差分プレビュー。根拠列を必ず持つ（docs/SPEC.md 5.3） -->
             <Border Grid.Row="4" Style="{StaticResource CardBorderStyle}" Padding="1">
-              <DataGrid ItemsSource="{Binding InspectionChanges}"
-                        SelectedItem="{Binding SelectedChange}"
-                        RowStyle="{StaticResource ChangeRowStyle}"
-                        CanUserSortColumns="True"
-                        EnableRowVirtualization="True"
-                        HorizontalScrollBarVisibility="Auto">
+              <DockPanel>
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="8,6,8,4">
+                  <Button Content="全選択" Command="{Binding SelectAllChangesCommand}" Margin="0,0,8,0" />
+                  <Button Content="全選択解除" Command="{Binding DeselectAllChangesCommand}" Margin="0,0,8,0" />
+                  <Button Content="選択反転" Command="{Binding InvertChangesCommand}" />
+                </StackPanel>
+                <DataGrid ItemsSource="{Binding InspectionChanges}"
+                          SelectedItem="{Binding SelectedChange}"
+                          RowStyle="{StaticResource ChangeRowStyle}"
+                          CanUserSortColumns="True"
+                          EnableRowVirtualization="True"
+                          HorizontalScrollBarVisibility="Auto">
                 <DataGrid.Columns>
                   <DataGridCheckBoxColumn Header="適用" Width="50"
                                           Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}"
-                                          ElementStyle="{StaticResource GridCheckBoxStyle}"
-                                          EditingElementStyle="{StaticResource GridCheckBoxStyle}" />
+                                          ElementStyle="{StaticResource ChangeApplyCheckBoxStyle}"
+                                          EditingElementStyle="{StaticResource ChangeApplyCheckBoxStyle}" />
                   <DataGridTextColumn Header="区分" Binding="{Binding Classification}" IsReadOnly="True" Width="68"
                                       ElementStyle="{StaticResource CenterCellTextStyle}" />
                   <!--
@@ -348,7 +376,8 @@
                   <DataGridTextColumn Header="根拠" Binding="{Binding Rationale}" IsReadOnly="True" Width="*" MinWidth="460"
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
                 </DataGrid.Columns>
-              </DataGrid>
+                </DataGrid>
+              </DockPanel>
             </Border>
           </Grid>
         </TabItem>

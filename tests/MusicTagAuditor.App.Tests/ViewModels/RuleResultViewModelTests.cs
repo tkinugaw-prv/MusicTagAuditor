@@ -90,6 +90,73 @@ public sealed class RuleResultViewModelTests
     }
 
     /// <summary>
+    /// 修正案を 1 件も持たないルールは、チェックできないものとして扱う。
+    /// 画面のチェックボックスを無効にする判断に使う。
+    /// </summary>
+    [Fact]
+    public void HasFixableChanges_修正案が無ければfalse()
+    {
+        RuleResultViewModel noFix = new(
+            CreateResult(Severity.Info, CreateChange("01.m4a", Severity.Info, [])));
+
+        Assert.False(noFix.HasFixableChanges);
+
+        RuleResultViewModel fixable = new(
+            CreateResult(Severity.Error, CreateChange("01.m4a", Severity.Error, ["Classic"])));
+
+        Assert.True(fixable.HasFixableChanges);
+    }
+
+    /// <summary>
+    /// <see cref="RuleResultViewModel.UpdateChangeSelection"/> の反転で、
+    /// ヘッダーのチェックが配下の実態に追従する。
+    ///
+    /// ヘッダーが取り残されると、画面上は「選択反転を押しても何も起きない」ように見える。
+    /// </summary>
+    [Fact]
+    public void UpdateChangeSelection_反転でヘッダーが追従する()
+    {
+        TagChange first = CreateChange("01.m4a", Severity.Error, ["Classic"]);
+        TagChange second = CreateChange("02.m4a", Severity.Error, ["Classic"]);
+        RuleResultViewModel rule = new(CreateResult(Severity.Error, first, second));
+
+        Assert.True(rule.IsSelected);
+
+        rule.UpdateChangeSelection(selected => !selected);
+
+        Assert.False(first.IsSelected);
+        Assert.False(second.IsSelected);
+        Assert.False(rule.IsSelected);
+
+        rule.UpdateChangeSelection(selected => !selected);
+
+        Assert.True(first.IsSelected);
+        Assert.True(second.IsSelected);
+        Assert.True(rule.IsSelected);
+    }
+
+    /// <summary>
+    /// 明細を 1 件外すとヘッダーは外れるが、**残りの明細は巻き込まれない**。
+    ///
+    /// ヘッダー同期が配下へ撃ち返すと「1 件外した」が「全件外す」に化ける。
+    /// </summary>
+    [Fact]
+    public void ヘッダー同期は配下へ撃ち返さない()
+    {
+        TagChange first = CreateChange("01.m4a", Severity.Error, ["Classic"]);
+        TagChange second = CreateChange("02.m4a", Severity.Error, ["Classic"]);
+        RuleResultViewModel rule = new(CreateResult(Severity.Error, first, second));
+
+        rule.Changes[0].IsSelected = false;
+
+        Assert.False(rule.IsSelected);
+        Assert.False(first.IsSelected);
+
+        // 残りは選択されたまま。
+        Assert.True(second.IsSelected);
+    }
+
+    /// <summary>
     /// テスト用のルール結果を作る。
     /// </summary>
     /// <param name="severity">重大度。</param>

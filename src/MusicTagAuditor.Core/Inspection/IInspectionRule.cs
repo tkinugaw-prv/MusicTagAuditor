@@ -59,4 +59,43 @@ public sealed record InspectionResult(IReadOnlyList<RuleResult> Results, TimeSpa
 
     /// <summary>すべての修正案を平坦に返す。</summary>
     public IEnumerable<TagChange> AllChanges => Results.SelectMany(result => result.Changes);
+
+    /// <summary>
+    /// 指定した組（ファイル・フィールド）に一致する修正案を取り除いた結果を返す。
+    ///
+    /// 適用に成功した項目だけを検査結果から消すために使う（docs/SPEC.md 9章）。
+    /// 除去後に 0 件になったルールは <see cref="Results"/> から落とす。検査直後の
+    /// <c>RunInspection</c> が最初から 0 件のルールを画面に出していないのと基準を揃える。
+    /// 何も除去しなかったルールは同一インスタンスのまま返す。無関係な行の参照を変えないことで、
+    /// 呼び出し側（ビューモデル）が触れていない行を作り直さずに済む。
+    /// </summary>
+    public InspectionResult RemoveChanges(IReadOnlySet<TagChangeKey> keys)
+    {
+        if (keys.Count == 0)
+        {
+            return this;
+        }
+
+        List<RuleResult> results = [];
+
+        foreach (RuleResult rule in Results)
+        {
+            bool touched = rule.Changes.Any(change => keys.Contains(TagChangeKey.From(change)));
+
+            if (!touched)
+            {
+                results.Add(rule);
+                continue;
+            }
+
+            TagChange[] remaining = [.. rule.Changes.Where(change => !keys.Contains(TagChangeKey.From(change)))];
+
+            if (remaining.Length > 0)
+            {
+                results.Add(rule with { Changes = remaining });
+            }
+        }
+
+        return this with { Results = results };
+    }
 }

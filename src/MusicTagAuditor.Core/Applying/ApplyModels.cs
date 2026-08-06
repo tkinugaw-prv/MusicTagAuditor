@@ -66,6 +66,32 @@ public sealed record ApplyResult(
     /// 手編集で解消した競合は、捨てた案を利用者に知らせる必要があるので「要確認」に数える。
     /// </summary>
     public bool IsClean => Failures.Count == 0 && Mismatches.Count == 0 && Conflicts.Count == 0;
+
+    /// <summary>
+    /// <paramref name="targets"/> のうち、完全に成功した (ファイル, フィールド) の組を返す。
+    ///
+    /// 書き込みに失敗したファイルは全フィールドを除外する。読み戻し照合の不一致・競合になった
+    /// 組も除外する（手編集で解消済みの競合を含む。捨てた案があったことを利用者が確認できるよう
+    /// 検査結果に残すため）。呼び出し側はこの結果を検査結果から取り除く用途に使う想定。
+    /// </summary>
+    public IReadOnlySet<TagChangeKey> GetSucceededFields(IEnumerable<TagChange> targets)
+    {
+        HashSet<string> failedFiles = new(
+            Failures.Select(failure => failure.RelativePath),
+            StringComparer.OrdinalIgnoreCase);
+
+        HashSet<TagChangeKey> blocked =
+        [
+            .. Mismatches.Select(mismatch => TagChangeKey.Of(mismatch.RelativePath, mismatch.Field)),
+            .. Conflicts.Select(conflict => TagChangeKey.Of(conflict.RelativePath, conflict.Field)),
+        ];
+
+        return new HashSet<TagChangeKey>(
+            targets
+                .Where(change => !failedFiles.Contains(change.RelativePath))
+                .Select(TagChangeKey.From)
+                .Where(key => !blocked.Contains(key)));
+    }
 }
 
 /// <summary>

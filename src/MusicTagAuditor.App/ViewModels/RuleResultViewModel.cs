@@ -30,6 +30,12 @@ public sealed partial class RuleResultViewModel : ObservableObject
     [ObservableProperty]
     private bool _isSelected;
 
+    /// <summary>配下から逆算してヘッダーを直している最中か。配下への撃ち返しを止める。</summary>
+    private bool _syncingHeader;
+
+    /// <summary>配下を一括で書き換えている最中か。1 件ごとのヘッダー再計算を止める。</summary>
+    private bool _suppressHeaderSync;
+
     /// <summary>
     /// ルールの結果からビューモデルを作る。
     /// </summary>
@@ -88,6 +94,48 @@ public sealed partial class RuleResultViewModel : ObservableObject
     public int HoldCount => Result.HoldCount;
 
     /// <summary>
+    /// 修正案を持つ明細。チェックしても適用できないものは一括操作の対象外にする。
+    /// </summary>
+    public IEnumerable<TagChangeViewModel> FixableChanges => Changes.Where(change => change.HasFix);
+
+    /// <summary>
+    /// 適用できる明細を持つか。
+    ///
+    /// 持たないルールはチェックしても書き込むものが無いので、画面のチェックボックスを
+    /// 無効にする。**チェックできるのに適用されない状態を作らない。**
+    /// 選択件数の表示と実際の適用件数が食い違う原因になる。
+    /// </summary>
+    public bool HasFixableChanges => FixableCount > 0;
+
+    /// <summary>
+    /// 配下のチェックをまとめて書き換える。全選択・全解除・選択反転の入口。
+    ///
+    /// **ヘッダーの同期は最後に 1 回だけ行う。** 1 件ごとに配下を数え直すと、
+    /// 明細が 1,000 件を超えるルールで O(n²) になる。
+    /// </summary>
+    /// <param name="next">今のチェック状態から次の状態を決める。</param>
+    public void UpdateChangeSelection(Func<bool, bool> next)
+    {
+        ArgumentNullException.ThrowIfNull(next);
+
+        _suppressHeaderSync = true;
+
+        try
+        {
+            foreach (TagChangeViewModel change in FixableChanges)
+            {
+                change.IsSelected = next(change.IsSelected);
+            }
+        }
+        finally
+        {
+            _suppressHeaderSync = false;
+        }
+
+        SyncHeaderFromChanges();
+    }
+
+    /// <summary>
     /// このルールの検出をすべて選択／解除する。
     /// 修正案を持たないものはチェックしても適用できないため対象外にする。
     ///
@@ -96,9 +144,25 @@ public sealed partial class RuleResultViewModel : ObservableObject
     /// </summary>
     partial void OnIsSelectedChanged(bool value)
     {
-        foreach (TagChangeViewModel change in Changes.Where(change => change.HasFix))
+        // 配下から逆算してヘッダーを直している最中。ここで配下へ撃ち返すと、
+        // 「1 件だけ外した」が「全件外す」に化ける。
+        if (_syncingHeader)
         {
-            change.IsSelected = value;
+            return;
+        }
+
+        _suppressHeaderSync = true;
+
+        try
+        {
+            foreach (TagChangeViewModel change in FixableChanges)
+            {
+                change.IsSelected = value;
+            }
+        }
+        finally
+        {
+            _suppressHeaderSync = false;
         }
     }
 
@@ -112,6 +176,47 @@ public sealed partial class RuleResultViewModel : ObservableObject
             return;
         }
 
+        if (!_suppressHeaderSync)
+        {
+            SyncHeaderFromChanges();
+        }
+
         ChangeSelectionChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// 配下の実態からヘッダーのチェックを決め直す。
+    ///
+    /// **ヘッダーは配下を一括で切り替えるスイッチだが、配下だけが変わったときに
+    /// 取り残されると画面が嘘をつく。** 選択反転を押しても上段のチェックが動かず
+    /// 「効いていない」ように見えるのはこれが原因だった。
+    /// 混在は <c>bool</c> で表せないので、全件チェック済みのときだけ true にする。
+    /// </summary>
+    private void SyncHeaderFromChanges()
+    {
+        TagChangeViewModel[] fixable = [.. FixableChanges];
+
+        if (fixable.Length == 0)
+        {
+            return;
+        }
+
+        bool allSelected = Array.TrueForAll(fixable, change => change.IsSelected);
+
+        if (IsSelected == allSelected)
+        {
+            return;
+        }
+
+        _syncingHeader = true;
+
+        try
+        {
+            IsSelected = allSelected;
+        }
+        finally
+        {
+            _syncingHeader = false;
+        }
     }
 }

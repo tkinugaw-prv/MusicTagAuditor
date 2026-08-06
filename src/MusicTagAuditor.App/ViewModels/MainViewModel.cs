@@ -139,6 +139,9 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>検査結果で選択中のルール。</summary>
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SelectAllChangesCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DeselectAllChangesCommand))]
+    [NotifyCanExecuteChangedFor(nameof(InvertChangesCommand))]
     private RuleResultViewModel? _selectedRule;
 
     /// <summary>検査結果の要約。</summary>
@@ -246,6 +249,17 @@ public sealed partial class MainViewModel : ObservableObject
         Dictionary.Saved += OnDictionarySaved;
 
         _manualEdits.Changed += OnManualEditsChanged;
+
+        // 上段の一括選択ボタンの活性はルールの有無で決まる。ObservableCollection は
+        // ObservableProperty ではないため [NotifyCanExecuteChangedFor] が使えず、
+        // CollectionChanged を購読して手動で再評価する。
+        // 下段は SelectedRule に依存するので、そちらの属性に任せてある。
+        RuleResults.CollectionChanged += (_, _) =>
+        {
+            SelectAllRuleChangesCommand.NotifyCanExecuteChanged();
+            DeselectAllRuleChangesCommand.NotifyCanExecuteChanged();
+            InvertRuleChangesCommand.NotifyCanExecuteChanged();
+        };
 
         RefreshSuggestions();
     }
@@ -918,6 +932,78 @@ public sealed partial class MainViewModel : ObservableObject
         CanApplyChanges = selected > 0;
     }
 
+    /// <summary>上段（ルール別集計）の全項目を選択する。</summary>
+    [RelayCommand(CanExecute = nameof(CanBulkSelectRuleChanges))]
+    private void SelectAllRuleChanges()
+    {
+        UpdateAllRuleSelections(_ => true);
+    }
+
+    /// <summary>上段（ルール別集計）の全項目を選択解除する。</summary>
+    [RelayCommand(CanExecute = nameof(CanBulkSelectRuleChanges))]
+    private void DeselectAllRuleChanges()
+    {
+        UpdateAllRuleSelections(_ => false);
+    }
+
+    /// <summary>
+    /// 上段配下の全項目のチェックを個別に反転する。
+    ///
+    /// ルール行のヘッダーチェックを一括トグルするのではなく、明細
+    /// （<see cref="TagChange.IsSelected"/>）を 1 件ずつ反転する。ヘッダーは
+    /// 反転後の配下の実態から決め直される（<see cref="RuleResultViewModel"/>）。
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanBulkSelectRuleChanges))]
+    private void InvertRuleChanges()
+    {
+        UpdateAllRuleSelections(selected => !selected);
+    }
+
+    /// <summary>上段の一括選択操作を実行できるか。修正案を持つ明細が 1 件も無ければ押させない。</summary>
+    private bool CanBulkSelectRuleChanges()
+    {
+        return RuleResults.Any(rule => rule.FixableCount > 0);
+    }
+
+    /// <summary>下段（選択中ルールの差分明細）の全項目を選択する。</summary>
+    [RelayCommand(CanExecute = nameof(CanBulkSelectChanges))]
+    private void SelectAllChanges()
+    {
+        SelectedRule?.UpdateChangeSelection(_ => true);
+    }
+
+    /// <summary>下段（選択中ルールの差分明細）の全項目を選択解除する。</summary>
+    [RelayCommand(CanExecute = nameof(CanBulkSelectChanges))]
+    private void DeselectAllChanges()
+    {
+        SelectedRule?.UpdateChangeSelection(_ => false);
+    }
+
+    /// <summary>下段（選択中ルールの差分明細）のチェックを個別に反転する。</summary>
+    [RelayCommand(CanExecute = nameof(CanBulkSelectChanges))]
+    private void InvertChanges()
+    {
+        SelectedRule?.UpdateChangeSelection(selected => !selected);
+    }
+
+    /// <summary>下段の一括選択操作を実行できるか。修正案を持つ明細が 1 件も無ければ押させない。</summary>
+    private bool CanBulkSelectChanges()
+    {
+        return SelectedRule is not null && SelectedRule.FixableCount > 0;
+    }
+
+    /// <summary>
+    /// 全ルール配下のチェックをまとめて書き換える。
+    /// </summary>
+    /// <param name="next">今のチェック状態から次の状態を決める。</param>
+    private void UpdateAllRuleSelections(Func<bool, bool> next)
+    {
+        foreach (RuleResultViewModel rule in RuleResults)
+        {
+            rule.UpdateChangeSelection(next);
+        }
+    }
+
     /// <summary>
     /// 未知の値の一覧を作り直す。
     /// </summary>
@@ -1584,18 +1670,122 @@ public sealed partial class MainViewModel : ObservableObject
     /// </summary>
     partial void OnSelectedRuleChanged(RuleResultViewModel? value)
     {
+        RefreshInspectionChanges();
+    }
+
+    /// <summary>
+    /// 選択中ルール（<see cref="SelectedRule"/>）の明細で下段グリッドを作り直す。
+    ///
+    /// <c>OnSelectedRuleChanged</c> と <see cref="RemoveSucceededFromInspection"/> の
+    /// 両方から呼ぶ。後者はルール行を差し替えたあと、選択中ルールが差し替わった場合に
+    /// 下段の表示を最新化する必要がある。
+    /// </summary>
+    private void RefreshInspectionChanges()
+    {
         InspectionChanges.Clear();
         SelectedChange = null;
 
-        if (value is null)
+        if (SelectedRule is null)
         {
             return;
         }
 
-        foreach (TagChangeViewModel change in value.Changes)
+        foreach (TagChangeViewModel change in SelectedRule.Changes)
         {
             InspectionChanges.Add(change);
         }
+    }
+
+    /// <summary>
+    /// 適用に成功した項目だけを検査結果から取り除く。
+    ///
+    /// 全クリアすると「まだ直っていない」ように見せてしまう項目まで消えてしまうが、
+    /// 未対象・失敗・不一致・競合の項目はチェック状態を保ったまま残したい
+    /// （検査結果を保持してほしいという要望への対応）。触れていないルール行は
+    /// 同一インスタンスを使い回し、ヘッダーのチェック状態を意味なくリセットしない。
+    ///
+    /// <c>internal</c> にしてあるのはテストのため。<see cref="ApplyAsync"/> は
+    /// 確認ダイアログ（<c>MessageBox.Show</c>）を経由するため自動テストで直接実行できず、
+    /// このメソッド単体をテストから呼んで検証する。
+    /// </summary>
+    internal void RemoveSucceededFromInspection(IReadOnlySet<TagChangeKey> succeededFields)
+    {
+        if (_lastInspection is null || succeededFields.Count == 0)
+        {
+            return;
+        }
+
+        _lastInspection = _lastInspection.RemoveChanges(succeededFields);
+
+        RuleResultViewModel? selectedRule = SelectedRule;
+        RuleResultViewModel? replacementForSelectedRule = null;
+        bool selectedRuleRemoved = selectedRule is not null;
+        List<RuleResultViewModel> updated = [];
+
+        foreach (RuleResultViewModel existing in RuleResults)
+        {
+            bool touched = existing.Result.Changes.Any(
+                change => succeededFields.Contains(TagChangeKey.From(change)));
+
+            if (!touched)
+            {
+                updated.Add(existing);
+
+                if (ReferenceEquals(existing, selectedRule))
+                {
+                    selectedRuleRemoved = false;
+                }
+
+                continue;
+            }
+
+            existing.ChangeSelectionChanged -= OnInspectionSelectionChanged;
+
+            TagChange[] remaining =
+            [
+                .. existing.Result.Changes.Where(change => !succeededFields.Contains(TagChangeKey.From(change))),
+            ];
+
+            if (remaining.Length == 0)
+            {
+                // ルール行ごと落とす。空のルールをヘッダーだけ残しても情報量が無い
+                // （RunInspection が検査直後に 0 件のルールを画面に出さないのと基準を揃える）。
+                continue;
+            }
+
+            RuleResultViewModel replacement = new(existing.Result with { Changes = remaining });
+            replacement.ChangeSelectionChanged += OnInspectionSelectionChanged;
+            updated.Add(replacement);
+
+            if (ReferenceEquals(existing, selectedRule))
+            {
+                replacementForSelectedRule = replacement;
+                selectedRuleRemoved = false;
+            }
+        }
+
+        RuleResults.Clear();
+
+        foreach (RuleResultViewModel rule in updated)
+        {
+            RuleResults.Add(rule);
+        }
+
+        if (selectedRuleRemoved)
+        {
+            // 選択中ルールが丸ごと消えた。RunInspection の既定選択と同じく先頭へ切り替える。
+            SelectedRule = RuleResults.FirstOrDefault();
+        }
+        else if (replacementForSelectedRule is not null)
+        {
+            // 選択中ルールは一部残った。差し替えた新しいインスタンスへ選択をつなぎ直す。
+            SelectedRule = replacementForSelectedRule;
+        }
+
+        // 選択中ルールに触れていない場合はここで何もしない。SelectedRule が変わっていないので
+        // OnSelectedRuleChanged は発火せず、下段の選択行（SelectedChange）も保たれる。
+
+        UpdateInspectionSelection(isDefault: false);
     }
 
     /// <summary>
@@ -1631,6 +1821,8 @@ public sealed partial class MainViewModel : ObservableObject
         ProgressMaximum = 1;
         StatusText = "適用しています…";
 
+        ApplyResult? result = null;
+
         try
         {
             Progress<ApplyProgress> progress = new(report =>
@@ -1639,7 +1831,7 @@ public sealed partial class MainViewModel : ObservableObject
                 ProgressValue = report.Completed;
             });
 
-            ApplyResult result = await _applyService
+            result = await _applyService
                 .ApplyAsync(
                     _lastScan,
                     targets,
@@ -1659,8 +1851,16 @@ public sealed partial class MainViewModel : ObservableObject
             IsScanning = false;
         }
 
-        // 適用後の状態で読み直す。古い検査結果を残すと、直したものがまだ出ているように見える。
-        await ScanAsync().ConfigureAwait(true);
+        // 成功した項目だけ検査結果から取り除く。失敗・不一致・競合の項目とチェック状態は残す
+        // （例外で result が取れなかった場合は刈り込みをスキップする）。
+        if (result is not null)
+        {
+            RemoveSucceededFromInspection(result.GetSucceededFields(targets));
+        }
+
+        // 適用でタグの値が変わっているのでファイル一覧は読み直す。検査結果は上で刈り込み済みなので
+        // 巻き込まない（RescanLibraryAsync は ScanAsync と違い検査結果・ApplyIssues に触れない）。
+        await RescanLibraryAsync().ConfigureAwait(true);
         RefreshBackups();
     }
 
@@ -1821,15 +2021,10 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        IsScanning = true;
-
         // 編集は読み取り時点のタグを土台にしている。読み直したら足場が変わるので捨てる。
         // 捨ててよいかは呼び出し側が確認済み（ConfirmDiscardManualEdits）。
         _manualEdits.Clear();
 
-        Failures.Clear();
-        Tracks.Clear();
-        FolderTree.Clear();
         ClearRuleResults();
         InspectionChanges.Clear();
         UnknownValues.Clear();
@@ -1840,6 +2035,29 @@ public sealed partial class MainViewModel : ObservableObject
         HasInspectionResult = false;
         SelectedChange = null;
         _lastInspection = null;
+
+        await RescanLibraryAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// ライブラリを走査してタグを読み取り、一覧とツリーだけを組み立て直す。
+    ///
+    /// **検査結果（<see cref="RuleResults"/> 等）と保留中の手編集には触れない。**
+    /// 適用直後のように「タグの値だけ最新化したいが検査結果は残したい」場面から呼ばれる
+    /// （<see cref="ApplyAsync"/>）。全クリアしたい場合は <see cref="ScanAsync"/> を使うこと。
+    /// </summary>
+    private async Task RescanLibraryAsync()
+    {
+        if (string.IsNullOrEmpty(LibraryRoot))
+        {
+            return;
+        }
+
+        IsScanning = true;
+
+        Failures.Clear();
+        Tracks.Clear();
+        FolderTree.Clear();
         ProgressValue = 0;
         ProgressMaximum = 1;
         StatusText = "スキャンしています…";
