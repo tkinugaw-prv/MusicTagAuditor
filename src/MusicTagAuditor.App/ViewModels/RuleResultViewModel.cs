@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using MusicTagAuditor.Core.Inspection;
 using MusicTagAuditor.Core.Models;
@@ -35,7 +36,15 @@ public sealed partial class RuleResultViewModel : ObservableObject
     /// <param name="result">ルールの結果。</param>
     public RuleResultViewModel(RuleResult result)
     {
+        ArgumentNullException.ThrowIfNull(result);
+
         Result = result;
+        Changes = [.. result.Changes.Select(change => new TagChangeViewModel(change))];
+
+        foreach (TagChangeViewModel change in Changes)
+        {
+            change.PropertyChanged += OnChangePropertyChanged;
+        }
 
         // 修正値が決まっている ⛔ と ⚠ を既定でチェックする。❓ と保留は既定で外す。
         // TagChange.IsSelected の既定値と同じ条件にすること。ずれると
@@ -43,8 +52,19 @@ public sealed partial class RuleResultViewModel : ObservableObject
         _isSelected = result.Severity != Severity.Info && result.FixableCount > 0;
     }
 
+    /// <summary>
+    /// このルールの明細のうち、いずれかのチェック状態が変わった。
+    ///
+    /// 明細は 1,000 件を超えることがあるため、親（<c>MainViewModel</c>）には
+    /// ルール単位で 1 本にまとめて伝える。子は自分が生成・所有するので購読が漏れない。
+    /// </summary>
+    public event EventHandler? ChangeSelectionChanged;
+
     /// <summary>元のルール結果。</summary>
     public RuleResult Result { get; }
+
+    /// <summary>このルールの明細。下段グリッドはこれを表示する。</summary>
+    public IReadOnlyList<TagChangeViewModel> Changes { get; }
 
     /// <summary>ルール ID。</summary>
     public string RuleId => Result.RuleId;
@@ -70,12 +90,28 @@ public sealed partial class RuleResultViewModel : ObservableObject
     /// <summary>
     /// このルールの検出をすべて選択／解除する。
     /// 修正案を持たないものはチェックしても適用できないため対象外にする。
+    ///
+    /// **反映先は子のビューモデルにする。** <see cref="TagChange"/> を直接書くと
+    /// 通知が起きず、表示中の下段グリッドがルールを選び直すまで古いままになる。
     /// </summary>
     partial void OnIsSelectedChanged(bool value)
     {
-        foreach (TagChange change in Result.Changes.Where(change => change.HasFix))
+        foreach (TagChangeViewModel change in Changes.Where(change => change.HasFix))
         {
             change.IsSelected = value;
         }
+    }
+
+    /// <summary>
+    /// 明細のチェック状態の変化を親へ中継する。
+    /// </summary>
+    private void OnChangePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(TagChangeViewModel.IsSelected))
+        {
+            return;
+        }
+
+        ChangeSelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 }

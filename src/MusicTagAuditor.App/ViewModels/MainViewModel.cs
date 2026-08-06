@@ -158,7 +158,7 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>検査結果の差分明細で選択中の行。</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(AddSelectedChangeToDictionaryCommand))]
-    private TagChange? _selectedChange;
+    private TagChangeViewModel? _selectedChange;
 
     /// <summary>未知の値の一覧で選択中の行。</summary>
     [ObservableProperty]
@@ -300,7 +300,7 @@ public sealed partial class MainViewModel : ObservableObject
     public ObservableCollection<RuleResultViewModel> RuleResults { get; } = [];
 
     /// <summary>検査結果タブ下段。選択したルールの差分明細。</summary>
-    public ObservableCollection<TagChange> InspectionChanges { get; } = [];
+    public ObservableCollection<TagChangeViewModel> InspectionChanges { get; } = [];
 
     /// <summary>
     /// 辞書に無いために修正案を出せなかった値（docs/SPEC.md 7.3）。
@@ -806,7 +806,7 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        RuleResults.Clear();
+        ClearRuleResults();
         InspectionChanges.Clear();
         UnknownValues.Clear();
         ApplyIssues.Clear();
@@ -828,7 +828,9 @@ public sealed partial class MainViewModel : ObservableObject
 
             foreach (RuleResult rule in result.Results.Where(rule => rule.Changes.Count > 0))
             {
-                RuleResults.Add(new RuleResultViewModel(rule));
+                RuleResultViewModel ruleViewModel = new(rule);
+                ruleViewModel.ChangeSelectionChanged += OnInspectionSelectionChanged;
+                RuleResults.Add(ruleViewModel);
             }
 
             _lastInspection = result;
@@ -836,23 +838,16 @@ public sealed partial class MainViewModel : ObservableObject
 
             LoadUnknownValues(result);
 
-            int selected = result.AllChanges.Count(change => change.IsSelected);
-            int holds = result.AllChanges.Count(change => change.HoldReason != HoldReason.None);
-
-            InspectionSummary = string.Create(
-                CultureInfo.CurrentCulture,
-                $"検出 {result.TotalChanges:N0} 件 / 既定で選択 {selected:N0} 件 / 保留 {holds:N0} 件"
-                + $"（{result.Elapsed.TotalSeconds:F2} 秒）");
+            HasInspectionResult = true;
+            UpdateInspectionSelection(isDefault: true);
 
             StatusText = InspectionSummary;
-            CanApplyChanges = selected > 0;
-            HasInspectionResult = true;
 
             Log.Information(
                 "検査完了 検出={Total} 選択={Selected} 保留={Holds} 未知の値={Unknown} 所要={Elapsed}",
                 result.TotalChanges,
-                selected,
-                holds,
+                result.AllChanges.Count(change => change.IsSelected),
+                result.AllChanges.Count(change => change.HoldReason != HoldReason.None),
                 UnknownValues.Count,
                 result.Elapsed);
         }
@@ -861,6 +856,66 @@ public sealed partial class MainViewModel : ObservableObject
             InspectionSummary = $"検査に失敗しました: {ex.Message}";
             Log.Error(ex, "検査に失敗した root={Root}", LibraryRoot);
         }
+    }
+
+    /// <summary>
+    /// ルール別集計を空にする。**購読を外してから捨てる。**
+    ///
+    /// <see cref="RunInspection"/> は辞書を編集するたびに呼ばれる。外し忘れると、
+    /// 捨てたはずのビューモデルからも通知が届いて集計が多重に走る。
+    /// </summary>
+    private void ClearRuleResults()
+    {
+        foreach (RuleResultViewModel rule in RuleResults)
+        {
+            rule.ChangeSelectionChanged -= OnInspectionSelectionChanged;
+        }
+
+        RuleResults.Clear();
+    }
+
+    /// <summary>
+    /// 明細のチェックが変わったので、選択件数と適用の可否を取り直す。
+    ///
+    /// **ここでコレクションを触らないこと。** 呼ばれるのは DataGrid がセルの編集
+    /// トランザクションを開いている最中で、その状態で
+    /// <see cref="System.ComponentModel.ICollectionView.Refresh"/> を呼ぶと落ちる
+    /// (<see cref="TrackViewRefresher"/>)。数えて表示を書き換えるだけに留める。
+    /// </summary>
+    private void OnInspectionSelectionChanged(object? sender, EventArgs e)
+    {
+        UpdateInspectionSelection(isDefault: false);
+    }
+
+    /// <summary>
+    /// 選択件数から要約テキストと適用の可否を作り直す。
+    /// </summary>
+    /// <param name="isDefault">
+    /// 検査直後の既定値そのままか。既定値であることは利用者が知るべき情報なので
+    /// （docs/SPEC.md 9.1）文言で区別する。利用者が触ったあとは所要時間も再掲しない。
+    /// </param>
+    private void UpdateInspectionSelection(bool isDefault)
+    {
+        if (_lastInspection is null)
+        {
+            return;
+        }
+
+        // 適用対象の唯一の真実は Core 側にある。ビューモデルは書き込みを素通しするだけなので、
+        // ここは検査結果をそのまま数えればよい。
+        int selected = _lastInspection.AllChanges.Count(change => change.IsSelected);
+        int holds = _lastInspection.AllChanges.Count(change => change.HoldReason != HoldReason.None);
+
+        InspectionSummary = isDefault
+            ? string.Create(
+                CultureInfo.CurrentCulture,
+                $"検出 {_lastInspection.TotalChanges:N0} 件 / 既定で選択 {selected:N0} 件 / 保留 {holds:N0} 件"
+                + $"（{_lastInspection.Elapsed.TotalSeconds:F2} 秒）")
+            : string.Create(
+                CultureInfo.CurrentCulture,
+                $"検出 {_lastInspection.TotalChanges:N0} 件 / 選択 {selected:N0} 件 / 保留 {holds:N0} 件");
+
+        CanApplyChanges = selected > 0;
     }
 
     /// <summary>
@@ -927,7 +982,7 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        UnknownValue unknown = UnknownValueCollector.Collect([SelectedChange]).FirstOrDefault()
+        UnknownValue unknown = UnknownValueCollector.Collect([SelectedChange.Change]).FirstOrDefault()
             ?? new UnknownValue(
                 SelectedChange.BeforeText,
                 DictionaryEditor.SuggestCategory(SelectedChange.Field),
@@ -1537,7 +1592,7 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        foreach (TagChange change in value.Result.Changes)
+        foreach (TagChangeViewModel change in value.Changes)
         {
             InspectionChanges.Add(change);
         }
@@ -1775,7 +1830,7 @@ public sealed partial class MainViewModel : ObservableObject
         Failures.Clear();
         Tracks.Clear();
         FolderTree.Clear();
-        RuleResults.Clear();
+        ClearRuleResults();
         InspectionChanges.Clear();
         UnknownValues.Clear();
         ApplyIssues.Clear();
