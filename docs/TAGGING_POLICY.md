@@ -76,7 +76,7 @@
 | `album` | 「作曲家: 作品名 - 演奏者/年」形式を目標とする（後述 6.1 の未完了事項） |
 | `title` | 楽章名。番号書式は後述 6.2 の未完了事項 |
 | `date` | 録音年を4桁で。`1993-01-22T08:00:00Z` のような ISO 形式は使わない |
-| `tracknumber` / `discnumber` | 単一ディスクでも `1/1` を設定する |
+| `discnumber` | 単一ディスクでも `1/1` を設定する（`tracknumber` は対象外。現状は未設定の検査ルールが無い） |
 
 `date` は 3.1 の団体名規則（規則3）の入力でもある。単なる付加情報ではない。
 
@@ -158,8 +158,8 @@
 | album | `©alb` | `ALBUM` | `TALB` |
 | genre | `©gen` | `GENRE` | `TCON` |
 | date | `©day` | `DATE` | `TDRC` |
-| track | `trkn` | `TRACKNUMBER` / `TOTALTRACKS` | `TRCK` |
-| disc | `disk` | `DISCNUMBER` / `TOTALDISCS` | `TPOS` |
+| track | `trkn` | `TRACKNUMBER`（`3/12` のように番号/総数をまとめて1フィールドに格納） | `TRCK` |
+| disc | `disk` | `DISCNUMBER`（同上） | `TPOS` |
 
 ### 4.2 conductor の注意点
 

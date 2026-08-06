@@ -524,8 +524,8 @@ AIMP はタグの保存時に `;` を複数値の区切りとして解釈し、1
 | アルバム | album | `©alb` | `ALBUM` | `TALB` |
 | ジャンル | genre | `©gen` | `GENRE` | `TCON` |
 | 年 | date | `©day` | `DATE` | `TDRC` |
-| トラック | tracknumber | `trkn` | `TRACKNUMBER` / `TOTALTRACKS` | `TRCK` |
-| ディスク | discnumber | `disk` | `DISCNUMBER` / `TOTALDISCS` | `TPOS` |
+| トラック | tracknumber | `trkn` | `TRACKNUMBER`（`3/12` のように番号/総数をまとめて1フィールドに格納） | `TRCK` |
+| ディスク | discnumber | `disk` | `DISCNUMBER`（同上） | `TPOS` |
 
 （[docs/TAGGING_POLICY.md](TAGGING_POLICY.md) 4.1・実ファイルとAIMPで検証済み）
 

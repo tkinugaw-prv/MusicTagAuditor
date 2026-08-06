@@ -79,7 +79,7 @@ WPF / MVVM によるデスクトップアプリケーション本体。
 
 | フォルダ・ファイル | 役割 |
 |---|---|
-| `ViewModels/` | 画面ごとの ViewModel(`MainViewModel` / `DictionaryViewModel` / `AddToDictionaryViewModel` / `FolderNodeViewModel` / `TrackRowViewModel` / `RuleResultViewModel` / `TagChangeViewModel` / `BackupEntryViewModel` / `DictionaryRowViewModels`)。**グリッドに束ねる行は Core のモデルを直接使わずここでラップする**(理由は README「グリッドに束ねるのは ViewModel にする」) |
+| `ViewModels/` | 画面ごとの ViewModel(`MainViewModel` / `DictionaryViewModel` / `AddToDictionaryViewModel` / `FolderNodeViewModel` / `TrackRowViewModel` / `RuleResultViewModel` / `TagChangeViewModel` / `BackupEntryViewModel` / `DictionaryRowViewModels`)。**グリッドに束ねる行は Core のモデルを直接使わずここでラップする**(理由は README「グリッドに束ねるのは ViewModel にする」)。`TrackViewRefresher` はファイル一覧グリッドの編集中に絞り込みを掛け直すための補助クラスで、同フォルダに置いている |
 | `Converters/` | XAML バインディング用のコンバータ群(Enum⇔bool/Visibility、件数⇔Visibility、タグフィールド名のラベル変換など) |
 | `Controls/Placeholder.cs` | `TextBox` にプレースホルダ文字列を持たせる添付プロパティ |
 | `Controls/SuggestBox.cs` | 辞書の候補を絞り込みながら出す入力欄(`TextBox` 派生)。挙動だけを持ち、見た目と候補一覧のポップアップは `Themes/DarkTheme.xaml` のテンプレート(`PART_Popup` / `PART_Suggestions`)が担う。照合ロジックも持たず `Core` の `DictionarySuggester` に委ねる。**暗黙スタイルは派生型に当たらないため、テーマ側に `ctl:SuggestBox` のスタイルが必須**(詳細は README「派生コントロールにはスタイルを明示する」) |
@@ -102,6 +102,7 @@ WPF / MVVM によるデスクトップアプリケーション本体。
 |---|---|---|
 | `tests/MusicTagAuditor.Core.Tests` | `MusicTagAuditor.Core` | 検査ルール・辞書・バックアップ・適用処理などドメインロジックの単体テスト |
 | `tests/MusicTagAuditor.TagIo.Tests` | `MusicTagAuditor.TagIo` | タグ読み書きの往復テストに加え、`Integration/` 配下に実ライブラリを対象にした結合テストを持つ。対象パスは環境変数 `MUSICTAGGER_LIBRARY_ROOT` で指定し、フォルダが存在しない場合は該当テストをスキップする |
+| `tests/MusicTagAuditor.App.Tests` | `MusicTagAuditor.App` | `ViewModels/` の単体テスト(検査結果の選択状態、ルール別集計、手編集の差分、`TrackViewRefresher` の絞り込み掛け直しなど) |
 
 ---
 
