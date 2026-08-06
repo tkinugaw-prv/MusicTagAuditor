@@ -125,6 +125,7 @@ dotnet test
 | `src/MusicTagAuditor.Core` | `net10.0` | ドメイン。正規化・辞書・検査ルール。UI とタグライブラリに依存しない |
 | `src/MusicTagAuditor.TagIo` | `net10.0` | タグ読み書きの抽象（`ITagReader` / `ITagWriter`）と実装 |
 | `src/MusicTagAuditor.App` | `net10.0-windows` | WPF アプリケーション（MVVM） |
+| `tests/MusicTagAuditor.App.Tests` | `net10.0-windows` | App 層のテスト。WPF のコレクションビューを実際に動かすため `UseWPF` が要る |
 | `tests/MusicTagAuditor.Core.Tests` | `net10.0` | ドメインのテスト |
 | `tests/MusicTagAuditor.TagIo.Tests` | `net10.0` | タグ読み書きの往復テスト |
 | `tools/TagIoProbe` | `net10.0` | タグライブラリ選定の検証スパイク（選定後は破棄可） |
@@ -215,6 +216,8 @@ Excel が日本語を Shift-JIS と誤認しないよう、BOM 付き UTF-8 で�
 検査結果タブの差分明細を**ダブルクリック**すると、ファイル一覧タブの当該行へ飛べる。修正案を出せなかった行はここから手で直す。ツリーは対象ファイルのフォルダを選び直し、絞り込みは**対象行を隠しているものだけ**を解除してステータスバーに出す（`docs/SPEC.md` 5.3）。
 
 適用は検査結果とまったく同じ経路を通る。書き込み経路を 2 本持つと、自動バックアップや読み戻し照合を片方で入れ忘れるため。
+
+一覧の外（ボタン・絞り込み欄・ツリー・別のタブ）へ移ると、編集中のセルはその場で確定して保留中の編集に入る。**WPF の `DataGrid` は入力が離れても行の編集を開いたままにする**ため、閉じずに先へ進むと絞り込みの掛け直しも一覧の作り直しもできなくなる。確定してもファイルには書き込まれないので、失うものは無い。
 
 ### フォルダ単位の一括入力
 
