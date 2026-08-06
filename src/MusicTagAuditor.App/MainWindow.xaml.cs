@@ -3,7 +3,6 @@ using System.Windows.Controls;
 using System.Windows.Threading;
 using MusicTagAuditor.App.Interop;
 using MusicTagAuditor.App.ViewModels;
-using MusicTagAuditor.Core.Models;
 
 namespace MusicTagAuditor.App;
 
@@ -53,7 +52,7 @@ public partial class MainWindow : Window
     /// </summary>
     private void OnInspectionChangeRowDoubleClick(object sender, RoutedEventArgs e)
     {
-        if (sender is DataGridRow { Item: TagChange change } && DataContext is MainViewModel viewModel)
+        if (sender is DataGridRow { Item: TagChangeViewModel change } && DataContext is MainViewModel viewModel)
         {
             viewModel.RevealTrack(change.RelativePath);
         }
