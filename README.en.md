@@ -154,4 +154,14 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). `develop` is the default branch; pushing
 
 MIT License — see [LICENSE](LICENSE).
 
-The [TagLibSharp](https://github.com/mono/taglib-sharp) dependency is LGPL-2.1, but it is linked dynamically as a NuGet package and therefore does not affect this project's MIT license.
+Copyright notices and full license texts for every third-party component shipped in the binaries are collected in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), which is also attached to each Release.
+
+The [TagLibSharp](https://github.com/mono/taglib-sharp) dependency is LGPL-2.1-only. **The LGPL places no conditions on the license of the consuming work, so this project's own source stays MIT**; TagLibSharp is used unmodified, exactly as published on NuGet.
+
+Note, however, that the released executables bundle `TagLibSharp.dll` inside the binary via `PublishSingleFile`. To substitute a modified build of TagLibSharp, publish without single-file packaging — `TagLibSharp.dll` is then emitted as a standalone file and can be replaced without rebuilding this application.
+
+```powershell
+dotnet publish src/MusicTagAuditor.App -c Release -r win-x64 --self-contained false -p:PublishSingleFile=false
+```
+
+Serilog is Apache-2.0; CommunityToolkit.Mvvm and Microsoft.Extensions.DependencyInjection are MIT. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for details.
