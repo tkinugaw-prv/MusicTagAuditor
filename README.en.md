@@ -59,6 +59,36 @@ Logs are written daily to `%LOCALAPPDATA%\MusicTagAuditor\logs\`. The dictionary
 
 ---
 
+## Downloads
+
+Single-file Windows x64 executables are published on the [Releases](https://github.com/tkinugaw-prv/MusicTagAuditor/releases) page.
+
+| File | Kind | Requirements |
+|---|---|---|
+| `MusicTagAuditor-<tag>-win-x64.exe` | Self-contained (runtime bundled) | None (Windows x64) |
+| `MusicTagAuditor-<tag>-win-x64-fdd.exe` | Framework-dependent | .NET 10 Desktop Runtime |
+
+### Publishing locally
+
+```powershell
+dotnet publish src/MusicTagAuditor.App -p:PublishProfile=win-x64-self-contained
+```
+
+Output goes to `src/MusicTagAuditor.App/bin/publish/win-x64-self-contained/`. The profiles live in `src/MusicTagAuditor.App/Properties/PublishProfiles/`.
+
+Both profiles enable `IncludeAllContentForSelfExtract`. Without it, `Assembly.Location` returns an empty string for assemblies embedded in the single-file bundle, which means **backups can no longer bundle the `TagLibSharp.dll` that the standalone restore script needs** — restoring without the app would stop working.
+
+### Cutting a release
+
+Pushing a tag that starts with `v` triggers the [release workflow](.github/workflows/release.yml): it runs the tests, publishes both configurations, and creates a GitHub Release with the executables attached. The version is taken from the tag name (e.g. `v1.2.3` becomes `1.2.3`).
+
+```powershell
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+---
+
 ## Tests and coverage reports
 
 Test results and coverage reports are generated on every run by GitHub Actions ([CI workflow](.github/workflows/ci.yml)).

@@ -20,6 +20,8 @@
 [Aa][Rr][Mm]64/
 publish/
 artifacts/
+# release ワークフローが配布用 exe を並べる場所
+dist/
 
 ## Test results
 [Tt]est[Rr]esult*/

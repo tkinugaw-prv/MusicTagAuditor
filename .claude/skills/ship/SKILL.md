@@ -57,6 +57,22 @@ git push origin <現在のブランチ>
 - 完了したらテスト件数・カバレッジ・コミットハッシュ・プッシュ先を報告する。
 - プッシュ後に GitHub Actions の CI ワークフローが成功したことを確認する（`gh run watch` など）。
 
+## 5. リリース（求められた場合のみ）
+
+**バージョンを切る指示があったときだけ行う。** 通常の `/ship` は手順 4 で終わり。
+
+`develop` → `main` のマージ後、`main` で `v` 始まりのタグを push すると
+[release ワークフロー](../../../.github/workflows/release.yml) がテスト → 両構成の publish →
+GitHub Release 作成（exe 添付）まで自動で行う。
+
+```powershell
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+- バージョンはタグ名から決まる（`v1.2.3` → `1.2.3`）。`Directory.Build.props` の `<Version>` は基準値で、CI が上書きする
+- タグを push したら `gh run watch` で release ワークフローの完走を確認し、Release ページの exe 2 本を報告する
+
 ## Gotchas
 
 - **`reports/` は git 管理外**（.gitignore 済み）— TRX にはローカルのユーザー名・マシン名、Cobertura にはソースの絶対パスが入るため絶対にコミットしない。

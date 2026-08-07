@@ -65,6 +65,36 @@ dotnet run --project src/MusicTagAuditor.App/MusicTagAuditor.App.csproj -- "D:\M
 
 ---
 
+## 配布物
+
+[Releases](https://github.com/tkinugaw-prv/MusicTagAuditor/releases) から Windows x64 向けの単一 exe を配布している。
+
+| ファイル | 形態 | 実行要件 |
+|---|---|---|
+| `MusicTagAuditor-<tag>-win-x64.exe` | 自己完結型（ランタイム同梱） | なし（Windows x64） |
+| `MusicTagAuditor-<tag>-win-x64-fdd.exe` | フレームワーク依存型 | .NET 10 デスクトップランタイム |
+
+### ローカルでの publish
+
+```powershell
+dotnet publish src/MusicTagAuditor.App -p:PublishProfile=win-x64-self-contained
+```
+
+出力は `src/MusicTagAuditor.App/bin/publish/win-x64-self-contained/`。プロファイルは `src/MusicTagAuditor.App/Properties/PublishProfiles/` にある。
+
+どちらのプロファイルも `IncludeAllContentForSelfExtract` を有効にしている。これを外すと単一 exe に埋め込まれたアセンブリの `Assembly.Location` が空文字になり、**バックアップに復元スクリプト用の `TagLibSharp.dll` を同梱できなくなる**（アプリ無しでの復元が使えなくなる）。
+
+### リリース手順
+
+`v` で始まるタグを push すると、[release ワークフロー](.github/workflows/release.yml)がテスト → 両構成の publish → GitHub Release 作成（exe 添付）を自動実行する。バージョンはタグ名から設定される（例: `v1.2.3` → `1.2.3`）。
+
+```powershell
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+---
+
 ## テストとカバレッジレポート
 
 テスト結果とカバレッジレポートは GitHub Actions（[CI ワークフロー](.github/workflows/ci.yml)）が実行ごとに生成する。
