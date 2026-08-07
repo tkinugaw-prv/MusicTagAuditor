@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MusicTagAuditor.App/MusicTagAuditor.App.csproj" />
+    <Project Path="src/MusicTagAuditor.Core/MusicTagAuditor.Core.csproj" />
+    <Project Path="src/MusicTagAuditor.TagIo/MusicTagAuditor.TagIo.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MusicTagAuditor.App.Tests/MusicTagAuditor.App.Tests.csproj" />
+    <Project Path="tests/MusicTagAuditor.Core.Tests/MusicTagAuditor.Core.Tests.csproj" />
+    <Project Path="tests/MusicTagAuditor.TagIo.Tests/MusicTagAuditor.TagIo.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/TagIoProbe/TagIoProbe.csproj" />
+  </Folder>
+</Solution>

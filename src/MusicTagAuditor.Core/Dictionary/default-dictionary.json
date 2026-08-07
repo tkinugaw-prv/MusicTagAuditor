@@ -1,0 +1,280 @@
+{
+  "version": 3,
+
+  "_comment": [
+    "既定の正規化辞書。docs/TAGGING_POLICY.md 5章が唯一の基準。",
+    "canonical は正規形、aliases は正規化キーで照合する別表記・誤記。",
+    "照合は NFKC・小文字化・ひらがな→カタカナ・ダイアクリティカル除去・記号除去を経た",
+    "正規化キーで行うため、中黒やピリオドの有無、大文字小文字の違いは登録不要。",
+    "エントリは (a) 原則の表に載っているもの と (b) 実ライブラリに実在する値 に限る。",
+    "推測で名前を足さないこと。誤った canonical は誤った修正案を生む。"
+  ],
+
+  "composers": [
+    { "canonical": "Adolphe Adam", "aliases": ["Adam"], "aliasesJa": ["アダン"] },
+    { "canonical": "Alexander Glazunov", "aliases": ["Glazunov"], "aliasesJa": ["グラズノフ"] },
+    { "canonical": "Anatoly Lyadov", "aliases": ["Lyadov", "Liadov"], "aliasesJa": ["リャードフ"] },
+    { "canonical": "Anton Bruckner", "aliases": ["Bruckner", "Btuckner"], "aliasesJa": ["ブルックナー", "ブル"] },
+    { "canonical": "Anton Rubinstein", "aliases": ["Rubinstein"], "aliasesJa": ["ルビンシテイン"] },
+    { "canonical": "Antonín Dvořák", "aliases": ["Dvorak", "Antonin Dvorak", "Dvořák"], "aliasesJa": ["ドヴォルザーク", "ドボルザーク", "ドヴォルジャーク", "ドボ"] },
+    { "canonical": "Antonio Vivaldi", "aliases": ["Vivaldi"], "aliasesJa": ["ビバルディ", "ヴィヴァルディ", "ビヴァルディ"] },
+    { "canonical": "Bedřich Smetana", "aliases": ["Smetana", "Bedrich Smetana"], "aliasesJa": ["スメタナ"] },
+    { "canonical": "Carl Maria von Weber", "aliases": ["Weber"], "aliasesJa": ["ウェーバー", "ヴェーバー"] },
+    { "canonical": "Carl Nielsen", "aliases": ["Nielsen"], "aliasesJa": ["ニールセン"] },
+    { "canonical": "Dmitri Shostakovich", "aliases": ["Dmitry Shostakovich", "Domitri Shostakovich", "Shostakovich"], "aliasesJa": ["ショスタコーヴィチ", "ショスタコービチ", "ショスタコーヴィッチ", "ショス"] },
+    { "canonical": "Edvard Grieg", "aliases": ["Grieg"], "aliasesJa": ["グリーグ"] },
+    { "canonical": "Felix Mendelssohn", "aliases": ["Mendelssohn"], "aliasesJa": ["メンデルスゾーン"] },
+    { "canonical": "Franz Liszt", "aliases": ["Liszt", "Franz LISZT (1811-1886)"], "aliasesJa": ["リスト"] },
+    { "canonical": "Franz Schubert", "aliases": ["Schubert"], "aliasesJa": ["シューベルト", "シュベ"] },
+    { "canonical": "Georges Bizet", "aliases": ["Bizet", "Bizet, Georges"], "aliasesJa": ["ビゼー"] },
+    { "canonical": "Gioachino Rossini", "aliases": ["Rossini", "Gioacchino Rossini"], "aliasesJa": ["ロッシーニ"] },
+    { "canonical": "Gustav Mahler", "aliases": ["Mahler"], "aliasesJa": ["マーラー", "マラ"] },
+    { "canonical": "Hector Berlioz", "aliases": ["Berlioz"], "aliasesJa": ["ベルリオーズ"] },
+    { "canonical": "Jean Sibelius", "aliases": ["Sibelius", "Siberius"], "aliasesJa": ["シベリウス"] },
+    { "canonical": "Johann Sebastian Bach", "aliases": ["Bach", "J.S.Bach", "Johann Sebastian Bach(1685-1750)"], "aliasesJa": ["バッハ"] },
+    { "canonical": "Johannes Brahms", "aliases": ["Brahms", "Brahmus"], "aliasesJa": ["ブラームス"] },
+    { "canonical": "Ludwig van Beethoven", "aliases": ["Beethoven"], "aliasesJa": ["ベートーヴェン", "ベートーベン", "ベト"] },
+    { "canonical": "Mikhail Glinka", "aliases": ["Glinka"], "aliasesJa": ["グリンカ"] },
+    { "canonical": "Modest Mussorgsky", "aliases": ["Mussorgsky", "Moussorgsky"], "aliasesJa": ["ムソルグスキー"] },
+    { "canonical": "Nikolai Rimsky-Korsakov", "aliases": ["Rimsky-Korsakov"], "aliasesJa": ["リムスキー＝コルサコフ", "リムスキーコルサコフ"] },
+    { "canonical": "Otto Nicolai", "aliases": ["Nicolai"], "aliasesJa": ["ニコライ"] },
+    { "canonical": "Pierre Degeyter", "aliases": ["Degeyter"], "aliasesJa": ["ドジェイテル"] },
+    { "canonical": "Pyotr Ilyich Tchaikovsky", "aliases": ["Tchaikovsky", "Pyotr Il'yich Tchaikovsky", "Peter Ilyich Tchaikovsky"], "aliasesJa": ["チャイコフスキー", "チャイコ", "チャイ"] },
+    { "canonical": "Richard Strauss", "aliases": ["R. Strauss"], "aliasesJa": ["リヒャルト・シュトラウス"] },
+    { "canonical": "Richard Wagner", "aliases": ["Wagner"], "aliasesJa": ["ワーグナー", "ヴァーグナー"] },
+    { "canonical": "Robert Schumann", "aliases": ["Schumann"], "aliasesJa": ["シューマン"] },
+    { "canonical": "Sergei Prokofiev", "aliases": ["Prokofiev"], "aliasesJa": ["プロコフィエフ"] },
+    { "canonical": "Vasily Kalinnikov", "aliases": ["Kalinnikov", "Kalinnikov , Vasily Sergeevich (1866-1901)"], "aliasesJa": ["カリンニコフ"] },
+    { "canonical": "Wolfgang Amadeus Mozart", "aliases": ["Mozart", "Mozart, Wolfgang Amadeus"], "aliasesJa": ["モーツァルト", "モツァ", "モツ"] }
+  ],
+
+  "persons": [
+    { "canonical": "Alfred Scholz", "roles": ["Conductor"], "aliases": ["Scholz"], "aliasesJa": ["ショルツ"] },
+    { "canonical": "Anton Nanut", "roles": ["Conductor"], "aliases": ["Nanut"], "aliasesJa": ["ナヌート"] },
+    { "canonical": "Arturo Toscanini", "roles": ["Conductor"], "aliases": ["Toscanini"], "aliasesJa": ["トスカニーニ"] },
+    { "canonical": "Bernard Haitink", "roles": ["Conductor"], "aliases": ["Haitink"], "aliasesJa": ["ハイティンク"] },
+    { "canonical": "Bruno Walter", "roles": ["Conductor"], "aliases": ["Walter"], "aliasesJa": ["ワルター"] },
+    { "canonical": "Carlos Kleiber", "roles": ["Conductor"], "aliases": ["Kleiber"], "aliasesJa": ["カルロス・クライバー", "クライバー"] },
+    { "canonical": "Claudio Abbado", "roles": ["Conductor"], "aliases": ["Abbado"], "aliasesJa": ["アバド"] },
+    { "canonical": "David Zinman", "roles": ["Conductor"], "aliases": ["Zinman"], "aliasesJa": ["ジンマン"] },
+    { "canonical": "Eliahu Inbal", "roles": ["Conductor"], "aliases": ["Inbal"], "aliasesJa": ["インバル"] },
+    { "canonical": "Eugen Jochum", "roles": ["Conductor"], "aliases": ["Jochum"], "aliasesJa": ["ヨッフム"] },
+    { "canonical": "Georg Solti", "roles": ["Conductor"], "aliases": ["Solti", "George Solti", "Solt"], "aliasesJa": ["ショルティ"] },
+    { "canonical": "Günter Wand", "roles": ["Conductor"], "aliases": ["Gunter Wand", "Wand"], "aliasesJa": ["ヴァント", "ワント"] },
+    { "canonical": "Hans Knappertsbusch", "roles": ["Conductor"], "aliases": ["Knappertsbusch", "Knappertsbush"], "aliasesJa": ["クナッパーツブッシュ", "クナ"] },
+    { "canonical": "Heinz Bongartz", "roles": ["Conductor"], "aliases": ["Bongartz"], "aliasesJa": ["ボンガルツ"] },
+    { "canonical": "Herbert Blomstedt", "roles": ["Conductor"], "aliases": ["Blomstedt"], "aliasesJa": ["ブロムシュテット"] },
+    { "canonical": "Herbert von Karajan", "roles": ["Conductor"], "aliases": ["Karajan", "Herbelt Von Karajan"], "aliasesJa": ["カラヤン"] },
+    { "canonical": "Karl Böhm", "roles": ["Conductor"], "aliases": ["Karl Boehm", "Bohm", "Boehm", "Böhm"], "aliasesJa": ["ベーム"] },
+    { "canonical": "Karl Münchinger", "roles": ["Conductor"], "aliases": ["Munchinger", "Münchinger"], "aliasesJa": ["ミュンヒンガー"] },
+    { "canonical": "Kurt Masur", "roles": ["Conductor"], "aliases": ["Masur"], "aliasesJa": ["マズア"] },
+    { "canonical": "Leonard Bernstein", "roles": ["Conductor"], "aliases": ["Bernstein", "Leonard Bernsterin", "Bernsterin"], "aliasesJa": ["バーンスタイン"] },
+    { "canonical": "Libor Pešek", "roles": ["Conductor"], "aliases": ["Libor Pesek", "Pešek"], "aliasesJa": ["ペシェク"] },
+    { "canonical": "Lorin Maazel", "roles": ["Conductor"], "aliases": ["Maazel"], "aliasesJa": ["マゼール"] },
+    { "canonical": "Marek Janowski", "roles": ["Conductor"], "aliases": ["Janowski"], "aliasesJa": ["ヤノフスキ", "ヤノフスキー"] },
+    { "canonical": "Mstislav Rostropovich", "roles": ["Conductor", "Soloist"], "aliases": ["Rostropovich"], "aliasesJa": ["ロストロポーヴィチ", "ロストロポービチ"] },
+    { "canonical": "Neville Marriner", "roles": ["Conductor"], "aliases": ["Marriner"], "aliasesJa": ["マリナー"] },
+    { "canonical": "Otmar Suitner", "roles": ["Conductor"], "aliases": ["Suitner"], "aliasesJa": ["スウィトナー", "スイトナー"] },
+    { "canonical": "Rafael Kubelík", "roles": ["Conductor"], "aliases": ["Rafael Kubelik", "Kubelik", "Kubelík"], "aliasesJa": ["クーベリック"] },
+    { "canonical": "Rudolf Kempe", "roles": ["Conductor"], "aliases": ["Kempe"], "aliasesJa": ["ケンペ"] },
+    { "canonical": "Seiji Ozawa", "roles": ["Conductor"], "aliases": ["Ozawa"], "aliasesJa": ["小澤征爾", "小沢征爾", "小澤"] },
+    { "canonical": "Sergiu Celibidache", "roles": ["Conductor"], "aliases": ["Celibidache"], "aliasesJa": ["チェリビダッケ"] },
+    { "canonical": "Simone Young", "roles": ["Conductor"], "aliases": ["Young"], "aliasesJa": ["ヤング"] },
+    { "canonical": "Stanisław Skrowaczewski", "roles": ["Conductor"], "aliases": ["Stanislaw Skrowaczewski", "Skrowaczewski"], "aliasesJa": ["スクロヴァチェフスキ", "スクロヴァチェフスキー"] },
+    { "canonical": "Takashi Asahina", "roles": ["Conductor"], "aliases": ["Asahina"], "aliasesJa": ["朝比奈隆", "朝比奈"] },
+    { "canonical": "Valery Gergiev", "roles": ["Conductor"], "aliases": ["Gergiev"], "aliasesJa": ["ゲルギエフ"] },
+    { "canonical": "Václav Smetáček", "roles": ["Conductor"], "aliases": ["Vaclav Smetacek", "Smetacek", "Smetáček"], "aliasesJa": ["スメターチェク"] },
+    { "canonical": "Vladimir Fedoseyev", "roles": ["Conductor"], "aliases": ["Vladimir Fedseev", "Fedseev", "Fedoseev", "Fedoseyev"], "aliasesJa": ["フェドセーエフ"] },
+    { "canonical": "Wilhelm Furtwängler", "roles": ["Conductor"], "aliases": ["Furtwangler", "Furtwaengler", "Furtwängler"], "aliasesJa": ["フルトヴェングラー", "フルトベングラー"] },
+    { "canonical": "Wolfgang Sawallisch", "roles": ["Conductor"], "aliases": ["Sawallisch"], "aliasesJa": ["サヴァリッシュ", "サバリッシュ"] },
+    { "canonical": "Yevgeny Mravinsky", "roles": ["Conductor"], "aliases": ["Evgeni Muravinsky", "Mravinsky", "Muravinsky", "Evgeny Mravinsky"], "aliasesJa": ["ムラヴィンスキー", "ムラビンスキー"] },
+    { "canonical": "Yuri Temirkanov", "roles": ["Conductor"], "aliases": ["Temirkanov"], "aliasesJa": ["テミルカーノフ"] },
+    { "canonical": "Zubin Mehta", "roles": ["Conductor"], "aliases": ["Mehta"], "aliasesJa": ["メータ"] },
+
+    { "canonical": "Alicia de Larrocha", "roles": ["Soloist"], "aliases": ["Larrocha"], "aliasesJa": ["ラローチャ"] },
+    { "canonical": "András Schiff", "roles": ["Soloist"], "aliases": ["Andras Schiff", "Schiff"], "aliasesJa": ["シフ"] },
+    { "canonical": "Dubravka Tomšič", "roles": ["Soloist"], "aliases": ["Dubravka Tomsic", "Tomšič"], "aliasesJa": ["トムシッチ"] },
+    { "canonical": "Kyung-Wha Chung", "roles": ["Soloist"], "aliases": ["Kyung Wha Chung"], "aliasesJa": ["チョン・キョンファ"] },
+    { "canonical": "Peter Hurford", "roles": ["Soloist"], "aliases": ["Hurford"], "aliasesJa": ["ハーフォード"] },
+    { "canonical": "Rudolf Serkin", "roles": ["Soloist"], "aliases": ["Serkin"], "aliasesJa": ["ゼルキン"] },
+    { "canonical": "Vladimir Ashkenazy", "roles": ["Conductor", "Soloist"], "aliases": ["Ashkenazy"], "aliasesJa": ["アシュケナージ"] },
+    { "canonical": "William Bennett", "roles": ["Soloist"], "aliases": [], "aliasesJa": [] }
+  ],
+
+  "_ensemblesComment": [
+    "eras を持つ団体は録音年で正規形が変わる（5.3.1）。これは表記揺れではないので片寄せしない。",
+    "同一性は entityId で判断する。名前が似ていても別実体、名前が違っても同一実体がある。",
+    "date が空欄で eras を持つ団体は HOLD_ERA_UNKNOWN として保留する（7.5）。",
+    "noConductor は指揮者を置かない団体（合奏団・弦楽四重奏団）。conductor が空なのが正しい（2.2）。"
+  ],
+
+  "ensembles": [
+    {
+      "entityId": "ru-spb-phil",
+      "eras": [
+        { "until": 1991, "canonical": "Leningrad Philharmonic Orchestra" },
+        { "from": 1991, "canonical": "Saint Petersburg Philharmonic Orchestra" }
+      ],
+      "aliases": [
+        "Leningrad Philharmonic",
+        "Leningrad Philharmonic Symphony Orchestra",
+        "St. Petersburg Philharmonic Orchestra",
+        "Saint Petersburg Philharmonic",
+        "St Petersburg Philharmonic Orchestra"
+      ],
+      "aliasesJa": ["レニングラード・フィルハーモニー管弦楽団", "サンクトペテルブルク・フィルハーモニー管弦楽団"]
+    },
+    {
+      "entityId": "ru-spb-radio",
+      "eras": [
+        { "until": 1991, "canonical": "Leningrad Radio Orchestra" },
+        { "from": 1991, "canonical": "Saint Petersburg Academic Symphony Orchestra" }
+      ],
+      "aliases": ["Leningrad Radio Symphony Orchestra"],
+      "aliasesJa": ["レニングラード放送交響楽団"]
+    },
+    {
+      "entityId": "ru-mariinsky",
+      "eras": [
+        { "until": 1992, "canonical": "Kirov Orchestra" },
+        { "from": 1992, "canonical": "Mariinsky Theatre Orchestra" }
+      ],
+      "aliases": [
+        "Kirov Orchestra, Mariinsky Theatre",
+        "KIorov Orchestra, Marinsky theatre",
+        "Mariinsky Orchestra"
+      ],
+      "aliasesJa": ["キーロフ歌劇場管弦楽団", "マリインスキー劇場管弦楽団"]
+    },
+    {
+      "entityId": "ru-tchaikovsky-so",
+      "eras": [
+        { "until": 1993, "canonical": "Moscow Radio Symphony Orchestra" },
+        { "from": 1993, "canonical": "Tchaikovsky Symphony Orchestra" }
+      ],
+      "aliases": ["Moscow Radio Symphony", "Tchaikovsky Symphony Orchestra of Moscow Radio"],
+      "aliasesJa": ["モスクワ放送交響楽団", "チャイコフスキー交響楽団"]
+    },
+    {
+      "entityId": "uk-philharmonia",
+      "eras": [
+        { "until": 1964, "canonical": "Philharmonia Orchestra" },
+        { "from": 1964, "until": 1977, "canonical": "New Philharmonia Orchestra" },
+        { "from": 1977, "canonical": "Philharmonia Orchestra" }
+      ],
+      "aliases": [],
+      "aliasesJa": ["フィルハーモニア管弦楽団"]
+    },
+    {
+      "entityId": "ru-ussr-state",
+      "canonical": "USSR State Symphony Orchestra",
+      "noEraSplit": true,
+      "aliases": ["Ussr State So.", "Mravinsky / Ussr State So.", "USSR State Academic Symphony Orchestra"],
+      "aliasesJa": ["ソビエト国立交響楽団"]
+    },
+    {
+      "entityId": "nl-concertgebouw",
+      "canonical": "Concertgebouworkest",
+      "noEraSplit": true,
+      "aliases": ["Royal Concertgebouw Orchestra", "Concertgebouw Orchestra", "Koninklijk Concertgebouworkest"],
+      "aliasesJa": ["ロイヤル・コンセルトヘボウ", "コンセルトヘボウ管弦楽団", "コンセルトヘボウ"]
+    },
+
+    { "entityId": "at-wiener-phil", "canonical": "Wiener Philharmoniker", "aliases": ["Vienna Philharmonic", "Vienna Philharmonic Orchestra"], "aliasesJa": ["ウィーン・フィルハーモニー管弦楽団", "ウィーン・フィル"] },
+    { "entityId": "at-wiener-sym", "canonical": "Wiener Symphoniker", "aliases": ["Vienna Symphony Orchestra"], "aliasesJa": ["ウィーン交響楽団"] },
+    { "entityId": "de-berliner-phil", "canonical": "Berliner Philharmoniker", "aliases": ["Berlin Philharmonic", "Berlin Philharmonic Orchestra", "Berliner Philharmonisches Orchester", "Berlin PhilHarmonic Orchestra / Herbelt Von Karajan"], "aliasesJa": ["ベルリン・フィルハーモニー管弦楽団", "ベルリン・フィル"] },
+    { "entityId": "de-berliner-sym", "canonical": "Berliner Symphoniker", "aliases": ["Berlin Symphony Orchestra"], "aliasesJa": ["ベルリン交響楽団"] },
+    { "entityId": "de-muenchner-phil", "canonical": "Münchner Philharmoniker", "aliases": ["Münchener Philharmoniker", "Munchner Philharmoniker", "Munich Philharmonic"], "aliasesJa": ["ミュンヘン・フィルハーモニー管弦楽団", "ミュンヘン・フィル"] },
+    { "entityId": "de-br-so", "canonical": "Symphonieorchester des Bayerischen Rundfunks", "aliases": ["Sinfornieorchester Of The Bavarian Radio", "Bavarian Radio Symphony Orchestra"], "aliasesJa": ["バイエルン放送交響楽団"] },
+    { "entityId": "de-bayerisches-staatsorchester", "canonical": "Bayerisches Staatsorchester", "aliases": [], "aliasesJa": ["バイエルン国立管弦楽団"] },
+    { "entityId": "de-saarbruecken-radio", "canonical": "Saarbrücken Radio Symphony Orchestra", "aliases": ["Saarbrucken Radio Symphony Orchestra"], "aliasesJa": ["ザールブリュッケン放送交響楽団"] },
+    { "entityId": "de-staatskapelle-dresden", "canonical": "Staatskapelle Dresden", "aliases": ["Dresden Staatskapelle"], "aliasesJa": ["ドレスデン国立歌劇場管弦楽団", "シュターツカペレ・ドレスデン"] },
+    { "entityId": "de-staatskapelle-berlin", "canonical": "Staatskapelle Berlin", "aliases": [], "aliasesJa": ["ベルリン国立歌劇場管弦楽団"] },
+    { "entityId": "de-gewandhaus", "canonical": "Gewandhausorchester Leipzig", "aliases": ["Leipzig Gewandhaus Orchestra"], "aliasesJa": ["ライプツィヒ・ゲヴァントハウス管弦楽団"] },
+    { "entityId": "de-ndr-sinfonie", "canonical": "NDR Sinfonieorchester", "aliases": ["NDR Symphony Orchestra"], "aliasesJa": ["北ドイツ放送交響楽団"] },
+    { "entityId": "de-stuttgart-radio", "canonical": "Stuttgart Radio Symphony Orchestra", "aliases": ["Radio-Sinfonieorchester Stuttgart"], "aliasesJa": ["シュトゥットガルト放送交響楽団"] },
+    { "entityId": "de-stuttgarter-kammerorchester", "canonical": "Stuttgarter Kammerorchester", "aliases": ["Stuttgart Chamber Orchestra"], "aliasesJa": ["シュトゥットガルト室内管弦楽団"] },
+    { "entityId": "de-philharmoniker-hamburg", "canonical": "Philharmoniker Hamburg", "aliases": ["Hamburg Philharmonic"], "aliasesJa": ["ハンブルク・フィルハーモニー管弦楽団"] },
+    { "entityId": "cz-czech-phil", "canonical": "Czech Philharmonic Orchestra", "aliases": ["Czech Philharmonic"], "aliasesJa": ["チェコ・フィルハーモニー管弦楽団"] },
+    { "entityId": "uk-lso", "canonical": "London Symphony Orchestra", "aliases": [], "aliasesJa": ["ロンドン交響楽団"] },
+    { "entityId": "uk-london-festival", "canonical": "London Festival Orchestra", "aliases": [], "aliasesJa": ["ロンドン祝祭管弦楽団"] },
+    { "entityId": "uk-london-sinfonietta", "canonical": "London Sinfonietta", "aliases": [], "aliasesJa": ["ロンドン・シンフォニエッタ"] },
+    { "entityId": "uk-rpo", "canonical": "Royal Philharmonic Orchestra", "aliases": [], "aliasesJa": ["ロイヤル・フィルハーモニー管弦楽団"] },
+    { "entityId": "uk-asmf", "canonical": "Academy of St Martin in the Fields", "aliases": ["Academy of St. Martin in the Fields"], "aliasesJa": ["アカデミー室内管弦楽団"] },
+    { "entityId": "us-chicago-so", "canonical": "Chicago Symphony Orchestra", "aliases": [], "aliasesJa": ["シカゴ交響楽団"] },
+    { "entityId": "us-nyphil", "canonical": "New York Philharmonic", "aliases": ["New York Philharmonic Orchestra"], "aliasesJa": ["ニューヨーク・フィルハーモニック", "ニューヨーク・フィル"] },
+    { "entityId": "us-columbia-so", "canonical": "Columbia Symphony Orchestra", "aliases": [], "aliasesJa": ["コロンビア交響楽団"] },
+    { "entityId": "us-national-so", "canonical": "National Symphony Orchestra", "aliases": [], "aliasesJa": ["ナショナル交響楽団"] },
+    { "entityId": "us-sfsymphony", "canonical": "San Francisco Symphony", "aliases": [], "aliasesJa": ["サンフランシスコ交響楽団"] },
+    { "entityId": "il-ipo", "canonical": "Israel Philharmonic Orchestra", "aliases": [], "aliasesJa": ["イスラエル・フィルハーモニー管弦楽団"] },
+    { "entityId": "jp-new-japan-phil", "canonical": "New Japan Philharmonic", "aliases": [], "aliasesJa": ["新日本フィルハーモニー交響楽団", "新日本フィル"] },
+    { "entityId": "jp-osaka-phil", "canonical": "Osaka Philharmonic Orchestra", "aliases": [], "aliasesJa": ["大阪フィルハーモニー交響楽団", "大阪フィル"] },
+    { "entityId": "it-i-musici", "canonical": "I Musici", "noConductor": true, "aliases": [], "aliasesJa": ["イ・ムジチ合奏団", "イ・ムジチ"] },
+    { "entityId": "cz-smetana-quartet", "canonical": "Smetana Quartet", "noConductor": true, "aliases": ["Smetana String Quartet"], "aliasesJa": ["スメタナ四重奏団"] },
+    { "entityId": "de-muenchener-bach-chor", "canonical": "Münchener Bach-Chor", "aliases": [], "aliasesJa": ["ミュンヘン・バッハ合唱団"] },
+    { "entityId": "de-muenchener-bach-orchester", "canonical": "Münchener Bach-Orchester", "aliases": [], "aliasesJa": ["ミュンヘン・バッハ管弦楽団"] }
+  ],
+
+  "_typosComment": [
+    "docs/TAGGING_POLICY.md 5.4 の実測一覧。照合は正規表現で行う。",
+    "完全一致だと「Finale- Allgro molto」と「Finale: Allgro molto」を取りこぼす。",
+    "団体名には適用しない。Münchener Bach-Chor の -ener は正しい表記である。"
+  ],
+
+  "typos": [
+    { "pattern": "\\bAllgro\\b", "replacement": "Allegro", "note": "楽語" },
+    { "pattern": "\\baLLegro\\b", "replacement": "Allegro", "note": "楽語" },
+    { "pattern": "\\bAllgretto\\b", "replacement": "Allegretto", "note": "楽語" },
+    { "pattern": "\\bAlleretto\\b", "replacement": "Allegretto", "note": "楽語" },
+    { "pattern": "\\bAdadio\\b", "replacement": "Adagio", "note": "楽語" },
+    { "pattern": "\\bAndate\\b", "replacement": "Andante", "note": "楽語" },
+    { "pattern": "\\bAndatente\\b", "replacement": "Andante", "note": "楽語" },
+    { "pattern": "\\bandatino\\b", "replacement": "andantino", "note": "楽語" },
+    { "pattern": "\\bcatabile\\b", "replacement": "cantabile", "note": "楽語" },
+    { "pattern": "\\benergio\\b", "replacement": "energico", "note": "楽語" },
+    { "pattern": "\\bMajestoso\\b", "replacement": "Maestoso", "note": "楽語" },
+    { "pattern": "\\bIamentoso\\b", "replacement": "lamentoso", "note": "先頭が大文字のI" },
+    { "pattern": "\\bPrelue\\b", "replacement": "Prelude", "note": "楽語" },
+    { "pattern": "\\bSchezo\\b", "replacement": "Scherzo", "note": "楽語" },
+    { "pattern": "\\blehaft\\b", "replacement": "lebhaft", "note": "ドイツ語" },
+    { "pattern": "\\bschenll\\b", "replacement": "schnell", "note": "ドイツ語" },
+    { "pattern": "\\bschell\\b", "replacement": "schnell", "note": "ドイツ語" },
+    { "pattern": "\\bZiemich\\b", "replacement": "Ziemlich", "note": "ドイツ語" },
+    { "pattern": "\\bGemassight\\b", "replacement": "Gemäßigt", "note": "ドイツ語" },
+    { "pattern": "\\bVospiel\\b", "replacement": "Vorspiel", "note": "ドイツ語" },
+    { "pattern": "\\bAufzung\\b", "replacement": "Aufzug", "note": "ドイツ語" },
+    { "pattern": "\\bLiedestod\\b", "replacement": "Liebestod", "note": "ドイツ語" },
+    { "pattern": "\\bSympohony\\b", "replacement": "Symphony", "note": "英語" },
+    { "pattern": "\\bSymphone\\b", "replacement": "Symphony", "note": "英語" },
+    { "pattern": "\\bConcerito\\b", "replacement": "Concerto", "note": "英語" },
+    { "pattern": "\\bQualtet\\b", "replacement": "Quartet", "note": "英語" },
+    { "pattern": "\\bDnces\\b", "replacement": "Dances", "note": "英語" },
+    { "pattern": "\\bApotheosys\\b", "replacement": "Apotheosis", "note": "英語" },
+    { "pattern": "\\bSity\\b", "replacement": "City", "note": "英語" },
+    { "pattern": "\\bTybalut\\b", "replacement": "Tybalt", "note": "人名" },
+    { "pattern": "\\bSiegfired\\b", "replacement": "Siegfried", "note": "人名" },
+    { "pattern": "\\bmurmus\\b", "replacement": "murmurs", "note": "英語" },
+    { "pattern": "\\bPromnade\\b", "replacement": "Promenade", "note": "英語" },
+    { "pattern": "\\bReconare\\b", "replacement": "Recordare", "note": "ラテン語" },
+    { "pattern": "\\bRiecare\\b", "replacement": "Ricercar", "note": "楽語" },
+    { "pattern": "\\bParesto\\b", "replacement": "Presto", "note": "楽語" },
+    { "pattern": "\\bWalz\\b", "replacement": "Valse", "note": "楽語" },
+    { "pattern": "\\bBtuckner\\b", "replacement": "Bruckner", "note": "人名" },
+    { "pattern": "\\bBrahmus\\b", "replacement": "Brahms", "note": "人名" },
+    { "pattern": "\\bKnappertsbush\\b", "replacement": "Knappertsbusch", "note": "人名" }
+  ],
+
+  "_protectedAlbumArtistsComment": [
+    "配役情報を含むため書き換えない値（docs/TAGGING_POLICY.md 2.3）。",
+    "実値は 2026-08-03 に全 1,041 ファイルから抽出したもの。",
+    "これらは検査そのものから除外する。除外しないと R-207 / R-208 が誤検出だらけになる。"
+  ],
+
+  "protectedAlbumArtists": [
+    "カラヤン/ベルリン・フィル,ベルリン・ドイツ・オペラCho,ホセ・ヴァン・ダム,ヴィクター・フォン・ハーレム,クルト・モル,ペーター・ホフマン etc",
+    "Peter Pears(T); Hermann Prey(BR); Elly Ameling(S); Marga Höffgen(ALT); Fritz Wunderlich(T); Tom Krause(BS); Heinz Blankenburg(BS); August Messthaler(BS); Stuttgarter Hymnus-Chorknaben/Gerhard Wilhelm; Karl Münchinger; Stuttgarter Kammerorchester",
+    "ドレスデン国立歌劇場管弦楽団, カルロス・クライバー, ライプツィヒ放送合唱団 & Horst Neumann",
+    "William Bennett, Neville Marriner; Academy of St. Martin in the Fields",
+    "Kommerchor Stuttgart(Chorus); Karl Münchinger; Stuttgarter Kammerorchester"
+  ]
+}

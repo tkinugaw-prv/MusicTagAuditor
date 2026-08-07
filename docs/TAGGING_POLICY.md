@@ -1,15 +1,15 @@
 # クラシック音楽ライブラリ タグ付け原則
 
-対象ライブラリ: `D:\Music Library for AIMP\Classic`（1,041ファイル / m4a 516・FLAC 510・AIFF 11・MP3 4）
+対象ライブラリ: 策定者のローカルライブラリ（1,041ファイル / m4a 516・FLAC 510・AIFF 11・MP3 4）
 再生環境: AIMP (Windows)
 策定日: 2026-08-02
-最終改訂: 2026-08-02（3.1 言語規則の再定義、5.3 の細分化、7.5 保留カテゴリの追加）
+最終改訂: 2026-08-03（2.3 に配役情報の実値を追記、6.8 曲名中のセミコロンを追加）
 
 ---
 
 ## 1. この文書の位置づけ
 
-タグ整理の実作業を通じて確定した規則をまとめたもの。以降のタグ付け、および `musicTagger` アプリの実装は本書を唯一の基準とする。
+タグ整理の実作業を通じて確定した規則をまとめたもの。以降のタグ付け、および `Music Tag Auditor` アプリの実装は本書を唯一の基準とする。
 
 「検証済み」と明記した項目は、実ファイルと AIMP で実際に確認した結果である。それ以外は方針の宣言であり、事実の記述ではない。
 
@@ -45,11 +45,26 @@
 
 **例外 — 配役情報の保護**: 歌手・合唱団の配役が記録されている値は、楽団名に縮めると情報が失われるため書き換えない。該当は以下の5種類。
 
-- パルジファル（カラヤン）
-- マタイ受難曲（ミュンヒンガー）
-- 魔弾の射手（C. クライバー）
-- バッハ 管弦楽組曲第2番（W. ベネット参加）
-- カンタータ第140番（シュトゥットガルト室内合唱団）
+実値は 2026-08-03 に Music Tag Auditor のスキャナで全 1,041 ファイルから抽出したもの（検証済み）。**この表が `dictionary.json` の `protectedAlbumArtists` の生成元となる。**
+
+| 作品 | 件数 | `albumartist` の実値 |
+|---|---|---|
+| パルジファル（カラヤン） | 29 | `カラヤン/ベルリン・フィル,ベルリン・ドイツ・オペラCho,ホセ・ヴァン・ダム,ヴィクター・フォン・ハーレム,クルト・モル,ペーター・ホフマン etc` |
+| マタイ受難曲（ミュンヒンガー） | 1 | `Peter Pears(T); Hermann Prey(BR); Elly Ameling(S); Marga Höffgen(ALT); Fritz Wunderlich(T); Tom Krause(BS); Heinz Blankenburg(BS); August Messthaler(BS); Stuttgarter Hymnus-Chorknaben/Gerhard Wilhelm; Karl Münchinger; Stuttgarter Kammerorchester` |
+| 魔弾の射手（C. クライバー） | 1 | `ドレスデン国立歌劇場管弦楽団, カルロス・クライバー, ライプツィヒ放送合唱団 & Horst Neumann` |
+| バッハ 管弦楽組曲第2番（W. ベネット参加） | 1 | `William Bennett, Neville Marriner; Academy of St. Martin in the Fields` |
+| カンタータ第140番（シュトゥットガルト室内合唱団） | 1 | `Kommerchor Stuttgart(Chorus); Karl Münchinger; Stuttgarter Kammerorchester` |
+
+該当は計 33 ファイル。パルジファル以外はいずれも単発のファイルで、`バッハ` フォルダ直下（アルバム `This Is Bach`）と `魔弾の射手` フォルダにある。
+
+パルジファルと魔弾の射手の値は日本語表記であり 3.1 の言語規則に反するが、**保護が優先する**。ラテン文字化するなら配役の情報量を落とさずに行う必要があり、それは別フィールドを用意してからの作業になる。
+
+**保護対象と紛らわしいが、保護してはならないもの**: `albumartist` に複数の実体が並ぶ値は他にも 2 種ある。いずれも配役情報ではないので、区切り文字の有無だけで保護対象を判定しないこと。
+
+| 値 | 件数 | 実体 | 扱い |
+|---|---|---|---|
+| `Mozart, Wolfgang Amadeus` | 7 | 作曲家名が `albumartist` に入っている | 修正対象（R-204） |
+| `Kirov Orchestra, Mariinsky Theatre` | 6 | 楽団名の表記揺れ | 修正対象（5.3.1 `ru-mariinsky`） |
 
 将来これらを整理する場合は、配役を格納する別フィールドを用意してから行う。
 
@@ -61,7 +76,7 @@
 | `album` | 「作曲家: 作品名 - 演奏者/年」形式を目標とする（後述 6.1 の未完了事項） |
 | `title` | 楽章名。番号書式は後述 6.2 の未完了事項 |
 | `date` | 録音年を4桁で。`1993-01-22T08:00:00Z` のような ISO 形式は使わない |
-| `tracknumber` / `discnumber` | 単一ディスクでも `1/1` を設定する |
+| `discnumber` | 単一ディスクでも `1/1` を設定する（`tracknumber` は対象外。現状は未設定の検査ルールが無い） |
 
 `date` は 3.1 の団体名規則（規則3）の入力でもある。単なる付加情報ではない。
 
@@ -143,8 +158,8 @@
 | album | `©alb` | `ALBUM` | `TALB` |
 | genre | `©gen` | `GENRE` | `TCON` |
 | date | `©day` | `DATE` | `TDRC` |
-| track | `trkn` | `TRACKNUMBER` / `TOTALTRACKS` | `TRCK` |
-| disc | `disk` | `DISCNUMBER` / `TOTALDISCS` | `TPOS` |
+| track | `trkn` | `TRACKNUMBER`（`3/12` のように番号/総数をまとめて1フィールドに格納） | `TRCK` |
+| disc | `disk` | `DISCNUMBER`（同上） | `TPOS` |
 
 ### 4.2 conductor の注意点
 
@@ -363,6 +378,24 @@ Vasily Kalinnikov / Wolfgang Amadeus Mozart
 - 指揮者名の和洋混在（`Wand` と `ヴァント`、`Young`、`Bongartz`、`チェリー`）
 - タグ側で修正した typo がファイル名に残存（`Sympohony No.1-1.flac` など）
 - `スラブ` と `スラヴ`、`ドボルザーク` と `ドヴォルザーク`、`ベートーベン` と `ベートーヴェン`
+
+### 6.8 曲名中のセミコロン
+
+`title` に `;` を含むファイルが 7 件ある（2026-08-03 のスキャンで確認）。いずれも区切り記号ではなく、ドイツ語の楽章指示に含まれる正当な句読点である。
+
+| フォルダ | `title` |
+|---|---|
+| ブルックナー 4- Wand | `3. Scherzo: Bewegt; Trio: Nicht zu schnell. Keinesfalls schleppend` |
+| ブルックナー 7 - 朝比奈 | `2. Adagio:; Sehr feierilich und sehr langsam` |
+| ブルックナー 8 - Wand | `3. Adagio. Feierlich langsam; doch nicht schleppend` |
+| ブルックナー 8 - 朝比奈 | `3. Adagio. Feierlich lansam:; doch nicht schleppend` |
+| ブルックナー 9- ヨッフム | `2. Scherzo: Bewegt, Lebhaft - Trio:; Schnell` |
+| シュベ 9 | `Andante; Allegro ma non troppo` |
+| ワルキューレ/第二幕 | `Zweiter Aufzug: Dritte Szene: Raste Nun Hier ; Gönne Dir Ruh! (Siegmund)` |
+
+問題は 3.4 のとおり **AIMP が保存時に `;` を分割する**こと。これらのファイルを AIMP で編集・保存すると楽章名が壊れる。一方で `;` を除くと楽譜どおりの表記でなくなる。
+
+**方針は未決定。** 現時点では自動修正の対象にせず、一覧として提示するに留める。なお `:;` という並び（ブルックナー 7・8 の朝比奈盤）は明らかに入力ミスであり、こちらは 5.4 と同種の誤記として別途扱える。
 
 ---
 

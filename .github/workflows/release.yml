@@ -1,0 +1,49 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # WPF プロジェクトを含むため Windows でしかビルドできない
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      # 実ライブラリを使う結合テスト（[RealLibraryFact]）は自動的にスキップされる
+      - name: Test
+        run: dotnet test --configuration Release --verbosity normal
+
+      - name: Publish
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $ver = $tag.TrimStart('v')
+
+          # Directory.Build.props の <Version> をタグの値で上書きする
+          dotnet publish src/MusicTagAuditor.App -p:PublishProfile=win-x64-self-contained -p:Version=$ver
+          dotnet publish src/MusicTagAuditor.App -p:PublishProfile=win-x64-framework-dependent -p:Version=$ver
+
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item "src/MusicTagAuditor.App/bin/publish/win-x64-self-contained/MusicTagAuditor.App.exe" "dist/MusicTagAuditor-$tag-win-x64.exe"
+          Copy-Item "src/MusicTagAuditor.App/bin/publish/win-x64-framework-dependent/MusicTagAuditor.App.exe" "dist/MusicTagAuditor-$tag-win-x64-fdd.exe"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          body: |
+            | ファイル | 形態 | 実行要件 |
+            |---|---|---|
+            | `MusicTagAuditor-${{ github.ref_name }}-win-x64.exe` | 自己完結型（ランタイム同梱） | なし（Windows x64） |
+            | `MusicTagAuditor-${{ github.ref_name }}-win-x64-fdd.exe` | フレームワーク依存型 | .NET 10 デスクトップランタイム |

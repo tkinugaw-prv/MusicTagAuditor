@@ -6,16 +6,24 @@ on:
   pull_request:
     branches: [main, develop]
 
+# 同じブランチへ続けて push したときは古い実行を打ち切る
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   build:
     # WPF プロジェクトを含むため Windows でしかビルドできない
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
 
@@ -25,5 +33,53 @@ jobs:
       - name: Build
         run: dotnet build --no-restore --configuration Release
 
+      # 実ライブラリを使う結合テスト（[RealLibraryFact]）は
+      # MUSICTAGAUDITOR_LIBRARY_ROOT が未設定のため自動的にスキップされる。
+      #
+      # テストプロジェクトが 3 本あるため LogFileName は指定しない。
+      # 固定名にすると 3 本の出力が同じファイルへ衝突する。既定の自動命名なら
+      # test-results_<n>.trx のように分かれる。
       - name: Test
-        run: dotnet test --no-build --configuration Release --verbosity normal
+        run: >
+          dotnet test --no-build --configuration Release --verbosity normal
+          --logger "trx"
+          --collect:"XPlat Code Coverage"
+          --results-directory reports/raw
+
+      # -reports のグロブは 1 階層だけにする。TRX ロガーが coverage.cobertura.xml を
+      # 添付ディレクトリ（reports/raw/<実行名>/In/<マシン名>/）にも複製するため、
+      # ** にすると同じレポートを二重に読み込む。
+      - name: Generate coverage report
+        if: always()
+        run: |
+          # ビルドが失敗して Test まで到達しなかった場合は入力が無い
+          if (-not (Test-Path "reports/raw")) {
+            Write-Host "テスト結果が無いためカバレッジレポートの生成をスキップする"
+            exit 0
+          }
+          dotnet tool install --global dotnet-reportgenerator-globaltool
+          reportgenerator "-reports:reports/raw/*/coverage.cobertura.xml" "-targetdir:reports/coverage/html" "-reporttypes:Html;TextSummary;MarkdownSummaryGithub"
+
+      # Artifacts はログインが必要なうえ既定 90 日で失効する。
+      # Run の概要ページに出しておけば誰でも常時参照できる。
+      - name: Publish coverage summary
+        if: always()
+        run: |
+          $summary = "reports/coverage/html/SummaryGithub.md"
+          if (Test-Path $summary) {
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value (Get-Content $summary -Raw)
+          }
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: test-results
+          path: reports/raw/*.trx
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage-report
+          path: reports/coverage/html

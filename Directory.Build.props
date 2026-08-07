@@ -21,8 +21,10 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <Product>musicTagger</Product>
+    <!-- EXE のプロパティに出る名前。ウィンドウのタイトルと同じ表記にする。 -->
+    <Product>Music Tag Auditor</Product>
     <Company>tkinugaw-prv</Company>
+    <!-- リリース時は CI がタグから -p:Version= で上書きする基準値 -->
     <Version>0.1.0</Version>
   </PropertyGroup>
 
