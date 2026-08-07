@@ -13,11 +13,11 @@ TagLibSharp と z440.atl.core (ATL.NET) のどちらを採用すべきか、ラ�
 ## 実行方法
 
 ```bash
-dotnet run --project tools/TagIoProbe/TagIoProbe.csproj -- "D:\Music Library for AIMP\Classic"
+dotnet run --project tools/TagIoProbe/TagIoProbe.csproj -- "D:\Music\Classic"
 ```
 
-- 第1引数(`args[0]`)にライブラリのルートパスを渡す。省略した場合は既定値 `D:\Music Library for AIMP\Classic` を使う([Program.cs:7](../tools/TagIoProbe/Program.cs))
-- 指定したパスが存在しない場合はエラーメッセージを出して終了コード `1` で終了する([Program.cs:9-13](../tools/TagIoProbe/Program.cs))
+- 第1引数(`args[0]`)にライブラリのルートパスを渡す。**必須**で、省略した場合は使い方を表示して終了コード `1` で終了する([Program.cs:8-12](../tools/TagIoProbe/Program.cs))
+- 指定したパスが存在しない場合はエラーメッセージを出して終了コード `1` で終了する([Program.cs:16-20](../tools/TagIoProbe/Program.cs))
 - **実ライブラリのファイルは読み取り専用で扱う。** 検体はフォーマットごとに `tools/TagIoProbe/work/{taglibsharp,atl}/` へ複製され、書き込みテストは複製に対してのみ行う([Program.cs:5](../tools/TagIoProbe/Program.cs))
 - `work/` は毎回削除してから再生成される([Program.cs:18-21](../tools/TagIoProbe/Program.cs))ため、実行結果は都度上書きされる
 

@@ -203,7 +203,7 @@ public sealed class RealLibraryApplyTests(ITestOutputHelper output) : IDisposabl
     /// </summary>
     private async Task CopySpecimensAsync()
     {
-        string libraryRoot = IntegrationConst.ResolveLibraryRoot();
+        string libraryRoot = IntegrationConst.RequireLibraryRoot();
 
         ScanResult source = await new LibraryScanner(_reader).ScanAsync(libraryRoot);
 

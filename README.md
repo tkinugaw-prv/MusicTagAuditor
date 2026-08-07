@@ -1,12 +1,122 @@
+日本語 | [English](README.en.md)
+
 # Music Tag Auditor
 
 クラシック音楽ライブラリ向け タグ検査・編集デスクトップアプリケーション（Windows / WPF）。
 
-`docs/TAGGING_POLICY.md` に定めた原則に沿って、音楽ライブラリのタグを検査・修正する。
+[docs/TAGGING_POLICY.md](docs/TAGGING_POLICY.md) に定めた原則に沿って、音楽ライブラリのタグを検査・修正する。
 
 **最重要方針**: 一括処理ツールでありながら、**適用前に必ず差分を人間が確認できる**こと。原則で確信が持てない項目を自動で埋めないこと。
 
-実装済みの範囲は `docs/SPEC.md` 12章の段階 0〜7（スキャン / バックアップと復元 / 検査ルール / 適用と読み戻し照合 / 辞書タブと辞書編集 / 手編集 / 全ルール）。
+主な機能:
+
+- フォルダを再帰スキャンして M4A / FLAC / MP3 / AIFF のタグを読む
+- 24 の検査ルール（[docs/SPEC.md](docs/SPEC.md) 6.1）で問題を検出し、修正案と根拠を出す
+- **適用直前にタグのスナップショットを自動取得**し、書き込み後は全項目を読み戻して照合する
+- ファイル一覧での手編集、フォルダ単位の一括入力、辞書からの入力候補
+- 正規化辞書（作曲家 / 人物 / 団体 / 誤記 / 保護対象）の編集と検証
+- 検査結果の CSV 出力、アプリ無しで戻せる PowerShell 復元スクリプト付きバックアップ
+
+実装済みの範囲は [docs/SPEC.md](docs/SPEC.md) 12章の段階 0〜7（スキャン / バックアップと復元 / 検査ルール / 適用と読み戻し照合 / 辞書タブと辞書編集 / 手編集 / 全ルール）。
+
+---
+
+## 技術スタック
+
+| 項目 | 内容 |
+|---|---|
+| ランタイム | .NET 10（LTS。GA 2025-11-11 / サポート期限 2028-11-14） |
+| UI | WPF（`net10.0-windows`）+ MVVM |
+| MVVM | CommunityToolkit.Mvvm 8.4.2 |
+| DI | Microsoft.Extensions.DependencyInjection 10.0.10 |
+| タグ入出力 | TagLibSharp 2.3.0 + 自前の MP4 atom リーダー（[ADR-0001](docs/adr/0001-tag-io-library.md)） |
+| ログ | Serilog 4.4.0 + Serilog.Sinks.File 7.0.0 |
+| テスト | xUnit 2.9.3 + coverlet.collector 6.0.4 |
+
+.NET 8 / .NET 9 は 2026-11-10 にサポート終了のため採用しない。
+
+配色とコントロールの見た目は姉妹プロジェクト [MusicFolderTimeFitter](https://github.com/tkinugaw-prv/MusicFolderTimeFitter)（音楽フォルダー時間フィッター）に合わせている。詳細は [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
+
+---
+
+## ビルドと実行
+
+必要なもの: .NET 10 SDK / Windows 11（WPF を含むため Windows でしかビルドできない）
+
+```bash
+dotnet build
+```
+
+```bash
+dotnet run --project src/MusicTagAuditor.App/MusicTagAuditor.App.csproj
+```
+
+最後に開いたライブラリは設定に残り、次回の起動で自動的に開いてスキャンまで行う。見つからない場合はステータスバーに出すだけで、設定からは消さない（外付けドライブを外しているだけかもしれない）。
+
+第 1 引数にライブラリのパスを渡すと、記憶しているライブラリより優先して、起動直後にそのフォルダを開いてスキャンする。
+
+```bash
+dotnet run --project src/MusicTagAuditor.App/MusicTagAuditor.App.csproj -- "D:\Music\Classic"
+```
+
+ログは `%LOCALAPPDATA%\MusicTagAuditor\logs\` に日次で出力される。辞書は `%APPDATA%\MusicTagAuditor\dictionary.json`、設定は同フォルダの `settings.json`（現在の項目はバックアップ先と前回のライブラリ）。設定が壊れていても既定値で起動し、理由をログに残す。
+
+操作方法は [docs/USER_MANUAL.md](docs/USER_MANUAL.md) を参照。
+
+---
+
+## テストとカバレッジレポート
+
+テスト結果とカバレッジレポートは GitHub Actions（[CI ワークフロー](.github/workflows/ci.yml)）が実行ごとに生成する。
+
+| 公開場所 | 内容 |
+|---|---|
+| 各 Run の **概要ページ** | カバレッジのサマリー表（ログイン不要・失効しない） |
+| 各 Run の **Artifacts** `test-results` | テスト結果の生データ（TRX） |
+| 各 Run の **Artifacts** `coverage-report` | カバレッジ生データ（Cobertura XML）から生成した HTML レポート |
+
+第三者はここからテストの合否と各クラスのカバレッジを検証できる。
+
+### ローカルでの再現手順
+
+```powershell
+# 1. テスト実行 + TRX ログ + カバレッジ収集（要 .NET 10 SDK）
+dotnet test --logger "trx" --collect:"XPlat Code Coverage" --results-directory "reports/raw"
+```
+
+```powershell
+# 2. ReportGenerator のインストール（初回のみ）
+dotnet tool install --global dotnet-reportgenerator-globaltool
+```
+
+```powershell
+# 3. HTML レポート生成（reports/ は git 管理外）
+reportgenerator "-reports:reports/raw/*/coverage.cobertura.xml" "-targetdir:reports/coverage/html" "-reporttypes:Html;TextSummary"
+```
+
+手順 3 のグロブを `**/` にしないこと。TRX ロガーが `coverage.cobertura.xml` を添付ディレクトリにも複製するため、同じレポートを二重に読み込む。
+
+`reports/` は git 管理外にしている。TRX にはローカルのユーザー名・マシン名が、Cobertura XML にはソースの絶対パスが埋め込まれるため。
+
+### テストの範囲
+
+| プロジェクト | 対象 |
+|---|---|
+| `MusicTagAuditor.Core.Tests` | ドメイン全域。正規化・辞書・検査ルール・バックアップ・適用・CSV 出力・設定 |
+| `MusicTagAuditor.TagIo.Tests` | タグ読み書きの往復。MP4 atom リーダー |
+| `MusicTagAuditor.App.Tests` | ViewModel。WPF の `ListCollectionView` を実際に動かして検証する |
+
+単体テストの対象外は **View / XAML / テーマ**（`MainWindow.xaml`、`Themes/DarkTheme.xaml` など）で、これらは手動の動作確認で検証する。全体のラインカバレッジにはこの対象外の層も分母として入るため、層ごとの数値は Run の概要ページで確認すること。
+
+`[RealLibraryFact]` を付けた**結合テスト 11 件は実際の音楽ライブラリを必要とする**ため、`MUSICTAGAUDITOR_LIBRARY_ROOT` が未設定の環境ではスキップされる。CI では常にスキップされるので、Run で見えるテスト件数は手元で実ライブラリを指定した場合より 11 件少ない。
+
+---
+
+## 環境変数
+
+| 変数名 | 用途 | 既定値 |
+|---|---|---|
+| `MUSICTAGAUDITOR_LIBRARY_ROOT` | 実ライブラリを使う結合テストの対象パス。**テスト専用**で、アプリ本体は参照しない。未設定の場合、および指定したフォルダが存在しない場合、該当テストはスキップされる | なし（既定値は持たない） |
 
 ---
 
@@ -18,113 +128,12 @@
 | [docs/TAGGING_POLICY.md](docs/TAGGING_POLICY.md) | タグ付けの原則。実装の唯一の基準 |
 | [docs/SPEC.md](docs/SPEC.md) | アプリケーション仕様 |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | モジュール構成の詳細解説 |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 開発ハンドブック。画面・検査ルール・手編集・辞書・バックアップの実装上の前提 |
 | [docs/TAG_IO_PROBE.md](docs/TAG_IO_PROBE.md) | `tools/TagIoProbe`(タグ入出力ライブラリ選定の検証ツール)の説明 |
 | [docs/adr/0001-tag-io-library.md](docs/adr/0001-tag-io-library.md) | タグ入出力ライブラリの選定記録 |
 | [docs/library-baseline-2026-08-03.md](docs/library-baseline-2026-08-03.md) | 実ライブラリの実態。検査ルール実装時の答え合わせ用 |
 | [docs/branch_strategy.md](docs/branch_strategy.md) | ブランチ戦略 |
 | [docs/llm_guideline.md](docs/llm_guideline.md) | コーディング規約 |
-
----
-
-## 画面
-
-**配色とコントロールの見た目は「音楽フォルダー時間フィッター」（MusicFolderTimeFitter）に合わせている。** 同じ人が同じ音楽ライブラリに対して使う道具なので、2 つのアプリが別物に見えないようにする。
-
-デザイントークン（背景・枠・文字・アクセント緑 `#5EC2A5`・角丸 5px・フォント `Inter, Yu Gothic UI, Segoe UI`）は向こうの `Themes/DarkTheme.xaml` と同じ値を `src/MusicTagAuditor.App/Themes/DarkTheme.xaml` に置いている。**片方だけ変えないこと。**
-
-| 領域 | 面 |
-|---|---|
-| タイトルバー・操作バー・ステータスバー | `PanelBarBrush` |
-| 入力エリア・ツリー・表のヘッダ | `PanelInputBrush` |
-| 表の本体 | `BgOuterBrush` |
-
-OS のタイトルバーは `Interop/DwmDarkTitleBar.cs` で着色する。DWM の属性が無い環境（Windows 10 など）では黙って標準の外観に戻る。
-
-### Music Tag Auditor 固有の色
-
-検査結果は重大度と判定区分で色が変わる（`docs/SPEC.md` 5.3 / 6章）。淡色前提の背景色をそのまま暗くすると判別できなくなるため、暗い面の上で使える値に置き直している。
-
-| 用途 | トークン |
-|---|---|
-| 確定 / 要確認 / 保留 の行 | `RowConfirmedBrush` / `RowReviewBrush` / `RowHoldBrush` |
-| 保留中の手編集がある行 | `RowEditedBrush` |
-| 適用の失敗・不一致 | `DangerPanelBrush` |
-| 手編集の気づき・辞書の検証結果 | `NoticePanelBrush` |
-
-重大度は画面では**文字ラベル**で示す（`エラー` / `警告` / `要確認` / `手編集`）。**記号に戻さないこと。** 記号は実描画で単色の代替字形に置き換わり、塗りと線の違いしか出ないため意味が読めない。
-
-淡色テーマのバッジ配色をそのまま持ってくると、暗い面では背景が沈んで文字だけが浮く。文字を明るく・面は色味だけ残す配分に置き直している。
-
-| 重大度 | ラベル | トークン |
-|---|---|---|
-| error | エラー | `SeverityErrorForeground` / `SeverityErrorBackground` |
-| warning | 警告 | `SeverityWarningForeground` / `SeverityWarningBackground` |
-| info | 要確認 | `SeverityInfoForeground` / `SeverityInfoBackground` |
-| manual | 手編集 | `SeverityManualForeground` / `SeverityManualBackground` |
-
-**判定区分の色は選択色より先に書く。** `DataGridRow` のスタイルはトリガの記述順で後勝ちになるため、順序を入れ替えると区分の色が選択色を上書きし、どの行を選んでいるか分からなくなる。
-
-### 入力欄のプレースホルダ
-
-WPF の `TextBox` は placeholder を持たない。ラベルを置けない検索欄・絞り込み欄は、空欄だと**何を入れる欄なのかが画面から消える**ため、添付プロパティ `Controls/Placeholder.cs` で説明文を持たせ、テーマの `TextBox` テンプレートが薄い文字で描く。
-
-```xml
-<TextBox ctl:Placeholder.Text="正規形・別名・実体 ID で絞り込む"
-         Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}" />
-```
-
-`xmlns:ctl="clr-namespace:MusicTagAuditor.App.Controls"` を宣言して使う。表示・非表示はテンプレートの `Text` トリガで切り替わるので、**バインドは `UpdateSourceTrigger=PropertyChanged` にすること。** 既定の `LostFocus` だと入力中にプレースホルダが消えない。
-
-一覧や右ペインが空のときに出す案内は別物で、`PlaceholderText` スタイル（テーマ）を当てた `TextBlock` で書く。名前が似ているので取り違えないこと。
-
-### 派生コントロールにはスタイルを明示する
-
-**WPF の暗黙スタイルは派生型には当たらない。** `<Style TargetType="TextBox">` のキーは `typeof(TextBox)` なので、`TextBox` を継承した `Controls/SuggestBox.cs`（辞書の入力候補）には届かず、指定しないと **OS 既定の白い入力欄**が出て周囲から浮く。
-
-テーマに `ctl:SuggestBox` のスタイルを `BasedOn="{StaticResource DarkTextBoxStyle}"` で置き、テンプレートごと引き継いでいる。候補一覧のポップアップもそのテンプレートに含める（`PART_Popup` / `PART_Suggestions`）。**配色をコードビハインドで拾わないこと。** 見た目は `Themes/DarkTheme.xaml` の 1 枚に集約する。
-
-DataGrid のセル編集で使う場合は `GridEditingSuggestBoxStyle` を当てる。`GridEditingTextBoxStyle` をそのまま当てると**テンプレートが既定に戻り、候補が出なくなる**。
-
-### グリッドに束ねるのは ViewModel にする
-
-**`Core` のモデルを `ItemsSource` へ直接束ねないこと。** `Core` は UI 依存を持たない `net10.0` のプロジェクトで、モデルは `INotifyPropertyChanged` を持たない。チェックボックス列を直接束ねると値は入るのに通知が起きず、**コマンドの `CanExecute` が再評価されないままボタンが灰色で固まる**（検査結果タブの「チェックした項目を適用」で実際に起きた）。同じ理由で、別のグリッドからモデルを書き換えても表示は描き直されない。
-
-`Core` のモデル側に `INotifyPropertyChanged` を足して済ませないこと。モデルは `record` で、生成される `Equals` は**宣言されたインスタンスフィールドを比較する**。field-like event を足すとデリゲートのバッキングフィールドまで比較対象に入り、購読者の有無で等価性が変わる。
-
-`App` 側にラッパー ViewModel を置き、**書き込みだけを `Core` のモデルへ素通しする**（`ViewModels/RuleResultViewModel.cs` / `ViewModels/TagChangeViewModel.cs`）。適用対象や CSV 出力が読む値は `Core` 側が唯一の真実のままにしておき、ラッパーは選択状態を自前で持たない。
-
-集計の更新ハンドラでは**コレクションを触らないこと**。呼ばれるのは DataGrid がセルの編集トランザクションを開いている最中で、その状態で `ICollectionView.Refresh()` を撃つと落ちる（下記「手編集」節と `ViewModels/TrackViewRefresher.cs`）。数えて表示を書き換えるだけに留める。
-
-### アイコン
-
-音符とタグを組み合わせたマーク。配色は「音楽フォルダー時間フィッター」のアイコンと同じ 4 色で、並べたときに同じ組の道具に見えるようにしている。
-
-| ファイル | 用途 |
-|---|---|
-| `src/MusicTagAuditor.App/Assets/app_icon.ico` | 実行ファイルとウィンドウのアイコン（16〜256px の 9 サイズ） |
-| `src/MusicTagAuditor.App/Assets/icon_source_small.svg` | 上記の元データ。**形を変えるときはこちらを直してから .ico を作り直す** |
-| `src/MusicTagAuditor.App/Assets/icon_source_detail.svg` | 説明資料向けの大きいサイズ（タグを 2 枚重ねた版） |
-
-タイトルバーの見出しにも同じ形を出す。こちらは `Themes/DarkTheme.xaml` の `AppMarkImage`（`DrawingImage`）で描いており、SVG とは別に持っている。**符頭と符幹が重なるので `GeometryGroup` の `FillRule` は `Nonzero` にすること。** 既定の `EvenOdd` だと重なった部分が打ち消し合って穴になる。
-
----
-
-## 開発環境
-
-- .NET 10 SDK（LTS。GA 2025-11-11 / サポート期限 2028-11-14）
-- Windows 11
-
-.NET 8 / .NET 9 は 2026-11-10 にサポート終了のため採用しない。
-
-### ビルドとテスト
-
-```bash
-dotnet build
-```
-
-```bash
-dotnet test
-```
 
 ---
 
@@ -135,283 +144,26 @@ dotnet test
 | `src/MusicTagAuditor.Core` | `net10.0` | ドメイン。正規化・辞書・検査ルール。UI とタグライブラリに依存しない |
 | `src/MusicTagAuditor.TagIo` | `net10.0` | タグ読み書きの抽象（`ITagReader` / `ITagWriter`）と実装 |
 | `src/MusicTagAuditor.App` | `net10.0-windows` | WPF アプリケーション（MVVM） |
-| `tests/MusicTagAuditor.App.Tests` | `net10.0-windows` | App 層のテスト。WPF のコレクションビューを実際に動かすため `UseWPF` が要る |
 | `tests/MusicTagAuditor.Core.Tests` | `net10.0` | ドメインのテスト |
 | `tests/MusicTagAuditor.TagIo.Tests` | `net10.0` | タグ読み書きの往復テスト |
+| `tests/MusicTagAuditor.App.Tests` | `net10.0-windows` | App 層のテスト。WPF のコレクションビューを実際に動かすため `UseWPF` が要る |
 | `tools/TagIoProbe` | `net10.0` | タグライブラリ選定の検証スパイク（選定後は破棄可） |
 
 ---
 
-## タグ入出力の実装上の注意
+## コントリビューション
 
-[ADR-0001](docs/adr/0001-tag-io-library.md) の実測にもとづく制約。**これを守らないと AIMP からタグが見えなくなる、あるいは値が壊れる。**
-
-- **M4A の指揮者は `©con`（`A9 63 6F 6E`）に書く。** TagLib# の `Tag.Conductor` は `cond` に書くため**使ってはならない**。`AppleTag.SetText` で atom を明示する。
-- **M4A の読み取りは自前の MP4 atom リーダーを使う。** TagLib# の MP4 読み取りは `; ` で値を分割するため、「1 値に `;` が含まれる状態」と「複数値に分割済みの状態」を区別できない。この区別は検査ルール R-205 / R-206 に必要。
-- **M4A はファイル全体を読まない。** タグは `moov` の中にあり、ファイルの大半を占める `mdat`（音声本体）には無い。全体を読むと 1,041 ファイルのスキャンに 34 秒かかり、非機能要件（1,000 ファイル / 10 秒）を満たせない。`moov` だけをシークして読むこと。
-- **`;` を値の区切りに使わない**（`TAGGING_POLICY.md` 3.4）。
-- **既知の制約**: M4A では複数値を書き分けられない。TagLib# の `AppleTag.SetText` は `string[]` を `"; "` で連結して 1 つの data ボックスに書くため、AIMP が分割した状態を復元できない。書き込み後の読み戻し照合で不一致として検出される。FLAC / MP3 / AIFF に制約はない。
-
----
-
-## 検査ルール
-
-`docs/SPEC.md` 6.1 の 24 ルールをすべて実装している。
-
-重大度は画面上で **`エラー` / `警告` / `要確認`** の文字と色で示す。SPEC が使っている記号（⛔ ⚠ ❓）は**実描画では単色の代替字形に置き換わり、塗りと線の違いしか出ないため意味が読めない**。記号に戻さないこと。
-
-実装で外せない前提が 5 つある。いずれも `docs/library-baseline-2026-08-03.md` の実測から導かれたもので、守らないと誤検出だらけになる。
-
-1. **`TAGGING_POLICY.md` 2.3 の保護対象（配役情報）は全ルールの検査前に除外する**
-2. **団体名に含まれる作曲家の姓を作曲家名として拾わない**（`Smetana Quartet` / `Münchener Bach-Chor`）
-3. **頭字語を全大文字判定から除外し、「姓, 名」順の判定は人名フィールドに限る**（`USSR State Symphony Orchestra` / `Kirov Orchestra, Mariinsky Theatre`）
-4. **指揮者が居ないのが正しい録音を R-402 で拾わない。** 室内楽・独奏・指揮者を置かない合奏団では `conductor` は空が正しい（2.2）。辞書の `noConductor` と人物の役割で判定する
-5. **誤記の置換（R-301）は `title` / `album` にだけ適用する。** 団体名に当てると `Münchener Bach-Chor` を壊す（5.3.3）
-
-団体名の時代分割（5.3.1）は**実体 ID** で判断する。名前が似ていても別実体、名前が違っても同一実体がある。`date` が空欄で名称を決められない場合は書き換えず `HOLD_ERA_UNKNOWN` として保留する。
-
-### 修正値があっても既定でチェックしないもの
-
-R-303（ファイル名からの曲名補完）と R-403（文字化けの削除）は修正値を出すが、**既定ではチェックしない**。判定区分も「確定」ではなく「要確認」になる。
-
-- R-303 のファイル名には Windows で使えない文字の代替が混じっている（`Op.141_ I. Allegretto` の `_` は本来 `:` と思われる）。元が何だったかは決められないので戻さない。先頭のトラック番号だけを落とす
-- R-403 は復元すると「アーティスト情報なし」等になり実質的にタグ未設定。消すか入れ直すかは人間が決める
-
-### 文字化けの検出（R-403）
-
-既知の文字列（`アルバム情報なし` 等）との照合では引っかからない。実際に格納されているのは `A[eBXgîñÈµ` のような、Shift-JIS のバイト列を別のコードページとして解釈した結果である。
-
-1. 値を Latin-1 相当のバイト列に戻す
-2. そのバイト列を Shift-JIS (CP932) として解釈する
-3. 解釈結果が妥当な日本語になれば文字化けと判定する
-
-### 既定で無効なルール
-
-R-304（曲名中の発音区別符号の欠落）は誤検出が増えるため既定で無効。ツールバーの「発音区別符号も検査」で有効にする。
-
-**自動修正はしない。** CD 原盤が意図的に ASCII 表記である可能性があり、人名・団体名（3.3）とは事情が違う。正しい綴りの候補は根拠に出すだけにする。
-
-対象の語は `Inspection/DiacriticCandidates.cs` の表に持つ。利用者ごとに育てる語彙ではなく `TAGGING_POLICY.md` 6.3 に紐づく固定の一覧なので、辞書ではなく定数にしている。ドイツ語以外（フランス語のアクサン等）もこの表に行を足す。
-
-### 適用
-
-「検査」→ チェックを確認 → 「チェックした項目を適用」の順に進む。適用時は必ず次の順序を通る（`docs/SPEC.md` 9章）。
-
-1. **適用直前にタグのスナップショットを自動取得する。** 利用者が明示的にバックアップを取っていなくても
-2. チェックされた差分だけを書き込む。1 ファイルにつき 1 回
-3. **書き込んだ全項目を読み戻して照合する。** この工程を省略しない
-4. 成功件数・失敗件数・不一致件数を表示する
-
-**チェックの変更はその場で反映する。** 付け外しすると選択件数の表示と「チェックした項目を適用」の活性が即座に追従する。既定のチェック状態（`docs/SPEC.md` 9.1）は出発点にすぎず、既定で 0 件選択だった検査結果でも検査をやり直さずに適用へ進める。
-
-**1 件の失敗で全体を止めない。** 失敗・不一致・競合は一覧として残し、ログにも出す。
-
-同じフィールドに異なる修正案が選ばれている場合は**書き込まずに競合として報告する**。どちらが正しいか機械的に決められないため。
-
-**適用後、検査結果タブは全クリアしない。** 成功した項目だけを取り除き、未対象・失敗・不一致・競合はチェック状態ごと残す。
-
-上段・下段それぞれに「全選択」「全選択解除」「選択反転」を持つ（下段の操作は選択中ルールの明細だけに効く）。**ルール行のチェックは配下の明細に追従させる。** 配下だけ変わってヘッダーが取り残されると、操作しても画面が動かないように見える。ただし**追従の際にヘッダーから配下へ撃ち返さないこと。** 「明細を 1 件外した」が「全件外す」に化ける（`ViewModels/RuleResultViewModel.cs`）。
-
-**修正案を持たない行はチェックボックス自体を無効にする。** 適用は `IsSelected` かつ修正値を持つものだけを書き込むため、チェックだけできる状態を残すと「選択 N 件」と実際の適用件数が食い違う。無効化は `ElementStyle` と `EditingElementStyle` の両方に要る（片方だけだとセルが編集モードに入った瞬間に操作できる）。
-
-### CSV 出力
-
-検査結果タブの「CSV出力」から、明細と集計の 2 ファイルを書き出す。
-
-| ファイル | 内容 |
-|---|---|
-| `MusicTagAuditor-changes-{yyyyMMddHHmmss}.csv` | 全ルールの差分明細。**根拠列を含む** |
-| `MusicTagAuditor-changes-{yyyyMMddHHmmss}-summary.csv` | ルール別の検出・適用予定・保留の件数 |
-
-Excel が日本語を Shift-JIS と誤認しないよう、BOM 付き UTF-8 で書く。
-
----
-
-## 手編集
-
-ファイル一覧タブでセルを直接編集する。**セルを直してもファイルには書き込まない。** 編集は保留され、差分を確認してから一括で適用する。
-
-検査結果タブの差分明細を**ダブルクリック**すると、ファイル一覧タブの当該行へ飛べる。修正案を出せなかった行はここから手で直す。ツリーは対象ファイルのフォルダを選び直し、絞り込みは**対象行を隠しているものだけ**を解除してステータスバーに出す（`docs/SPEC.md` 5.3）。
-
-適用は検査結果とまったく同じ経路を通る。書き込み経路を 2 本持つと、自動バックアップや読み戻し照合を片方で入れ忘れるため。
-
-一覧の外（ボタン・絞り込み欄・ツリー・別のタブ）へ移ると、編集中のセルはその場で確定して保留中の編集に入る。**WPF の `DataGrid` は入力が離れても行の編集を開いたままにする**ため、閉じずに先へ進むと絞り込みの掛け直しも一覧の作り直しもできなくなる。確定してもファイルには書き込まれないので、失うものは無い。
-
-### フォルダ単位の一括入力
-
-段階 6 の主な使い道はこれ。`docs/library-baseline-2026-08-03.md` の R-402（指揮者が不明な 124 ファイル / 25 フォルダ）は、CD 実物を確認したあとこの操作で埋める。
-
-1. ツリーでフォルダを選ぶ
-2. ファイル一覧で行を選択する（`Ctrl+A` で全選択）
-3. 上部で対象フィールドを選び、値を入れて「選択行に一括入力」
-
-値を空のまま押すとタグを消す。件数を示して確認を求める。空欄にすること自体は原則が認める操作（`TAGGING_POLICY.md` 7.4）。
-
-### 辞書からの入力候補
-
-`composer` / `artist` / `conductor` / `albumartist` のセルと一括入力の欄では、辞書の候補を絞り込みながら出す。照合は辞書引きと同じ正規化キーで行い、**別名・日本語表記でも当たる**（「ブラ」→ `Johannes Brahms`）。**確定して入るのは正規形。** 別名をそのまま入れられると、原則に反する値を候補から選べてしまう。
-
-**候補は入力を助けるだけで、入力を縛らない。** 辞書に無い名前も自由に入る。候補が出ないのは「辞書に登録がない」という意味であって、間違いという意味ではない。
-
-### 絞り込み
-
-全列横断の検索ボックスに加え、「空欄のある行のみ」「編集した行のみ」で絞れる。R-401 / R-402 の対象を探すのに使う。
-
-### 手編集の検査
-
-**止めない。** 出るのはすべて「気づいてほしい点」で、最終的な判断は人間が持つ。手で入れた値をツールが拒むと、原則の例外（配役情報や個別例外）を扱えなくなる。
-
-| 内容 |
-|---|
-| 値に `;` が含まれる（AIMP が保存時に分割する） |
-| 複数値として格納されているフィールドを編集した（M4A では書き分けられない） |
-| 配役情報として保護されている `albumartist` を書き換えた（`TAGGING_POLICY.md` 2.3） |
-| `genre` が `Classic` 以外 / `date` が 4 桁でない / トラック・ディスクが `番号/総数` 形式でない |
-| 人名・団体名が日本語表記 / 演奏者欄に作曲家名 / 辞書に無い名前 |
-
-### 検査結果との競合
-
-同じファイルの同じフィールドに、検査の修正案と手編集の両方がある場合は**手編集を採用する**。人間が明示的に入れた値のほうが強い。ただし競合そのものは要確認一覧に残し、どの案を捨てたかを示す。
-
----
-
-## 正規化辞書
-
-`%APPDATA%\MusicTagAuditor\dictionary.json`。初回起動時に同梱の既定辞書がコピーされる。
-
-照合は正規化キー（NFKC・小文字化・ひらがな→カタカナ・ダイアクリティカルマーク除去・記号と空白の除去）で行うため、中黒やピリオドの有無、大文字小文字の違いは登録不要。
-
-**推測で名前を足さないこと。** 誤った `canonical` は誤った修正案を生む。エントリは原則の表に載っているものと、実ライブラリに実在する値に限る。
-
-### 検査結果から辞書に追加する
-
-**この導線が辞書機能で最も使用頻度が高い**（`docs/SPEC.md` 7.3）。
-
-1. 「検査」を実行する
-2. 「辞書に無い値」タブを開く。修正案を出せなかった値が**値単位**でまとまっている（同じ値が 16 ファイルに散っていても 1 行）
-3. 行を選んで「辞書に追加」。既存エントリの別名にするか、新しいエントリを作るかを選ぶ
-4. 登録すると保存され、**自動で再検査**される
-
-再スキャンは行わない。辞書を変えてもタグは変わらないため、直近のスキャン結果に新しい索引を当て直せば足りる。
-
-検査結果タブの差分明細からも「選択行を辞書に追加」で同じダイアログを開ける。
-
-### 辞書タブ
-
-種別ごとに 作曲家 / 人物 / 団体 / 誤記 / 保護対象 のサブタブを持つ。別名は 1 行 1 件で入力する（`;` は値の区切りに使わない — `TAGGING_POLICY.md` 3.4）。
-
-- **誤記**はパターンをその場で試せる。任意の文字列を入れると一致の有無と置換結果が出る
-- **時代分割**（`eras`）は編集できる。期間の重なり・隙間は警告として出るが保存は止めない
-- **保護対象**の削除は確認を求める。外すと R-207 / R-208 が誤検出に戻る
-
-### 保存時の検証
-
-**保存前に必ず検証する。** エラーが 1 件でもあれば保存しない。
-
-最重要は**正規化キーの衝突**である。`DictionaryIndex` は索引を `TryAdd` で作るため、既存エントリと同じ正規化キーを持つ別名を足しても**例外は出ず、黙って捨てられる**。「登録したのに効かない」という気づきにくい状態になるので、保存前に止める。
-
-| 検出内容 | 重さ |
-|---|---|
-| 別名の正規化キーが他のエントリと衝突 | エラー（保存不可） |
-| 実体 ID の重複・空欄 | エラー |
-| 正規表現として解釈できないパターン | エラー |
-| 未知の役割名、正規形が空 | エラー |
-| 時代分割の期間の重なり・隙間 | 警告 |
-| 同一エントリ内での別名の重複 | 警告 |
-| 種別をまたいだ同名 | 警告 |
-
-保存時は一時ファイル経由で差し替え、直前版を `dictionary.json.bak` に残す。
-
-### 既定辞書からの取り込み
-
-**利用者辞書は初回起動時にコピーされたきり更新されない。** アプリ側の既定辞書にエントリや項目を足しても、既存の利用者には届かない。
-
-辞書タブの「既定辞書から取り込む」で反映する。取り込める差分があるときは起動時に件数を表示し、ボタンを強調する。
-
-| 取り込む内容 |
-|---|
-| 既定辞書にしか無いエントリ（作曲家 / 人物 / 団体 / 誤記 / 保護対象） |
-| 既存エントリに足りない別名 |
-| 既定辞書で新しく立った設定（`noConductor` / `noEraSplit`） |
-
-**自動では取り込まない。** 辞書からエントリを削除できるため、黙って差分を当てると意図的に消したものを復活させてしまう。取り込む前に一覧を出し、1 件ずつチェックを外せる。
-
-取り込みは**追加だけを行う**。編集済みの正規形は上書きしない。利用者が下ろした設定も戻さない（既定辞書で立っていて利用者側で立っていないものだけを提案する）。
-
-団体の同一性は**実体 ID** で判断する（`TAGGING_POLICY.md` 5.3.1）。名前を変えていても同じ団体として扱う。
-
-### 既定辞書への書き戻し
-
-辞書タブの「既定辞書として書き出し」で、育てた辞書をリポジトリ同梱の `src/MusicTagAuditor.Core/Dictionary/default-dictionary.json` へ書き戻せる。開発中は書き出し先が既定で埋まる（実行ディレクトリから上へ辿ってソースを探す）。配布物では見つからないので保存先を選ぶ。
-
-`_comment` などの注意書きは読み書きで往復して残る（出力位置は末尾になる）。**これを落とすと、辞書を編集する人が前提を知らないまま値を足せるようになる。**
-
----
-
-## バックアップと復元
-
-**音声ファイル本体は複製しない**（対象ライブラリは 30GB）。タグだけを JSON にスナップショットする。
-
-保存先は既定ではライブラリ直下の `backup_{yyyyMMddHHmmss}\`。入力エリアの「バックアップ先」で任意のフォルダ（別ドライブでもよい）に変えられる。設定は `%APPDATA%\MusicTagAuditor\settings.json` に残る。
-
-- 保存先を変えても、以前ライブラリ直下に取ったバックアップは履歴に並び続ける（両方を走査してマージする）
-- 保存先を複数のライブラリで共用した場合、履歴には `manifest.json` の `libraryRoot` が一致するものだけを出す。同じ秒に取得したものは `backup_{yyyyMMddHHmmss}_2` のように連番で分ける
-- 保存先をライブラリ配下に置いてもスキャン対象は増えない（`backup_*` は中間階層でも除外される）
-
-| ファイル | 内容 |
-|---|---|
-| `tags_snapshot.json` | 全ファイルの全タグ。復元はこの `fields` を使う |
-| `manifest.json` | 取得日時・理由・件数 |
-| `restore-tags.ps1` | **アプリ無しで復元する PowerShell** |
-| `TagLibSharp.dll` | 上記スクリプトが使う |
-
-### アプリを使わずに復元する
-
-```bash
-pwsh -File "D:\Music Library for AIMP\Classic\backup_20260803031500\restore-tags.ps1" -DryRun
-```
-
-`-DryRun` を外すと実際に書き戻す。PowerShell 7 以降が必要。`-PathFilter` で対象を絞り込める。
-
-### 検証スパイクの実行
-
-```bash
-dotnet run --project tools/TagIoProbe/TagIoProbe.csproj -- "D:\Music Library for AIMP\Classic"
-```
-
-実ライブラリのファイルは読み取りのみ。検体は `tools/TagIoProbe/work/` に複製され、書き込みはその複製に対してのみ行う。結果は `tools/TagIoProbe/work/report.md` に出力される。
-
----
-
-## 実行
-
-```bash
-dotnet run --project src/MusicTagAuditor.App/MusicTagAuditor.App.csproj
-```
-
-最後に開いたライブラリは設定に残り、次回の起動で自動的に開いてスキャンまで行う。見つからない場合はステータスバーに出すだけで、設定からは消さない（外付けドライブを外しているだけかもしれない）。
-
-第 1 引数にライブラリのパスを渡すと、記憶しているライブラリより優先して、起動直後にそのフォルダを開いてスキャンする。
-
-```bash
-dotnet run --project src/MusicTagAuditor.App/MusicTagAuditor.App.csproj -- "D:\Music Library for AIMP\Classic"
-```
-
-ログは `%LOCALAPPDATA%\MusicTagAuditor\logs\` に日次で出力される。辞書は `%APPDATA%\MusicTagAuditor\dictionary.json`、設定は同フォルダの `settings.json`（現在の項目はバックアップ先と前回のライブラリ）。設定が壊れていても既定値で起動し、理由をログに残す。
-
----
-
-## 環境変数
-
-| 変数名 | 用途 | 既定値 |
-|---|---|---|
-| `MUSICTAGAUDITOR_LIBRARY_ROOT` | 実ライブラリを使う結合テストの対象パス。**テスト専用**で、アプリ本体は参照しない。指定したフォルダが存在しない場合、該当テストはスキップされる | `D:\Music Library for AIMP\Classic` |
-
----
-
-## ブランチ
+[CONTRIBUTING.md](CONTRIBUTING.md) を参照。
 
 - `develop` が既定ブランチ。`main` と `develop` への直 push は禁止（初期構築時を除く）
 - 機能追加は `feature/`、バグ修正は `fix/` を `develop` から作成し、PR を経てマージする
 
 詳細は [docs/branch_strategy.md](docs/branch_strategy.md)。
+
+---
+
+## ライセンス
+
+MIT License — [LICENSE](LICENSE) を参照。
+
+依存ライブラリの [TagLibSharp](https://github.com/mono/taglib-sharp) は LGPL-2.1 だが、NuGet パッケージとして動的にリンクしているため本体の MIT ライセンスには影響しない。

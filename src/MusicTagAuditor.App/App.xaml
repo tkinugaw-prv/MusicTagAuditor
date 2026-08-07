@@ -6,7 +6,8 @@
     <ResourceDictionary>
       <ResourceDictionary.MergedDictionaries>
         <!--
-          配色・コントロールの見た目は「音楽フォルダー時間フィッター」と同じ定義に揃える。
+          配色・コントロールの見た目は「音楽フォルダー時間フィッター」
+          (https://github.com/tkinugaw-prv/MusicFolderTimeFitter) と同じ定義に揃える。
           重大度のバッジ・件数列・入力欄の見出しなど、画面が参照するスタイルも
           すべてこの 1 枚に集約している。App.xaml には値を置かないこと。
         -->

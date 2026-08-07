@@ -20,7 +20,7 @@ public sealed class RealLibraryInspectionTests(ITestOutputHelper output)
     [RealLibraryFact]
     public async Task InspectsRealLibrary()
     {
-        string root = IntegrationConst.ResolveLibraryRoot();
+        string root = IntegrationConst.RequireLibraryRoot();
 
         ScanResult scan = await new LibraryScanner(new TagReader()).ScanAsync(root);
         DictionaryIndex dictionary = new(DictionaryLoader.LoadDefault());
@@ -70,7 +70,7 @@ public sealed class RealLibraryInspectionTests(ITestOutputHelper output)
     [RealLibraryFact]
     public async Task ExcludesProtectedAlbumArtistsFromInspection()
     {
-        string root = IntegrationConst.ResolveLibraryRoot();
+        string root = IntegrationConst.RequireLibraryRoot();
 
         ScanResult scan = await new LibraryScanner(new TagReader()).ScanAsync(root);
         DictionaryIndex dictionary = new(DictionaryLoader.LoadDefault());

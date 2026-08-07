@@ -25,7 +25,7 @@ Music Tag Auditor のタグ読み書きに使うライブラリを決める。�
 再現手順:
 
 ```bash
-dotnet run --project tools/TagIoProbe/TagIoProbe.csproj -- "D:\Music Library for AIMP\Classic"
+dotnet run --project tools/TagIoProbe/TagIoProbe.csproj -- "D:\Music\Classic"
 ```
 
 ---

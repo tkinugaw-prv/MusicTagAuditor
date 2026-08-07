@@ -48,6 +48,19 @@ Desktop.ini
 $RECYCLE.BIN/
 .DS_Store
 
+## Claude Code
+# ローカル環境のマシン絶対パスが入るためコミットしない。
+# スキル（.claude/skills/）は共有するので .claude/ 全体は無視しない。
+.claude/settings.local.json
+
 ## Music Tag Auditor 固有
 # 段階 0 の検証で生成する作業用ファイル（音源の複製が入るためコミットしない）
 tools/TagIoProbe/work/
+
+# テスト・カバレッジレポートの出力先。
+# TRX にはローカルのユーザー名・マシン名、Cobertura にはソースの絶対パスが入るため
+# 絶対にコミットしない。公開用は CI が Artifacts として生成する。
+reports/
+
+# dotenv
+.env

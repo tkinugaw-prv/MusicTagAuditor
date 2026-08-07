@@ -9,7 +9,7 @@ namespace MusicTagAuditor.App.ViewModels;
 /// **Core のモデルを直接グリッドに束ねないための層。**
 /// <see cref="TagChange"/> は Core の純粋な record で <c>INotifyPropertyChanged</c> を持たない。
 /// チェックボックスを直接束ねると、値は入るのに通知が起きず、
-/// 「チェックした項目を適用」の <c>CanExecute</c> が再評価されない（README「画面」節）。
+/// 「チェックした項目を適用」の <c>CanExecute</c> が再評価されない（docs/DEVELOPMENT.md「画面」節）。
 ///
 /// 適用対象の唯一の真実は <see cref="TagChange.IsSelected"/> のままにする。
 /// <c>ApplyService</c> と <c>ChangeCsvExporter</c> がそこを読むため、
