@@ -66,10 +66,13 @@ git push origin <現在のブランチ>
 GitHub Release 作成（exe 添付）まで自動で行う。
 
 ```powershell
-git tag v1.0.0
+git fetch origin --tags
+git tag -a v1.0.0 origin/main -m "v1.0.0"
 git push origin v1.0.0
 ```
 
+- **タグは必ず main のコミットに打つ**（`docs/branch_strategy.md`）。main に含まれないコミットのタグは
+  release ワークフローの `Verify tag is on main` ステップが弾く。
 - バージョンはタグ名から決まる（`v1.2.3` → `1.2.3`）。`Directory.Build.props` の `<Version>` は基準値で、CI が上書きする
 - タグを push したら `gh run watch` で release ワークフローの完走を確認し、Release ページの exe 2 本を報告する
 

@@ -11,3 +11,9 @@
 - 機能追加時には `feature/` Branchを develop から作成すること
 - バグ修正時には `fix/` Branch を develop から作成すること
 
+## リリース
+
+- リリースタグ（`v` 始まり）は **main から切ること**
+  - develop → main の PR をマージした後、main のコミットに対してタグを打つ
+  - release ワークフローは main に含まれないコミットのタグを拒否する
+

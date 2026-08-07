@@ -13,7 +13,23 @@ jobs:
     runs-on: windows-latest
 
     steps:
+      # main に含まれるタグかを検証するため全履歴とリモート追跡ブランチを取得する
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # リリースは main から切る（docs/branch_strategy.md）。
+      # タグの push はブランチで絞り込めないため、ここで弾く。
+      - name: Verify tag is on main
+        shell: pwsh
+        run: |
+          git fetch --no-tags origin main
+          # タグが main の祖先なら merge-base はタグ自身になる
+          $base = git merge-base $env:GITHUB_SHA FETCH_HEAD
+          if ($base -ne $env:GITHUB_SHA) {
+            Write-Host "::error::タグ $env:GITHUB_REF_NAME ($env:GITHUB_SHA) は main に含まれていません。リリースタグは main から切ってください。"
+            exit 1
+          }
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
@@ -38,7 +54,7 @@ jobs:
           Copy-Item "src/MusicTagAuditor.App/bin/publish/win-x64-framework-dependent/MusicTagAuditor.App.exe" "dist/MusicTagAuditor-$tag-win-x64-fdd.exe"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: dist/*
           generate_release_notes: true
