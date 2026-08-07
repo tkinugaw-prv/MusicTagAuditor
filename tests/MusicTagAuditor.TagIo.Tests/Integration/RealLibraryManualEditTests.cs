@@ -212,7 +212,7 @@ public sealed class RealLibraryManualEditTests(ITestOutputHelper output) : IDisp
     /// </summary>
     private async Task CopySpecimensAsync()
     {
-        string libraryRoot = IntegrationConst.ResolveLibraryRoot();
+        string libraryRoot = IntegrationConst.RequireLibraryRoot();
 
         ScanResult source = await new LibraryScanner(_reader).ScanAsync(libraryRoot);
 

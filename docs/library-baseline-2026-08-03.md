@@ -10,7 +10,7 @@
 
 | 項目 | 内容 |
 |---|---|
-| 対象 | `D:\Music Library for AIMP\Classic` |
+| 対象 | 策定者のローカルライブラリ（クラシック音楽 1,041 ファイル） |
 | 測定日 | 2026-08-03 |
 | 手段 | Music Tag Auditor の `LibraryScanner` + `TagReader`（段階 1 時点） |
 | 除外 | `backup_*` フォルダ |

@@ -169,7 +169,7 @@ public sealed class RealLibraryBackupRestoreTests(ITestOutputHelper output) : ID
     /// </summary>
     private IReadOnlyList<string> CopySpecimens()
     {
-        string libraryRoot = IntegrationConst.ResolveLibraryRoot();
+        string libraryRoot = IntegrationConst.RequireLibraryRoot();
         LibraryScanner scanner = new(_reader);
 
         // フォーマットごとに均等に取る。M4A だけだと ID3 の経路を通らない。

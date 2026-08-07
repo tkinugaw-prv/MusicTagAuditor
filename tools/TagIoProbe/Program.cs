@@ -4,7 +4,14 @@ using TagIoProbe;
 // docs/SPEC.md 4章「タグ入出力ライブラリの選定」の検証を実行する使い捨てスパイク。
 // 実ライブラリのファイルは読み取りのみ。書き込みは work フォルダへの複製に対してのみ行う。
 
-string libraryRoot = args.Length > 0 ? args[0] : @"D:\Music Library for AIMP\Classic";
+// 既定値は持たない。特定の環境のパスを埋め込むと他の環境で意味を成さないため。
+if (args.Length == 0)
+{
+    Console.Error.WriteLine("使い方: dotnet run --project tools/TagIoProbe/TagIoProbe.csproj -- <ライブラリのルートパス>");
+    return 1;
+}
+
+string libraryRoot = args[0];
 
 if (!Directory.Exists(libraryRoot))
 {

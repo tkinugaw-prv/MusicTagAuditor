@@ -76,7 +76,7 @@ dotnet run --project src/MusicTagAuditor.App/MusicTagAuditor.App.csproj
 起動時に対象フォルダを指定する場合（第1引数にライブラリのパスを渡すと、記憶しているフォルダより優先して、起動直後にそのフォルダを開いてスキャンします）:
 
 ```bash
-dotnet run --project src/MusicTagAuditor.App/MusicTagAuditor.App.csproj -- "D:\Music Library for AIMP\Classic"
+dotnet run --project src/MusicTagAuditor.App/MusicTagAuditor.App.csproj -- "D:\Music\Classic"
 ```
 
 配布された実行ファイル（`.exe`）がある場合は、それをダブルクリックするか、エクスプローラーで対象フォルダのショートカットにドラッグ＆ドロップしても同様に開けます。
@@ -435,7 +435,7 @@ Excelでそのまま開けるよう BOM付き UTF-8 で書き出されます。
 アプリを起動できない状況でも、PowerShell から直接復元できます。
 
 ```bash
-pwsh -File "D:\Music Library for AIMP\Classic\backup_20260803031500\restore-tags.ps1" -DryRun
+pwsh -File "D:\Music\Classic\backup_20260803031500\restore-tags.ps1" -DryRun
 ```
 
 `-DryRun` を付けると実際には書き込まず、変更内容の確認だけを行います。実際に書き戻すときは `-DryRun` を外してください。`-PathFilter` オプションで対象フォルダを絞り込むこともできます。PowerShell 7 以降が必要です。

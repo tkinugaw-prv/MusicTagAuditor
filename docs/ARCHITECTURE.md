@@ -2,7 +2,7 @@
 
 Music Tag Auditor のソースツリーがどう分割されているか、各プロジェクトが何を担い、互いにどう依存しているかをまとめた技術ドキュメント。
 
-`README.md` の「プロジェクト構成」表(全体の一覧)を補い、各プロジェクト内部のフォルダ構成まで掘り下げる。実装の詳細な仕様(検査ルールの各論・タグ入出力の制約・UI 配色など)はここには書かず、[docs/SPEC.md](SPEC.md)・[docs/TAGGING_POLICY.md](TAGGING_POLICY.md)・[README.md](../README.md) を参照する形にしている。二重管理を避けるため、内容を変更したときはどちらか一方だけ直さないこと。
+`README.md` の「プロジェクト構成」表(全体の一覧)を補い、各プロジェクト内部のフォルダ構成まで掘り下げる。実装の詳細な仕様(検査ルールの各論・タグ入出力の制約・UI 配色など)はここには書かず、[docs/SPEC.md](SPEC.md)・[docs/TAGGING_POLICY.md](TAGGING_POLICY.md)・[docs/DEVELOPMENT.md](DEVELOPMENT.md) を参照する形にしている。二重管理を避けるため、内容を変更したときはどちらか一方だけ直さないこと。
 
 ---
 
@@ -64,7 +64,7 @@ tools/TagIoProbe (net10.0, コンソール) … どこにも依存しない独�
 | `Mp4/Mp4AtomReader.cs` | MP4 の `moov` 配下だけをシークして読む自前パーサ |
 | `TagIoConst.cs` | 定数(atom バイト列など) |
 
-自前の MP4 パーサを持つ理由は TagLibSharp の制約による(詳細は README「タグ入出力の実装上の注意」および [docs/adr/0001-tag-io-library.md](adr/0001-tag-io-library.md)):
+自前の MP4 パーサを持つ理由は TagLibSharp の制約による(詳細は [docs/DEVELOPMENT.md](DEVELOPMENT.md)「タグ入出力の実装上の注意」および [docs/adr/0001-tag-io-library.md](adr/0001-tag-io-library.md)):
 
 - TagLibSharp の MP4 読み取りは値を `; ` で分割してしまうため、「1値に `;` を含む状態」と「複数値に分割済みの状態」を区別できない
 - ファイル全体を読むと 1,000 ファイル規模のスキャンで非機能要件(10秒以内)を満たせない。タグは `moov` 配下にしかないため、そこだけをシークして読む
@@ -79,10 +79,10 @@ WPF / MVVM によるデスクトップアプリケーション本体。
 
 | フォルダ・ファイル | 役割 |
 |---|---|
-| `ViewModels/` | 画面ごとの ViewModel(`MainViewModel` / `DictionaryViewModel` / `AddToDictionaryViewModel` / `FolderNodeViewModel` / `TrackRowViewModel` / `RuleResultViewModel` / `TagChangeViewModel` / `BackupEntryViewModel` / `DictionaryRowViewModels`)。**グリッドに束ねる行は Core のモデルを直接使わずここでラップする**(理由は README「グリッドに束ねるのは ViewModel にする」)。`TrackViewRefresher` はファイル一覧グリッドの編集中に絞り込みを掛け直すための補助クラスで、同フォルダに置いている |
+| `ViewModels/` | 画面ごとの ViewModel(`MainViewModel` / `DictionaryViewModel` / `AddToDictionaryViewModel` / `FolderNodeViewModel` / `TrackRowViewModel` / `RuleResultViewModel` / `TagChangeViewModel` / `BackupEntryViewModel` / `DictionaryRowViewModels`)。**グリッドに束ねる行は Core のモデルを直接使わずここでラップする**(理由は [docs/DEVELOPMENT.md](DEVELOPMENT.md)「グリッドに束ねるのは ViewModel にする」)。`TrackViewRefresher` はファイル一覧グリッドの編集中に絞り込みを掛け直すための補助クラスで、同フォルダに置いている |
 | `Converters/` | XAML バインディング用のコンバータ群(Enum⇔bool/Visibility、件数⇔Visibility、タグフィールド名のラベル変換など) |
 | `Controls/Placeholder.cs` | `TextBox` にプレースホルダ文字列を持たせる添付プロパティ |
-| `Controls/SuggestBox.cs` | 辞書の候補を絞り込みながら出す入力欄(`TextBox` 派生)。挙動だけを持ち、見た目と候補一覧のポップアップは `Themes/DarkTheme.xaml` のテンプレート(`PART_Popup` / `PART_Suggestions`)が担う。照合ロジックも持たず `Core` の `DictionarySuggester` に委ねる。**暗黙スタイルは派生型に当たらないため、テーマ側に `ctl:SuggestBox` のスタイルが必須**(詳細は README「派生コントロールにはスタイルを明示する」) |
+| `Controls/SuggestBox.cs` | 辞書の候補を絞り込みながら出す入力欄(`TextBox` 派生)。挙動だけを持ち、見た目と候補一覧のポップアップは `Themes/DarkTheme.xaml` のテンプレート(`PART_Popup` / `PART_Suggestions`)が担う。照合ロジックも持たず `Core` の `DictionarySuggester` に委ねる。**暗黙スタイルは派生型に当たらないため、テーマ側に `ctl:SuggestBox` のスタイルが必須**(詳細は [docs/DEVELOPMENT.md](DEVELOPMENT.md)「派生コントロールにはスタイルを明示する」) |
 | `Interop/DwmDarkTitleBar.cs` | Windows のタイトルバーをダークテーマ化する DWM 呼び出し |
 | `Themes/DarkTheme.xaml` | 配色・角丸・フォントなどのデザイントークン一式 |
 | `Assets/` | アプリアイコン(`.ico`)とその元データ(`.svg`) |
@@ -92,7 +92,7 @@ WPF / MVVM によるデスクトップアプリケーション本体。
 | `App.xaml(.cs)` | アプリケーションエントリポイント。DI コンテナ・Serilog の初期化 |
 | `AppConst.cs` | アプリ層の定数 |
 
-画面配色・アイコン・プレースホルダの仕様は README「画面」節を参照。
+画面配色・アイコン・プレースホルダの仕様は [docs/DEVELOPMENT.md](DEVELOPMENT.md)「画面」節を参照。
 
 ---
 
@@ -110,7 +110,8 @@ WPF / MVVM によるデスクトップアプリケーション本体。
 
 | ドキュメント | 内容 |
 |---|---|
-| [README.md](../README.md) | プロジェクト概要、開発環境、画面仕様、機能ごとの運用ルール |
+| [README.md](../README.md) | プロジェクト概要、技術スタック、ビルドと実行、テストとカバレッジ |
+| [docs/DEVELOPMENT.md](DEVELOPMENT.md) | 開発ハンドブック。画面仕様、機能ごとの運用ルール、実装上の前提 |
 | [docs/SPEC.md](SPEC.md) | アプリケーション仕様(検査ルールの各論、実装段階など) |
 | [docs/TAGGING_POLICY.md](TAGGING_POLICY.md) | タグ付けの原則。実装の唯一の基準 |
 | [docs/adr/0001-tag-io-library.md](adr/0001-tag-io-library.md) | TagLibSharp 採用の経緯と根拠 |

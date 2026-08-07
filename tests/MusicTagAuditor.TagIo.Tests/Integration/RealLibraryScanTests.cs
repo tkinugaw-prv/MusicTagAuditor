@@ -21,7 +21,7 @@ public sealed class RealLibraryScanTests(ITestOutputHelper output)
     [RealLibraryFact]
     public async Task ScansRealLibraryWithinPerformanceBudget()
     {
-        string root = IntegrationConst.ResolveLibraryRoot();
+        string root = IntegrationConst.RequireLibraryRoot();
 
         ScanResult result = await new LibraryScanner(new TagReader()).ScanAsync(root);
 
@@ -61,7 +61,7 @@ public sealed class RealLibraryScanTests(ITestOutputHelper output)
     [RealLibraryFact]
     public async Task ReportsRealLibraryTagStatistics()
     {
-        string root = IntegrationConst.ResolveLibraryRoot();
+        string root = IntegrationConst.RequireLibraryRoot();
 
         ScanResult result = await new LibraryScanner(new TagReader()).ScanAsync(root);
 
