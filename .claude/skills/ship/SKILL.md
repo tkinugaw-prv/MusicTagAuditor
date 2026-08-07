@@ -82,3 +82,6 @@ git push origin v1.0.0
 - **`dotnet test` は Debug 構成で走る** — Release ビルド（手順 2）とは別物。両方必要。
 - **`-reports` のグロブは `*/` の 1 階層にする** — TRX ロガーが `coverage.cobertura.xml` を添付ディレクトリにも複製するため、`**/` にすると同じレポートを二重に読み込む。
 - **`TreatWarningsAsErrors=true` + `GenerateDocumentationFile=true`**（`Directory.Build.props`）のため、public メンバーに XML ドキュメントコメントが無いと **CS1591 でビルドが落ちる**。警告 0 件でないとそもそもビルドが通らない。
+- **検証用のタグを PR の head コミットに打たない** — タグ push で走った Release の Run は、そのコミットを head に持つ PR のチェック一覧に紐付く。
+  タグを消しても Run は残るため PR に赤 × が居座り、剥がすには `gh run delete <run-id>` が要る。
+  ガードの動作確認などでタグを打つときは、PR にぶら下がっていない使い捨てのコミットを対象にする。
