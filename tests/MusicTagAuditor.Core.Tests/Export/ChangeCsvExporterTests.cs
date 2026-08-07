@@ -99,7 +99,7 @@ public sealed class ChangeCsvExporterTests
     [Fact]
     public void WritesFileWithUtf8Bom()
     {
-        string path = Path.Combine(Path.GetTempPath(), $"musicTagger.tests.{Guid.NewGuid():N}.csv");
+        string path = Path.Combine(Path.GetTempPath(), $"MusicTagAuditor.tests.{Guid.NewGuid():N}.csv");
 
         try
         {

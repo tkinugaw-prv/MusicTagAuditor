@@ -25,7 +25,7 @@
     <Color x:Key="RowHoverColor">#272A30</Color>
     <Color x:Key="ButtonHoverColor">#33373F</Color>
 
-    <!-- musicTagger 固有のトークン。
+    <!-- Music Tag Auditor 固有のトークン。
          検査結果は「重大度」と「判定区分」で色が変わる（docs/SPEC.md 5.3 / 6章）。
          淡色テーマの背景色をそのまま暗くするのではなく、暗い面の上で
          判別できる彩度に置き直している。 -->

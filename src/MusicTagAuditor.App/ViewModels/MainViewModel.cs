@@ -1160,7 +1160,7 @@ public sealed partial class MainViewModel : ObservableObject
         SaveFileDialog dialog = new()
         {
             Title = "検査結果を CSV に書き出す",
-            FileName = $"musicTagger-changes-{DateTime.Now:yyyyMMddHHmmss}.csv",
+            FileName = $"{AppConst.CHANGE_CSV_FILE_NAME_PREFIX}{DateTime.Now:yyyyMMddHHmmss}.csv",
             Filter = "CSV ファイル|*.csv",
             DefaultExt = ".csv",
         };

@@ -1,4 +1,4 @@
-; musicTagger コーディング規約
+; Music Tag Auditor コーディング規約
 ; docs/llm_guideline.md の規約をアナライザで機械的に担保する。
 ; 「定数は FULL_CAPITAL」は C# の一般的慣習（PascalCase）と異なるが、
 ; llm_guideline.md を優先する方針で確定している。

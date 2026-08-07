@@ -24,7 +24,7 @@ namespace MusicTagAuditor.App.Tests.ViewModels;
 public sealed class MainViewModelApplyPruningTests : IDisposable
 {
     /// <summary>テスト用の作業ディレクトリ。ライブラリ・設定・辞書をここに置く。</summary>
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "musicTagger-vm-" + Guid.NewGuid().ToString("N"));
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "MusicTagAuditor-vm-" + Guid.NewGuid().ToString("N"));
 
     /// <summary>
     /// 作業ディレクトリを用意する。複数ルールが検出されるよう、フォルダ名から作曲家が拾えるうえに

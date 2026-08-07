@@ -82,7 +82,7 @@ public sealed class RestoreScriptTests : IDisposable
     public RestoreScriptTests(Xunit.Abstractions.ITestOutputHelper output)
     {
         _output = output;
-        _root = Path.Combine(Path.GetTempPath(), "musicTagger.tests", Guid.NewGuid().ToString("N"));
+        _root = Path.Combine(Path.GetTempPath(), "MusicTagAuditor.tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
     }
 

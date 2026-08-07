@@ -32,7 +32,7 @@ public sealed class ApplyServiceTests : IDisposable
     /// </summary>
     public ApplyServiceTests()
     {
-        _root = Path.Combine(Path.GetTempPath(), "musicTagger.tests", Guid.NewGuid().ToString("N"));
+        _root = Path.Combine(Path.GetTempPath(), "MusicTagAuditor.tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
 
         _writer = new RecordingTagWriter(_root);

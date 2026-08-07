@@ -1,10 +1,10 @@
 #Requires -Version 7.0
 <#
 .SYNOPSIS
-    musicTagger のスナップショットからタグを復元する。
+    Music Tag Auditor のスナップショットからタグを復元する。
 
 .DESCRIPTION
-    musicTagger アプリが無くても、このスクリプトと tags_snapshot.json だけでタグを巻き戻せる。
+    Music Tag Auditor アプリが無くても、このスクリプトと tags_snapshot.json だけでタグを巻き戻せる。
     同じフォルダに置かれた TagLibSharp.dll を使う。
 
     M4A の指揮者は必ず ©con (0xA9 63 6F 6E) に書く。TagLib# の Tag.Conductor は cond に書き、

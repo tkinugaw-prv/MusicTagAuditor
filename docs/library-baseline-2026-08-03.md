@@ -12,7 +12,7 @@
 |---|---|
 | 対象 | `D:\Music Library for AIMP\Classic` |
 | 測定日 | 2026-08-03 |
-| 手段 | musicTagger の `LibraryScanner` + `TagReader`（段階 1 時点） |
+| 手段 | Music Tag Auditor の `LibraryScanner` + `TagReader`（段階 1 時点） |
 | 除外 | `backup_*` フォルダ |
 | 辞書 | **未使用**（正規化辞書を要するルールは後述のとおり除外または近似） |
 

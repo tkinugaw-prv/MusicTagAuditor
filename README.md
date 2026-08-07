@@ -40,7 +40,7 @@
 
 OS のタイトルバーは `Interop/DwmDarkTitleBar.cs` で着色する。DWM の属性が無い環境（Windows 10 など）では黙って標準の外観に戻る。
 
-### musicTagger 固有の色
+### Music Tag Auditor 固有の色
 
 検査結果は重大度と判定区分で色が変わる（`docs/SPEC.md` 5.3 / 6章）。淡色前提の背景色をそのまま暗くすると判別できなくなるため、暗い面の上で使える値に置き直している。
 
@@ -220,8 +220,8 @@ R-304（曲名中の発音区別符号の欠落）は誤検出が増えるため
 
 | ファイル | 内容 |
 |---|---|
-| `musicTagger-changes-{yyyyMMddHHmmss}.csv` | 全ルールの差分明細。**根拠列を含む** |
-| `musicTagger-changes-{yyyyMMddHHmmss}-summary.csv` | ルール別の検出・適用予定・保留の件数 |
+| `MusicTagAuditor-changes-{yyyyMMddHHmmss}.csv` | 全ルールの差分明細。**根拠列を含む** |
+| `MusicTagAuditor-changes-{yyyyMMddHHmmss}-summary.csv` | ルール別の検出・適用予定・保留の件数 |
 
 Excel が日本語を Shift-JIS と誤認しないよう、BOM 付き UTF-8 で書く。
 
@@ -405,7 +405,7 @@ dotnet run --project src/MusicTagAuditor.App/MusicTagAuditor.App.csproj -- "D:\M
 
 | 変数名 | 用途 | 既定値 |
 |---|---|---|
-| `MUSICTAGGER_LIBRARY_ROOT` | 実ライブラリを使う結合テストの対象パス。**テスト専用**で、アプリ本体は参照しない。指定したフォルダが存在しない場合、該当テストはスキップされる | `D:\Music Library for AIMP\Classic` |
+| `MUSICTAGAUDITOR_LIBRARY_ROOT` | 実ライブラリを使う結合テストの対象パス。**テスト専用**で、アプリ本体は参照しない。指定したフォルダが存在しない場合、該当テストはスキップされる | `D:\Music Library for AIMP\Classic` |
 
 ---
 

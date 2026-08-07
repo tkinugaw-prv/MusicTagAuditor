@@ -24,7 +24,7 @@ public sealed class RealLibraryManualEditTests(ITestOutputHelper output) : IDisp
     /// <summary>複製先のルート。</summary>
     private readonly string _root = Path.Combine(
         Path.GetTempPath(),
-        "musicTagger.tests",
+        "MusicTagAuditor.tests",
         Guid.NewGuid().ToString("N"));
 
     /// <summary>タグ読み取り。</summary>

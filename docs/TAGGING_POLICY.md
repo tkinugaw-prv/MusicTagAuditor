@@ -45,7 +45,7 @@
 
 **例外 — 配役情報の保護**: 歌手・合唱団の配役が記録されている値は、楽団名に縮めると情報が失われるため書き換えない。該当は以下の5種類。
 
-実値は 2026-08-03 に musicTagger のスキャナで全 1,041 ファイルから抽出したもの（検証済み）。**この表が `dictionary.json` の `protectedAlbumArtists` の生成元となる。**
+実値は 2026-08-03 に Music Tag Auditor のスキャナで全 1,041 ファイルから抽出したもの（検証済み）。**この表が `dictionary.json` の `protectedAlbumArtists` の生成元となる。**
 
 | 作品 | 件数 | `albumartist` の実値 |
 |---|---|---|
