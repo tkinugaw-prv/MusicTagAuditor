@@ -7,7 +7,7 @@ namespace MusicTagAuditor.TagIo.Tests.Integration;
 public static class IntegrationConst
 {
     /// <summary>実ライブラリのパスを差し替える環境変数名。</summary>
-    public const string ENV_LIBRARY_ROOT = "MUSICTAGGER_LIBRARY_ROOT";
+    public const string ENV_LIBRARY_ROOT = "MUSICTAGAUDITOR_LIBRARY_ROOT";
 
     /// <summary>環境変数が無い場合に使う既定のライブラリパス。</summary>
     public const string DEFAULT_LIBRARY_ROOT = @"D:\Music Library for AIMP\Classic";

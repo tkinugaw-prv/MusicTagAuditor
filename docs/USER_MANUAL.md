@@ -249,8 +249,8 @@ dotnet run --project src/MusicTagAuditor.App/MusicTagAuditor.App.csproj -- "D:\M
 
 | ファイル | 内容 |
 |---|---|
-| `musicTagger-changes-{日時}.csv` | 全ルールの差分明細（根拠列を含む） |
-| `musicTagger-changes-{日時}-summary.csv` | ルール別の検出・適用予定・保留の件数 |
+| `MusicTagAuditor-changes-{日時}.csv` | 全ルールの差分明細（根拠列を含む） |
+| `MusicTagAuditor-changes-{日時}-summary.csv` | ルール別の検出・適用予定・保留の件数 |
 
 Excelでそのまま開けるよう BOM付き UTF-8 で書き出されます。
 

@@ -1,6 +1,6 @@
 # TagIoProbe
 
-`tools/TagIoProbe` は、musicTagger 本体が使うタグ入出力ライブラリを選ぶための**使い捨ての検証スパイクツール**である。[docs/SPEC.md](SPEC.md) 4章「タグ入出力ライブラリの選定」で定義された V1〜V8 の検証項目を、実ライブラリから複製した検体に対して実測する。
+`tools/TagIoProbe` は、Music Tag Auditor 本体が使うタグ入出力ライブラリを選ぶための**使い捨ての検証スパイクツール**である。[docs/SPEC.md](SPEC.md) 4章「タグ入出力ライブラリの選定」で定義された V1〜V8 の検証項目を、実ライブラリから複製した検体に対して実測する。
 
 検証結果と最終決定は [docs/adr/0001-tag-io-library.md](adr/0001-tag-io-library.md) にまとめられており、**TagLibSharp が採用済み**。このツール自体は選定が完了した後も再検証・再現用に残しているもので、`README.md` の「プロジェクト構成」表にあるとおり「選定後は破棄可能なスパイク」という位置づけ。
 

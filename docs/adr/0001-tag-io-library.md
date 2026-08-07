@@ -8,7 +8,7 @@
 
 ## 背景
 
-musicTagger のタグ読み書きに使うライブラリを決める。候補は TagLibSharp (TagLib#) と z440.atl.core (ATL.NET)。
+Music Tag Auditor のタグ読み書きに使うライブラリを決める。候補は TagLibSharp (TagLib#) と z440.atl.core (ATL.NET)。
 
 `docs/SPEC.md` 4.1 の V1〜V8 を、実ライブラリから複製した検体に対して実測した。判定はライブラリ自身の読み戻しに頼らず、M4A は MP4 ボックスを直接走査したバイナリ結果で行っている（`tools/TagIoProbe/Mp4AtomDumper.cs`）。
 
@@ -111,4 +111,4 @@ FLAC / MP3 / AIFF は TagLib# の標準 API で読み書きする（V5・V6・V7
 
 これにより、TagLib# の高レベル API（`Tag.Conductor`）をそのまま使うと **AIMP から指揮者が消える**ことが実機で確定した。本 ADR の決定（`©con` への直接書き込み）は必須の対処である。
 
-なお `TAGGING_POLICY.md` 4.3 のとおり、AIMP は**保存時**に `;` を複数値へ分割する。上記のアルバムアーティストは AIMP で保存し直すと壊れるため、musicTagger 側から書いた値を AIMP で編集・保存しないよう運用で注意する。
+なお `TAGGING_POLICY.md` 4.3 のとおり、AIMP は**保存時**に `;` を複数値へ分割する。上記のアルバムアーティストは AIMP で保存し直すと壊れるため、Music Tag Auditor 側から書いた値を AIMP で編集・保存しないよう運用で注意する。

@@ -21,7 +21,7 @@ namespace MusicTagAuditor.App.Tests.ViewModels;
 public sealed class MainViewModelBulkSelectionTests : IDisposable
 {
     /// <summary>テスト用の作業ディレクトリ。ライブラリ・設定・辞書をここに置く。</summary>
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "musicTagger-vm-" + Guid.NewGuid().ToString("N"));
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "MusicTagAuditor-vm-" + Guid.NewGuid().ToString("N"));
 
     /// <summary>
     /// 作業ディレクトリを用意する。

@@ -10,7 +10,7 @@ public sealed class DictionaryStoreTests : IDisposable
 {
     /// <summary>テスト用の作業フォルダ。</summary>
     private readonly string _directory =
-        Path.Combine(Path.GetTempPath(), $"musicTagger.tests.{Guid.NewGuid():N}");
+        Path.Combine(Path.GetTempPath(), $"MusicTagAuditor.tests.{Guid.NewGuid():N}");
 
     /// <summary>
     /// 保存した内容が読み直しで戻ることを確認する。

@@ -25,7 +25,7 @@ public sealed class TagWriterTests : IDisposable
     /// </summary>
     public TagWriterTests()
     {
-        _workDir = Path.Combine(Path.GetTempPath(), "musicTagger.tests", Guid.NewGuid().ToString("N"));
+        _workDir = Path.Combine(Path.GetTempPath(), "MusicTagAuditor.tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_workDir);
     }
 

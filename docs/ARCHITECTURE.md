@@ -101,7 +101,7 @@ WPF / MVVM によるデスクトップアプリケーション本体。
 | プロジェクト | 対応する実装 | 備考 |
 |---|---|---|
 | `tests/MusicTagAuditor.Core.Tests` | `MusicTagAuditor.Core` | 検査ルール・辞書・バックアップ・適用処理などドメインロジックの単体テスト |
-| `tests/MusicTagAuditor.TagIo.Tests` | `MusicTagAuditor.TagIo` | タグ読み書きの往復テストに加え、`Integration/` 配下に実ライブラリを対象にした結合テストを持つ。対象パスは環境変数 `MUSICTAGGER_LIBRARY_ROOT` で指定し、フォルダが存在しない場合は該当テストをスキップする |
+| `tests/MusicTagAuditor.TagIo.Tests` | `MusicTagAuditor.TagIo` | タグ読み書きの往復テストに加え、`Integration/` 配下に実ライブラリを対象にした結合テストを持つ。対象パスは環境変数 `MUSICTAGAUDITOR_LIBRARY_ROOT` で指定し、フォルダが存在しない場合は該当テストをスキップする |
 | `tests/MusicTagAuditor.App.Tests` | `MusicTagAuditor.App` | `ViewModels/` の単体テスト(検査結果の選択状態、ルール別集計、手編集の差分、`TrackViewRefresher` の絞り込み掛け直しなど) |
 
 ---

@@ -16,7 +16,7 @@ public sealed class AppSettingsStoreTests : IDisposable
     /// </summary>
     public AppSettingsStoreTests()
     {
-        _directory = Path.Combine(Path.GetTempPath(), "musicTagger.tests", Guid.NewGuid().ToString("N"));
+        _directory = Path.Combine(Path.GetTempPath(), "MusicTagAuditor.tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_directory);
     }
 

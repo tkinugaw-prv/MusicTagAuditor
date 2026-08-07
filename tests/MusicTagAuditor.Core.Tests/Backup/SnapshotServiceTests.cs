@@ -25,7 +25,7 @@ public sealed class SnapshotServiceTests : IDisposable
     /// </summary>
     public SnapshotServiceTests()
     {
-        string baseDirectory = Path.Combine(Path.GetTempPath(), "musicTagger.tests", Guid.NewGuid().ToString("N"));
+        string baseDirectory = Path.Combine(Path.GetTempPath(), "MusicTagAuditor.tests", Guid.NewGuid().ToString("N"));
 
         _root = Path.Combine(baseDirectory, "library");
         _customBackupRoot = Path.Combine(baseDirectory, "backups");
