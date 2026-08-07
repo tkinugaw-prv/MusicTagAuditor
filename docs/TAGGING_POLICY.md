@@ -21,10 +21,10 @@
 
 | フィールド | 入れるもの | 例 |
 |---|---|---|
-| `composer` | 作曲家 | `Ludwig van Beethoven` |
-| `artist` | **その録音の主役** | `Karl Böhm` / `Vladimir Ashkenazy` |
-| `conductor` | 指揮者 | `Zubin Mehta` |
-| `albumartist` | 演奏団体 | `Wiener Philharmoniker` |
+| `composer` | 作曲家 | `Johannes Brahms` |
+| `artist` | **その録音の主役** | `Yevgeny Mravinsky` / `Karl Böhm` |
+| `conductor` | 指揮者 | `Yevgeny Mravinsky` |
+| `albumartist` | 演奏団体 | `Leningrad Philharmonic Orchestra` |
 
 ### 2.2 `artist` の判定順序
 
@@ -35,7 +35,7 @@
 2. **室内楽・独奏曲** → 演奏者または団体
    例: ベートーヴェン 弦楽四重奏曲第14番 → `artist = Smetana Quartet`（`conductor` は空）
 3. **上記以外（交響曲・管弦楽曲・オペラ）** → 指揮者
-   例: ブルックナー 交響曲第8番 → `artist = Herbert von Karajan`
+   例: ブルックナー 交響曲第8番 → `artist = Eugen Jochum`
 
 指揮者がいる録音では、`artist` が誰であっても `conductor` に指揮者を必ず入れる。これにより 1〜3 のどのケースでも指揮者で絞り込める。
 
@@ -88,6 +88,11 @@
 
 `artist` / `conductor` / `albumartist` / `composer` は**ラテン文字で表記する**。キリル文字・仮名・漢字は用いない。
 
+##### 3.1 補足：なぜラテン文字で統一するか - 判断理由
+candidate: `Евгений Александрович Мравинский` / `Ленинградская филармония` / `Дмитрий Дмитриевич Шостакович`
+
+理想を言えばキリル文字表記にしたいところだが、Android Auto の検索機能はラテン文字の頭文字入力を前提としており、キリル文字（日本語と同様）は「その他大勢」に分類され頭文字検索が機能しなくなる。実運用上の検索性を優先し、ラテン文字表記に統一している。
+
 #### 3.1.1 人名
 
 - **ラテン文字圏** — 現地表記を用いる
@@ -96,6 +101,10 @@
   `Yevgeny Mravinsky` / `Vladimir Fedoseyev` / `Takashi Asahina` / `Seiji Ozawa`
 
 書式（フルネーム・生没年・語順・大文字）については 3.2 を参照。
+
+##### 3.1.1 補足 キリル文字のラテン文字転写
+`Yevgeny Mravinsky` は `Yevgeny` か `Evgeny` であるか流儀が分かれる。
+ここでは `Evgeny` を選択すると Android Auto 上で `E` を選択した時に `Eugen Jochum` と被るという実務上の理由で `Yevgeny` 表記を採用した。
 
 #### 3.1.2 団体名
 
