@@ -196,4 +196,14 @@ reportgenerator "-reports:reports/raw/*/coverage.cobertura.xml" "-targetdir:repo
 
 MIT License — [LICENSE](LICENSE) を参照。
 
-依存ライブラリの [TagLibSharp](https://github.com/mono/taglib-sharp) は LGPL-2.1 だが、NuGet パッケージとして動的にリンクしているため本体の MIT ライセンスには影響しない。
+配布物に含まれる第三者コンポーネントの著作権表示とライセンス全文は [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) にまとめている（Release にも同じファイルを添付している）。
+
+依存ライブラリの [TagLibSharp](https://github.com/mono/taglib-sharp) は LGPL-2.1-only である。**LGPL は利用する側のライセンスを制約しないため、本プロジェクトのソースコードは MIT のまま**であり、TagLibSharp は改変せず NuGet の公式パッケージをそのまま使っている。
+
+ただし配布している exe は `PublishSingleFile` により TagLibSharp.dll を実行ファイル内へバンドルしている。改変版の TagLibSharp と差し替えたい場合は、単一ファイル化しない構成で publish すれば `TagLibSharp.dll` が独立したファイルとして出力され、本体を再ビルドせずに置き換えられる。
+
+```powershell
+dotnet publish src/MusicTagAuditor.App -c Release -r win-x64 --self-contained false -p:PublishSingleFile=false
+```
+
+Serilog は Apache-2.0、CommunityToolkit.Mvvm と Microsoft.Extensions.DependencyInjection は MIT。詳細は [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) を参照。
