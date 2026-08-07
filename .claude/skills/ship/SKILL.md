@@ -66,10 +66,13 @@ git push origin <現在のブランチ>
 GitHub Release 作成（exe 添付）まで自動で行う。
 
 ```powershell
-git tag v1.0.0
+git fetch origin --tags
+git tag -a v1.0.0 origin/main -m "v1.0.0"
 git push origin v1.0.0
 ```
 
+- **タグは必ず main のコミットに打つ**（`docs/branch_strategy.md`）。main に含まれないコミットのタグは
+  release ワークフローの `Verify tag is on main` ステップが弾く。
 - バージョンはタグ名から決まる（`v1.2.3` → `1.2.3`）。`Directory.Build.props` の `<Version>` は基準値で、CI が上書きする
 - タグを push したら `gh run watch` で release ワークフローの完走を確認し、Release ページの exe 2 本を報告する
 
@@ -79,3 +82,6 @@ git push origin v1.0.0
 - **`dotnet test` は Debug 構成で走る** — Release ビルド（手順 2）とは別物。両方必要。
 - **`-reports` のグロブは `*/` の 1 階層にする** — TRX ロガーが `coverage.cobertura.xml` を添付ディレクトリにも複製するため、`**/` にすると同じレポートを二重に読み込む。
 - **`TreatWarningsAsErrors=true` + `GenerateDocumentationFile=true`**（`Directory.Build.props`）のため、public メンバーに XML ドキュメントコメントが無いと **CS1591 でビルドが落ちる**。警告 0 件でないとそもそもビルドが通らない。
+- **検証用のタグを PR の head コミットに打たない** — タグ push で走った Release の Run は、そのコミットを head に持つ PR のチェック一覧に紐付く。
+  タグを消しても Run は残るため PR に赤 × が居座り、剥がすには `gh run delete <run-id>` が要る。
+  ガードの動作確認などでタグを打つときは、PR にぶら下がっていない使い捨てのコミットを対象にする。
