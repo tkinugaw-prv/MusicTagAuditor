@@ -653,6 +653,60 @@
     </Style>
 
     <!-- ================================================================
+         右クリックメニュー
+         スタイルを当てないと、ここだけ Windows 既定の明るいクロームで出て
+         暗色の画面から浮く。
+         ================================================================ -->
+    <Style TargetType="ContextMenu">
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="HasDropShadow" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ContextMenu">
+                    <Border Background="{StaticResource PanelBarBrush}"
+                            BorderBrush="{StaticResource BorderStrongBrush}"
+                            BorderThickness="1"
+                            CornerRadius="5"
+                            Padding="4">
+                        <ItemsPresenter />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--
+      メニュー項目。今あるのは下位メニューもチェックも持たない平の項目だけなので、
+      テンプレートは Header の 1 列だけにしている。**サブメニューやチェック付きの
+      項目を足すときは、この最小テンプレートでは何も出ない。** 列を足すこと。
+    -->
+    <Style TargetType="MenuItem">
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        <Setter Property="Padding" Value="11,6" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="MenuItem">
+                    <Border x:Name="Root"
+                            Background="Transparent"
+                            CornerRadius="4"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter ContentSource="Header" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="Root" Property="Background" Value="{StaticResource ButtonHoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ================================================================
          ProgressBar（スキャン進捗）
          ================================================================ -->
     <Style TargetType="ProgressBar">
