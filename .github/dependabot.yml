@@ -1,0 +1,50 @@
+# 依存関係の更新 PR を Dependabot に作らせる。
+#
+# PR の宛先は既定ブランチ（develop）になる。main へ直接は入らない
+# （docs/branch_strategy.md）。取り込みは通常の PR と同じくレビューを経てマージする。
+#
+# セキュリティ更新（脆弱性が公表されたときの PR）はこのファイルとは別に、
+# リポジトリの設定で有効になっている。ここで設定するのは定期的なバージョン更新のほう。
+
+version: 2
+
+updates:
+  # ---- NuGet -------------------------------------------------------------
+  # ルートから再帰的に走査するので、src/ と tests/ の csproj がすべて対象になる。
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "saturday"
+      time: "03:00"
+      timezone: "Asia/Tokyo"
+    open-pull-requests-limit: 5
+    # メジャー更新だけは 1 件ずつ出す。破壊的変更を含みうるため、
+    # まとめられると「どれが原因で落ちたか」を切り分けられない。
+    groups:
+      nuget-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    commit-message:
+      prefix: "deps"
+
+  # ---- GitHub Actions ----------------------------------------------------
+  # ワークフローの Action はコミット SHA で固定してある（ci.yml / release.yml の
+  # 冒頭コメント）。Dependabot は SHA と末尾のバージョンコメントの両方を書き換えるため、
+  # 固定方針を崩さずに更新できる。
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "saturday"
+      time: "03:00"
+      timezone: "Asia/Tokyo"
+    open-pull-requests-limit: 5
+    groups:
+      actions-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    commit-message:
+      prefix: "deps"

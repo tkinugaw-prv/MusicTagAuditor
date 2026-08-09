@@ -107,6 +107,12 @@ git push origin v1.0.0
 
 第三者はここからテストの合否と各クラスのカバレッジを検証できる。
 
+### 依存関係の更新
+
+NuGet パッケージと GitHub Actions のバージョン更新は Dependabot が毎週 PR にする（[設定](.github/dependabot.yml)）。宛先は既定ブランチの `develop`。minor / patch はまとめ、major は 1 件ずつ出す。
+
+ワークフローの Action はコミット SHA で固定しているが、Dependabot は SHA と末尾のバージョンコメントの両方を書き換えるため、固定方針は崩れない。
+
 ### ローカルでの再現手順
 
 ```powershell
