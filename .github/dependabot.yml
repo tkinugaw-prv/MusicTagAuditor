@@ -15,8 +15,8 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "monday"
-      time: "09:00"
+      day: "saturday"
+      time: "03:00"
       timezone: "Asia/Tokyo"
     open-pull-requests-limit: 5
     # メジャー更新だけは 1 件ずつ出す。破壊的変更を含みうるため、
@@ -37,8 +37,8 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "monday"
-      time: "09:00"
+      day: "saturday"
+      time: "03:00"
       timezone: "Asia/Tokyo"
     open-pull-requests-limit: 5
     groups:
