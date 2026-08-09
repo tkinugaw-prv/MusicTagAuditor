@@ -16,6 +16,7 @@
     <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
     <conv:CountToVisibilityConverter x:Key="CountToVisibility" />
     <conv:TagFieldLabelConverter x:Key="TagFieldLabel" />
+    <conv:RootFolderLabelConverter x:Key="RootFolderLabel" />
 
     <!-- フォルダツリー。子フォルダを再帰的に展開する。 -->
     <HierarchicalDataTemplate DataType="{x:Type vm:FolderNodeViewModel}"
@@ -81,9 +82,29 @@
       </Style.Triggers>
     </Style>
 
+    <!--
+      ファイル一覧の行に出す右クリックメニュー。
+      ContextMenu は行とは別のツリーに載るため、DataContext は行の VM しか継がない。
+      MainViewModel のコマンドへ届かせるのに、行の Tag に DataGrid の DataContext を
+      載せて中継している（TrackRowStyle 側の Tag の Setter とセットで意味を持つ）。
+    -->
+    <ContextMenu x:Key="TrackRowContextMenu">
+      <MenuItem Header="エクスプローラーで表示"
+                Command="{Binding PlacementTarget.Tag.RevealInExplorerCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+    </ContextMenu>
+
     <!-- ファイル一覧の行。複数値・保留中の編集を色で区別する。 -->
     <Style x:Key="TrackRowStyle" TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
       <Setter Property="ToolTip" Value="{Binding SplitValueSummary}" />
+      <!--
+        右クリックメニュー。DataGrid 側に付けるとヘッダの右クリックまで拾うため、
+        行のスタイルに付ける（ChangeRowStyle のダブルクリックと同じ理由）。
+        右クリックした行は選択されていなくてよい。PlacementTarget.DataContext が
+        その行を指すので、コマンドの引数は常に「右クリックした行」になる。
+      -->
+      <Setter Property="ContextMenu" Value="{StaticResource TrackRowContextMenu}" />
+      <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=DataGrid}}" />
       <Style.Triggers>
         <!-- 複数値として格納されている行は、表示上は連結されて見えるため色で区別する -->
         <DataTrigger Binding="{Binding HasSplitValues}" Value="True">
@@ -512,7 +533,14 @@
                   <!-- ファイル名・フォルダ・形式は編集できない。リネームは対象外（docs/SPEC.md 2.2） -->
                   <DataGridTextColumn Header="ファイル" Binding="{Binding FileName}" IsReadOnly="True" Width="1.6*" MinWidth="160"
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
-                  <DataGridTextColumn Header="フォルダ" Binding="{Binding FolderPath}" IsReadOnly="True" Width="1.2*" MinWidth="120"
+                  <!--
+                    ルート直下のファイルは FolderPath が空文字になる。空欄のままだと
+                    「ルート直下」なのか「値が取れなかった」のか読み取れないため (root) と出す。
+                    変換するのは表示だけ。並べ替えは SortMemberPath が既定でバインドのパス
+                    （FolderPath）になるので、変換後の文字列ではなく実体で並ぶ。
+                  -->
+                  <DataGridTextColumn Header="フォルダ" Binding="{Binding FolderPath, Converter={StaticResource RootFolderLabel}}"
+                                      IsReadOnly="True" Width="1.2*" MinWidth="120"
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
                   <DataGridTextColumn Header="形式" Binding="{Binding Format}" IsReadOnly="True" Width="64" MinWidth="64"
                                       ElementStyle="{StaticResource CenterCellTextStyle}" />
