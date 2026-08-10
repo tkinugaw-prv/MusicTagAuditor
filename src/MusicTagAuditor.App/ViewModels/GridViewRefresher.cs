@@ -17,10 +17,13 @@ namespace MusicTagAuditor.App.ViewModels;
 /// 一括入力のようにコマンドから起きると、そのままアプリが落ちる。
 ///
 /// 掛け直しは <see cref="Resume"/> まで持ち越す。
+///
+/// ファイル一覧と検査結果の差分明細で 1 つずつ使う。どちらもチェックボックス列か
+/// セル編集を持ち、絞り込みの条件が編集の最中に変わりうる。
 /// </summary>
-public sealed class TrackViewRefresher
+public sealed class GridViewRefresher
 {
-    /// <summary>絞り込みの対象になるビュー。</summary>
+    /// <summary>絞り込みを掛け直す対象のビュー。</summary>
     private readonly ICollectionView _view;
 
     /// <summary>掛け直しを見送っているか。</summary>
@@ -29,8 +32,8 @@ public sealed class TrackViewRefresher
     /// <summary>
     /// 絞り直す相手を決める。
     /// </summary>
-    /// <param name="view">ファイル一覧のコレクションビュー。</param>
-    public TrackViewRefresher(ICollectionView view)
+    /// <param name="view">グリッドが表示しているコレクションビュー。</param>
+    public GridViewRefresher(ICollectionView view)
     {
         ArgumentNullException.ThrowIfNull(view);
 

@@ -6,13 +6,13 @@ using MusicTagAuditor.App.ViewModels;
 namespace MusicTagAuditor.App.Tests.ViewModels;
 
 /// <summary>
-/// <see cref="TrackViewRefresher"/> のテスト。
+/// <see cref="GridViewRefresher"/> のテスト。
 ///
 /// 守りたいのは「編集トランザクション中に Refresh を撃たない」の一点。
 /// 撃つと ListCollectionView が例外を投げ、ファイル一覧の行が確定できなくなる
 /// （握り潰されて編集が固まる／一括入力ではアプリが落ちる）。
 /// </summary>
-public sealed class TrackViewRefresherTests
+public sealed class GridViewRefresherTests
 {
     /// <summary>絞り込みを「a だけ」に切り替えるかどうか。</summary>
     private bool _keepsOnlyA;
@@ -24,7 +24,7 @@ public sealed class TrackViewRefresherTests
     public void Request_絞り込みをその場で掛ける()
     {
         ICollectionView view = CreateView();
-        TrackViewRefresher refresher = new(view);
+        GridViewRefresher refresher = new(view);
 
         _keepsOnlyA = true;
         refresher.Request();
@@ -40,7 +40,7 @@ public sealed class TrackViewRefresherTests
     public void Request_編集中は見送る()
     {
         ICollectionView view = CreateView();
-        TrackViewRefresher refresher = new(view);
+        GridViewRefresher refresher = new(view);
 
         ((IEditableCollectionView)view).EditItem("a");
 
@@ -58,7 +58,7 @@ public sealed class TrackViewRefresherTests
     public void Resume_編集の確定後に見送った分を掛け直す()
     {
         ICollectionView view = CreateView();
-        TrackViewRefresher refresher = new(view);
+        GridViewRefresher refresher = new(view);
         IEditableCollectionView editable = (IEditableCollectionView)view;
 
         editable.EditItem("a");
@@ -80,7 +80,7 @@ public sealed class TrackViewRefresherTests
     public void Resume_編集が続いていれば持ち越す()
     {
         ICollectionView view = CreateView();
-        TrackViewRefresher refresher = new(view);
+        GridViewRefresher refresher = new(view);
 
         ((IEditableCollectionView)view).EditItem("a");
         _keepsOnlyA = true;
@@ -99,7 +99,7 @@ public sealed class TrackViewRefresherTests
     public void Resume_見送っていなければ何もしない()
     {
         ICollectionView view = CreateView();
-        TrackViewRefresher refresher = new(view);
+        GridViewRefresher refresher = new(view);
 
         // Request を挟まずに絞り込みの条件だけ変える。掛け直せば 1 件に減るはず。
         _keepsOnlyA = true;
