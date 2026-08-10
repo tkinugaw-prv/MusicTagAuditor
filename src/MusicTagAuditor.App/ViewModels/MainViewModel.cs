@@ -65,6 +65,12 @@ public sealed partial class MainViewModel : ObservableObject
     private IReadOnlyList<TrackRowViewModel> _allTracks = [];
 
     /// <summary>
+    /// 検査で出た全ルール行。<see cref="RuleResults"/> はここから絞り込んだ表示用の写し。
+    /// <see cref="_allTracks"/> と <see cref="Tracks"/> の関係と同じ。
+    /// </summary>
+    private readonly List<RuleResultViewModel> _allRuleResults = [];
+
+    /// <summary>
     /// 保留中の手編集（段階 6）。**セルを直してもここに溜めるだけで、ファイルには書き込まない。**
     /// </summary>
     private readonly ManualEditSet _manualEdits = new();
@@ -123,6 +129,15 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>ツリーで選択中のフォルダ。</summary>
     [ObservableProperty]
     private FolderNodeViewModel? _selectedFolder;
+
+    /// <summary>
+    /// 検査結果をツリーで選択中のフォルダ配下だけに絞るか（docs/SPEC.md 5.3）。
+    ///
+    /// **既定は無効。** ツリーはファイル一覧タブの操作にも使うため、フォルダを選んだだけで
+    /// 検査結果が黙って狭まると、全体を見ているつもりの利用者を欺く。
+    /// </summary>
+    [ObservableProperty]
+    private bool _limitInspectionToSelectedFolder;
 
     /// <summary>バックアップ履歴で選択中の項目。</summary>
     [ObservableProperty]
@@ -845,11 +860,13 @@ public sealed partial class MainViewModel : ObservableObject
             {
                 RuleResultViewModel ruleViewModel = new(rule);
                 ruleViewModel.ChangeSelectionChanged += OnInspectionSelectionChanged;
-                RuleResults.Add(ruleViewModel);
+                _allRuleResults.Add(ruleViewModel);
             }
 
             _lastInspection = result;
-            SelectedRule = RuleResults.FirstOrDefault();
+
+            // 表示用のルール行と選択中ルールはここで決まる。絞り込みが無効なら全件が入る。
+            ApplyInspectionScope();
 
             LoadUnknownValues(result);
 
@@ -881,11 +898,12 @@ public sealed partial class MainViewModel : ObservableObject
     /// </summary>
     private void ClearRuleResults()
     {
-        foreach (RuleResultViewModel rule in RuleResults)
+        foreach (RuleResultViewModel rule in _allRuleResults)
         {
             rule.ChangeSelectionChanged -= OnInspectionSelectionChanged;
         }
 
+        _allRuleResults.Clear();
         RuleResults.Clear();
     }
 
@@ -918,17 +936,27 @@ public sealed partial class MainViewModel : ObservableObject
 
         // 適用対象の唯一の真実は Core 側にある。ビューモデルは書き込みを素通しするだけなので、
         // ここは検査結果をそのまま数えればよい。
-        int selected = _lastInspection.AllChanges.Count(change => change.IsSelected);
-        int holds = _lastInspection.AllChanges.Count(change => change.HoldReason != HoldReason.None);
+        // **数える範囲は画面に出している範囲に揃える。** 見えていない項目を件数に混ぜると、
+        // 「選択 N 件」と実際に書き込まれる件数が食い違う。
+        TagChange[] scoped = [.. ScopedChanges()];
+        int selected = scoped.Count(change => change.IsSelected);
+        int holds = scoped.Count(change => change.HoldReason != HoldReason.None);
+
+        // 絞り込み中は対象を明示する。件数だけ減っていると、検査し直したのか絞ったのか読めない。
+        string scopeSuffix = InspectionScopeLabel is { Length: > 0 } scopeName
+            ? $"（{scopeName} 配下）"
+            : string.Empty;
 
         InspectionSummary = isDefault
             ? string.Create(
                 CultureInfo.CurrentCulture,
-                $"検出 {_lastInspection.TotalChanges:N0} 件 / 既定で選択 {selected:N0} 件 / 保留 {holds:N0} 件"
+                $"検出 {scoped.Length:N0} 件 / 既定で選択 {selected:N0} 件 / 保留 {holds:N0} 件"
                 + $"（{_lastInspection.Elapsed.TotalSeconds:F2} 秒）")
+                + scopeSuffix
             : string.Create(
                 CultureInfo.CurrentCulture,
-                $"検出 {_lastInspection.TotalChanges:N0} 件 / 選択 {selected:N0} 件 / 保留 {holds:N0} 件");
+                $"検出 {scoped.Length:N0} 件 / 選択 {selected:N0} 件 / 保留 {holds:N0} 件")
+                + scopeSuffix;
 
         CanApplyChanges = selected > 0;
     }
@@ -1175,22 +1203,29 @@ public sealed partial class MainViewModel : ObservableObject
         {
             string summaryPath = BuildSummaryPath(dialog.FileName);
 
-            ChangeCsvExporter.WriteFile(dialog.FileName, _lastInspection.AllChanges);
+            // 画面と同じ範囲を書き出す。表と CSV で件数が違うと、どちらが本当か確かめられない。
+            TagChange[] exported = [.. ScopedChanges()];
+            string scopeSuffix = InspectionScopeLabel is { Length: > 0 } scopeName
+                ? $" / {scopeName} 配下"
+                : string.Empty;
+
+            ChangeCsvExporter.WriteFile(dialog.FileName, exported);
             File.WriteAllText(
                 summaryPath,
-                ChangeCsvExporter.BuildSummary(_lastInspection.AllChanges),
+                ChangeCsvExporter.BuildSummary(exported),
                 new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
 
             StatusText = string.Create(
                 CultureInfo.CurrentCulture,
-                $"CSV を書き出しました（{_lastInspection.TotalChanges:N0} 件）: ")
+                $"CSV を書き出しました（{exported.Length:N0} 件{scopeSuffix}）: ")
                 + $"{Path.GetFileName(dialog.FileName)} / {Path.GetFileName(summaryPath)}";
 
             Log.Information(
-                "CSV を書き出した path={Path} summary={Summary} 件数={Count}",
+                "CSV を書き出した path={Path} summary={Summary} 件数={Count} 範囲={Scope}",
                 dialog.FileName,
                 summaryPath,
-                _lastInspection.TotalChanges);
+                exported.Length,
+                InspectionScopeLabel.Length == 0 ? "(全体)" : InspectionScopeLabel);
         }
         catch (Exception ex)
         {
@@ -1753,10 +1788,109 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        foreach (TagChangeViewModel change in SelectedRule.Changes)
+        foreach (TagChangeViewModel change in SelectedRule.ScopedChanges)
         {
             InspectionChanges.Add(change);
         }
+    }
+
+    /// <summary>
+    /// 検査結果の絞り込み対象になっているフォルダ名。絞り込んでいなければ空。
+    /// </summary>
+    private string InspectionScopeLabel =>
+        LimitInspectionToSelectedFolder && SelectedFolder is { RelativePath.Length: > 0 } folder
+            ? folder.Name
+            : string.Empty;
+
+    /// <summary>
+    /// 検査結果の絞り込み判定を作る。絞り込まないときは null を返す。
+    ///
+    /// ルート（相対パスが空）を選んでいるときは全件が対象。
+    /// <see cref="ApplyFolderFilter"/> と基準を揃える。
+    /// </summary>
+    private Func<TagChangeViewModel, bool>? BuildInspectionScope()
+    {
+        if (!LimitInspectionToSelectedFolder || SelectedFolder is not { RelativePath.Length: > 0 } folder)
+        {
+            return null;
+        }
+
+        string ancestor = folder.RelativePath;
+
+        return change => IsUnder(change.FolderPath, ancestor);
+    }
+
+    /// <summary>
+    /// 検査結果を今の絞り込み範囲で作り直す。
+    ///
+    /// **チェック状態には触れない。** 範囲外の <see cref="TagChange.IsSelected"/> はそのまま残し、
+    /// 絞り込みを外せば元の選択が戻るようにする。
+    ///
+    /// **<c>DataGrid</c> がセルの編集トランザクションを開いている最中に呼ばないこと。**
+    /// 表示用コレクションを詰め替えるため、<see cref="OnInspectionSelectionChanged"/> からは呼べない。
+    /// </summary>
+    /// <param name="preferredSelection">選択し直したいルール行。無ければ null。</param>
+    private void ApplyInspectionScope(RuleResultViewModel? preferredSelection = null)
+    {
+        Func<TagChangeViewModel, bool>? scope = BuildInspectionScope();
+
+        foreach (RuleResultViewModel rule in _allRuleResults)
+        {
+            rule.SetScope(scope);
+        }
+
+        RuleResultViewModel? previous = preferredSelection ?? SelectedRule;
+
+        RuleResults.Clear();
+
+        // 配下に検出が無いルールは行ごと落とす。0 件の行を残しても情報量が無く、
+        // 検査直後に 0 件のルールを出さないのと基準が揃う（RunInspection）。
+        foreach (RuleResultViewModel rule in _allRuleResults.Where(rule => rule.Count > 0))
+        {
+            RuleResults.Add(rule);
+        }
+
+        RuleResultViewModel? next = previous is not null && RuleResults.Contains(previous)
+            ? previous
+            : RuleResults.FirstOrDefault();
+
+        if (ReferenceEquals(SelectedRule, next))
+        {
+            // OnSelectedRuleChanged が発火しない。明細は範囲が変わっているので自分で張り直す。
+            TagChangeViewModel? selectedChange = SelectedChange;
+
+            RefreshInspectionChanges();
+
+            // **範囲に残っている行の選択は捨てない。** 適用のたびに下段の選択が飛ぶと、
+            // 明細を 1 行ずつ潰していく作業のほうが壊れる。
+            if (selectedChange is not null && InspectionChanges.Contains(selectedChange))
+            {
+                SelectedChange = selectedChange;
+            }
+        }
+        else
+        {
+            SelectedRule = next;
+        }
+
+        UpdateInspectionSelection(isDefault: false);
+
+        // 下段の一括操作の活性は SelectedRule.FixableCount で決まる。選択中ルールが同じままでも
+        // 範囲が変われば件数が変わるので、[NotifyCanExecuteChangedFor] 任せにはできない。
+        // 上段は RuleResults の CollectionChanged で再評価される（コンストラクタ）。
+        SelectAllChangesCommand.NotifyCanExecuteChanged();
+        DeselectAllChangesCommand.NotifyCanExecuteChanged();
+        InvertChangesCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>
+    /// 絞り込み範囲に入っている修正案。適用と CSV 出力はここを見る。
+    /// </summary>
+    private IEnumerable<TagChange> ScopedChanges()
+    {
+        return _allRuleResults
+            .SelectMany(rule => rule.ScopedChanges)
+            .Select(change => change.Change);
     }
 
     /// <summary>
@@ -1785,7 +1919,7 @@ public sealed partial class MainViewModel : ObservableObject
         bool selectedRuleRemoved = selectedRule is not null;
         List<RuleResultViewModel> updated = [];
 
-        foreach (RuleResultViewModel existing in RuleResults)
+        foreach (RuleResultViewModel existing in _allRuleResults)
         {
             bool touched = existing.Result.Changes.Any(
                 change => succeededFields.Contains(TagChangeKey.From(change)));
@@ -1827,28 +1961,18 @@ public sealed partial class MainViewModel : ObservableObject
             }
         }
 
-        RuleResults.Clear();
-
-        foreach (RuleResultViewModel rule in updated)
-        {
-            RuleResults.Add(rule);
-        }
+        _allRuleResults.Clear();
+        _allRuleResults.AddRange(updated);
 
         if (selectedRuleRemoved)
         {
             // 選択中ルールが丸ごと消えた。RunInspection の既定選択と同じく先頭へ切り替える。
-            SelectedRule = RuleResults.FirstOrDefault();
-        }
-        else if (replacementForSelectedRule is not null)
-        {
-            // 選択中ルールは一部残った。差し替えた新しいインスタンスへ選択をつなぎ直す。
-            SelectedRule = replacementForSelectedRule;
+            SelectedRule = null;
         }
 
-        // 選択中ルールに触れていない場合はここで何もしない。SelectedRule が変わっていないので
-        // OnSelectedRuleChanged は発火せず、下段の選択行（SelectedChange）も保たれる。
-
-        UpdateInspectionSelection(isDefault: false);
+        // 表示用のルール行の詰め替えと選択の解決は絞り込み側にまとめてある。
+        // **差し替えで新しく作った RuleResultViewModel にも範囲を当て直す必要がある。**
+        ApplyInspectionScope(replacementForSelectedRule);
     }
 
     /// <summary>
@@ -1865,7 +1989,9 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        TagChange[] targets = [.. _lastInspection.AllChanges.Where(change => change.IsSelected && change.HasFix)];
+        // **画面に出ていない項目は書き込まない。** 絞り込み中に全体へ適用すると、
+        // 1 フォルダだけ直しているつもりの操作がライブラリ全体への書き込みになる。
+        TagChange[] targets = [.. ScopedChanges().Where(change => change.IsSelected && change.HasFix)];
 
         if (targets.Length == 0)
         {
@@ -1873,7 +1999,7 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        if (!ConfirmApply(targets))
+        if (!ConfirmApply(targets, InspectionScopeLabel))
         {
             return;
         }
@@ -1930,7 +2056,12 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>
     /// 適用してよいかを確認する。書き込みは取り消しにくいので、件数と内訳を示してから実行する。
     /// </summary>
-    private static bool ConfirmApply(IReadOnlyList<TagChange> targets)
+    /// <param name="targets">書き込む修正案。</param>
+    /// <param name="scopeLabel">
+    /// 絞り込み中の対象フォルダ名。絞り込んでいなければ空。
+    /// **絞っているときは必ず示す。** 全体に効いたと思わせたまま一部だけ書き込むのは嘘になる。
+    /// </param>
+    private static bool ConfirmApply(IReadOnlyList<TagChange> targets, string scopeLabel)
     {
         string breakdown = string.Join(
             Environment.NewLine,
@@ -1943,9 +2074,14 @@ public sealed partial class MainViewModel : ObservableObject
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Count();
 
-        string message = string.Create(
-            CultureInfo.CurrentCulture,
-            $"{fileCount:N0} ファイルに {targets.Count:N0} 項目を書き込みます。")
+        string scopeLine = scopeLabel.Length == 0
+            ? string.Empty
+            : $"対象フォルダ: {scopeLabel}（配下のみ）" + Environment.NewLine + Environment.NewLine;
+
+        string message = scopeLine
+            + string.Create(
+                CultureInfo.CurrentCulture,
+                $"{fileCount:N0} ファイルに {targets.Count:N0} 項目を書き込みます。")
             + Environment.NewLine + Environment.NewLine
             + breakdown
             + Environment.NewLine + Environment.NewLine
@@ -2068,10 +2204,24 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>
     /// ツリーの選択が変わったら一覧を絞り込む。
+    /// 検査結果は「選択フォルダのみ」が有効なときだけ追随させる。
     /// </summary>
     partial void OnSelectedFolderChanged(FolderNodeViewModel? value)
     {
         ApplyFolderFilter(value);
+
+        if (LimitInspectionToSelectedFolder)
+        {
+            ApplyInspectionScope();
+        }
+    }
+
+    /// <summary>
+    /// 検査結果の絞り込みの入切が変わったので、範囲を作り直す。
+    /// </summary>
+    partial void OnLimitInspectionToSelectedFolderChanged(bool value)
+    {
+        ApplyInspectionScope();
     }
 
     /// <summary>

@@ -291,6 +291,13 @@
                   <Button Content="全選択" Command="{Binding SelectAllRuleChangesCommand}" Margin="0,0,8,0" />
                   <Button Content="全選択解除" Command="{Binding DeselectAllRuleChangesCommand}" Margin="0,0,8,0" />
                   <Button Content="選択反転" Command="{Binding InvertRuleChangesCommand}" />
+                  <!--
+                    既定は無効。ツリーはファイル一覧タブの操作にも使うため、フォルダを選んだだけで
+                    検査結果が黙って狭まると、全体を見ているつもりの利用者を欺く（docs/SPEC.md 5.3）。
+                  -->
+                  <CheckBox Content="選択フォルダのみ" VerticalAlignment="Center" Margin="14,0,0,0"
+                            IsChecked="{Binding LimitInspectionToSelectedFolder}"
+                            ToolTip="左のツリーで選んだフォルダ配下の検出だけを表示します。一括選択・適用・CSV出力も同じ範囲に限定されます" />
                 </StackPanel>
                 <DataGrid ItemsSource="{Binding RuleResults}"
                           SelectedItem="{Binding SelectedRule}"

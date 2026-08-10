@@ -36,6 +36,12 @@ public sealed partial class RuleResultViewModel : ObservableObject
     /// <summary>配下を一括で書き換えている最中か。1 件ごとのヘッダー再計算を止める。</summary>
     private bool _suppressHeaderSync;
 
+    /// <summary>範囲内の明細のうち修正案を持つもの。<see cref="SetScope"/> で作り直す。</summary>
+    private TagChangeViewModel[] _scopedFixableChanges = [];
+
+    /// <summary>範囲内の保留件数。バインドのたびに数え直さないよう持っておく。</summary>
+    private int _scopedHoldCount;
+
     /// <summary>
     /// ルールの結果からビューモデルを作る。
     /// </summary>
@@ -51,6 +57,12 @@ public sealed partial class RuleResultViewModel : ObservableObject
         {
             change.PropertyChanged += OnChangePropertyChanged;
         }
+
+        // 絞り込み前の状態から始める。ヘッダーの既定はこの下で別に決めるので、
+        // ここで SyncHeaderFromChanges を走らせないよう素で組み立てる。
+        ScopedChanges = Changes;
+        _scopedFixableChanges = [.. Changes.Where(change => change.HasFix)];
+        _scopedHoldCount = result.HoldCount;
 
         // 修正値が決まっている ⛔ と ⚠ を既定でチェックする。❓ と保留は既定で外す。
         // TagChange.IsSelected の既定値と同じ条件にすること。ずれると
@@ -69,8 +81,15 @@ public sealed partial class RuleResultViewModel : ObservableObject
     /// <summary>元のルール結果。</summary>
     public RuleResult Result { get; }
 
-    /// <summary>このルールの明細。下段グリッドはこれを表示する。</summary>
+    /// <summary>このルールの明細の全件。絞り込みの母集合。</summary>
     public IReadOnlyList<TagChangeViewModel> Changes { get; }
+
+    /// <summary>
+    /// 絞り込み範囲に入っている明細。下段グリッドはこれを表示する。
+    ///
+    /// 絞り込みが無いときは <see cref="Changes"/> と同じ内容を指す。
+    /// </summary>
+    public IReadOnlyList<TagChangeViewModel> ScopedChanges { get; private set; }
 
     /// <summary>ルール ID。</summary>
     public string RuleId => Result.RuleId;
@@ -84,19 +103,22 @@ public sealed partial class RuleResultViewModel : ObservableObject
     /// <summary>説明。</summary>
     public string Description => Result.Description;
 
-    /// <summary>検出件数。</summary>
-    public int Count => Result.Changes.Count;
+    /// <summary>検出件数。絞り込み中は範囲内の件数。</summary>
+    public int Count => ScopedChanges.Count;
 
-    /// <summary>自動修正できる件数。</summary>
-    public int FixableCount => Result.FixableCount;
+    /// <summary>自動修正できる件数。絞り込み中は範囲内の件数。</summary>
+    public int FixableCount => _scopedFixableChanges.Length;
 
-    /// <summary>保留になった件数。</summary>
-    public int HoldCount => Result.HoldCount;
+    /// <summary>保留になった件数。絞り込み中は範囲内の件数。</summary>
+    public int HoldCount => _scopedHoldCount;
 
     /// <summary>
     /// 修正案を持つ明細。チェックしても適用できないものは一括操作の対象外にする。
+    ///
+    /// **絞り込み範囲の外は含めない。** 一括操作とヘッダー同期はここを通るので、
+    /// 範囲外を混ぜると画面に出ていない明細のチェックまで動いてしまう。
     /// </summary>
-    public IEnumerable<TagChangeViewModel> FixableChanges => Changes.Where(change => change.HasFix);
+    public IEnumerable<TagChangeViewModel> FixableChanges => _scopedFixableChanges;
 
     /// <summary>
     /// 適用できる明細を持つか。
@@ -106,6 +128,30 @@ public sealed partial class RuleResultViewModel : ObservableObject
     /// 選択件数の表示と実際の適用件数が食い違う原因になる。
     /// </summary>
     public bool HasFixableChanges => FixableCount > 0;
+
+    /// <summary>
+    /// 絞り込みの範囲を差し替える。
+    ///
+    /// **ビューモデルを作り直さずに範囲だけ入れ替える。** 作り直すとヘッダーのチェックが
+    /// 既定値に戻り、利用者が組み立てた選択が消える。購読と選択中ルールの同一性も切れる。
+    /// </summary>
+    /// <param name="scope">範囲内なら true を返す判定。null なら全件を範囲とする。</param>
+    public void SetScope(Func<TagChangeViewModel, bool>? scope)
+    {
+        ScopedChanges = scope is null ? Changes : [.. Changes.Where(scope)];
+        _scopedFixableChanges = [.. ScopedChanges.Where(change => change.HasFix)];
+        _scopedHoldCount = ScopedChanges.Count(change => change.Change.HoldReason != HoldReason.None);
+
+        OnPropertyChanged(nameof(ScopedChanges));
+        OnPropertyChanged(nameof(Count));
+        OnPropertyChanged(nameof(FixableCount));
+        OnPropertyChanged(nameof(HoldCount));
+        OnPropertyChanged(nameof(FixableChanges));
+        OnPropertyChanged(nameof(HasFixableChanges));
+
+        // 範囲が変われば「全件チェック済みか」の答えも変わる。範囲内の実態から決め直す。
+        SyncHeaderFromChanges();
+    }
 
     /// <summary>
     /// 配下のチェックをまとめて書き換える。全選択・全解除・選択反転の入口。
@@ -194,14 +240,12 @@ public sealed partial class RuleResultViewModel : ObservableObject
     /// </summary>
     private void SyncHeaderFromChanges()
     {
-        TagChangeViewModel[] fixable = [.. FixableChanges];
-
-        if (fixable.Length == 0)
+        if (_scopedFixableChanges.Length == 0)
         {
             return;
         }
 
-        bool allSelected = Array.TrueForAll(fixable, change => change.IsSelected);
+        bool allSelected = Array.TrueForAll(_scopedFixableChanges, change => change.IsSelected);
 
         if (IsSelected == allSelected)
         {

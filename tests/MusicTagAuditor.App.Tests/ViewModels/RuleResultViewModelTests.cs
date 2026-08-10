@@ -157,6 +157,78 @@ public sealed class RuleResultViewModelTests
     }
 
     /// <summary>
+    /// <see cref="RuleResultViewModel.SetScope"/> で件数と明細が範囲内だけになる。
+    ///
+    /// 上段の「検出 / 修正可 / 保留」列はここを見ている。範囲外を混ぜると、
+    /// 行に出ている件数と下段に並ぶ明細の数が食い違う。
+    /// </summary>
+    [Fact]
+    public void SetScope_件数と明細が範囲内だけになる()
+    {
+        TagChange bach = CreateChange(@"バッハ\01.m4a", Severity.Error, ["Classic"]);
+        TagChange bruckner = CreateChange(@"ブルックナー\01.m4a", Severity.Error, ["Classic"]);
+        RuleResultViewModel rule = new(CreateResult(Severity.Error, bach, bruckner));
+
+        Assert.Equal(2, rule.Count);
+        Assert.Equal(2, rule.FixableCount);
+
+        rule.SetScope(change => change.FolderPath == "バッハ");
+
+        Assert.Equal(1, rule.Count);
+        Assert.Equal(1, rule.FixableCount);
+        Assert.Equal(bach, Assert.Single(rule.ScopedChanges).Change);
+
+        // 母集合は残っている。範囲を外せば元に戻る。
+        Assert.Equal(2, rule.Changes.Count);
+
+        rule.SetScope(null);
+
+        Assert.Equal(2, rule.Count);
+    }
+
+    /// <summary>
+    /// 範囲内だけを一括操作の対象にし、**範囲外のチェック状態は動かさない**。
+    ///
+    /// ここが崩れると、1 フォルダを見ているつもりの操作がライブラリ全体のチェックを変える。
+    /// </summary>
+    [Fact]
+    public void SetScope_一括操作は範囲外を動かさない()
+    {
+        TagChange bach = CreateChange(@"バッハ\01.m4a", Severity.Error, ["Classic"]);
+        TagChange bruckner = CreateChange(@"ブルックナー\01.m4a", Severity.Error, ["Classic"]);
+        RuleResultViewModel rule = new(CreateResult(Severity.Error, bach, bruckner));
+
+        rule.SetScope(change => change.FolderPath == "バッハ");
+        rule.UpdateChangeSelection(_ => false);
+
+        Assert.False(bach.IsSelected);
+        Assert.True(bruckner.IsSelected);
+
+        // ヘッダーも範囲内の実態から決まる（範囲内は全解除なので false）。
+        Assert.False(rule.IsSelected);
+    }
+
+    /// <summary>
+    /// 範囲を差し替えた時点で、ヘッダーのチェックが範囲内の実態から決め直される。
+    /// </summary>
+    [Fact]
+    public void SetScope_ヘッダーが範囲内の実態から決まる()
+    {
+        TagChange bach = CreateChange(@"バッハ\01.m4a", Severity.Error, ["Classic"]);
+        TagChange bruckner = CreateChange(@"ブルックナー\01.m4a", Severity.Error, ["Classic"]);
+        RuleResultViewModel rule = new(CreateResult(Severity.Error, bach, bruckner));
+
+        // 範囲外だけ外す。全体で見れば「混在」なのでヘッダーは false。
+        rule.Changes[1].IsSelected = false;
+        Assert.False(rule.IsSelected);
+
+        // バッハ配下だけを見ると全件チェック済みなのでヘッダーは true に戻る。
+        rule.SetScope(change => change.FolderPath == "バッハ");
+
+        Assert.True(rule.IsSelected);
+    }
+
+    /// <summary>
     /// テスト用のルール結果を作る。
     /// </summary>
     /// <param name="severity">重大度。</param>

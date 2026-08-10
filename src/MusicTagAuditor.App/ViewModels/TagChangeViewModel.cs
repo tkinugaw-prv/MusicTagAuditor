@@ -1,3 +1,4 @@
+using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using MusicTagAuditor.Core.Models;
 
@@ -26,10 +27,17 @@ public sealed class TagChangeViewModel : ObservableObject
         ArgumentNullException.ThrowIfNull(change);
 
         Change = change;
+
+        // フォルダでの絞り込みは明細 1,000 件超を毎回走査する。
+        // 相対パスの切り出しは変わらないので、ここで 1 回だけ計算しておく。
+        FolderPath = Path.GetDirectoryName(change.RelativePath) ?? string.Empty;
     }
 
     /// <summary>元の修正案。適用と辞書登録はこちらを渡す。</summary>
     public TagChange Change { get; }
+
+    /// <summary>相対パスのうちフォルダ部分。ツリーでの絞り込みに使う。</summary>
+    public string FolderPath { get; }
 
     /// <summary>
     /// 適用対象にするかどうか（docs/SPEC.md 9章）。
