@@ -1091,13 +1091,33 @@
          行数が多い画面なので Music Selector より行高を詰める。
          配色と枠の扱いは同じ。
          ================================================================ -->
+    <!--
+      列幅を変えるつまみ。**掴める場所だと分かるように光らせる。**
+      当たり判定だけ透明で置くと、ドラッグできること自体に気づけない
+      （見出しの縦線は細く、そこが操作対象だと読み取れない）。
+      幅 8 は境界線の左右 4px ずつ。細くすると狙って掴めない。
+    -->
     <Style x:Key="ColumnHeaderGripperStyle" TargetType="Thumb">
         <Setter Property="Width" Value="8" />
         <Setter Property="Cursor" Value="SizeWE" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Thumb">
-                    <Border Background="Transparent" />
+                    <!-- 外側は当たり判定。中の細い線だけを色付けして境界を示す。 -->
+                    <Border Background="Transparent">
+                        <Border x:Name="GripperLine"
+                                Width="2"
+                                HorizontalAlignment="Center"
+                                Background="Transparent" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="GripperLine" Property="Background" Value="{StaticResource AccentBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsDragging" Value="True">
+                            <Setter TargetName="GripperLine" Property="Background" Value="{StaticResource AccentBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
@@ -1110,7 +1130,12 @@
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Padding" Value="10,7" />
         <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
-        <Setter Property="BorderThickness" Value="0,0,0,1" />
+        <!--
+          右にも線を引いて列の境目を見せる。**境界が見えないとドラッグで幅を
+          変えられること自体が伝わらない。** つまみ（PART_*HeaderGripper）は
+          この線の上に重ねてある。
+        -->
+        <Setter Property="BorderThickness" Value="0,0,1,1" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="DataGridColumnHeader">
@@ -1156,6 +1181,23 @@
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--
+      利用者が幅を変える表の見出し（ctl:ColumnResize.Enabled と対で使う）。
+      一度ドラッグすると全列の幅が px に固定され、ウィンドウを広げても列が
+      伸びなくなる。**戻す道を用意しておかないと再起動するしかない。**
+    -->
+    <Style x:Key="ResizableColumnHeader" TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+        <Setter Property="ContextMenu">
+            <Setter.Value>
+                <ContextMenu>
+                    <MenuItem Header="列幅を初期化"
+                              Command="{x:Static ctl:ColumnResize.ResetWidthsCommand}"
+                              CommandParameter="{Binding PlacementTarget, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                </ContextMenu>
             </Setter.Value>
         </Setter>
     </Style>
