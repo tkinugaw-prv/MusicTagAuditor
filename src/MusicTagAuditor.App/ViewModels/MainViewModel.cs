@@ -79,9 +79,18 @@ public sealed partial class MainViewModel : ObservableObject
     private ICollectionView? _trackView;
 
     /// <summary>
-    /// ファイル一覧の絞り込みを掛け直す係。**編集中は掛け直さない**（<see cref="TrackViewRefresher"/>）。
+    /// ファイル一覧の絞り込みを掛け直す係。**編集中は掛け直さない**（<see cref="GridViewRefresher"/>）。
     /// </summary>
-    private TrackViewRefresher? _trackRefresher;
+    private GridViewRefresher? _trackRefresher;
+
+    /// <summary>検査結果の差分明細（下段）の絞り込みビュー。</summary>
+    private ICollectionView? _inspectionChangeView;
+
+    /// <summary>
+    /// 差分明細の絞り込みを掛け直す係。**編集中は掛け直さない**（<see cref="GridViewRefresher"/>）。
+    /// チェックボックス列を触ると絞り込みの条件そのものが変わるため、ここが特に効く。
+    /// </summary>
+    private GridViewRefresher? _inspectionChangeRefresher;
 
     /// <summary>実行中のスキャンをキャンセルするためのトークンソース。</summary>
     private CancellationTokenSource? _scanCancellation;
@@ -173,6 +182,20 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ExportCsvCommand))]
     private bool _hasInspectionResult;
+
+    /// <summary>
+    /// 差分明細をチェック済みの行だけに絞るか（docs/SPEC.md 5.3）。
+    ///
+    /// **表示だけの絞り込み。** 隠すのは適用されない行だけなので、上段の件数・適用対象・
+    /// CSV 出力は動かさない。フォルダの絞り込み（<see cref="LimitInspectionToSelectedFolder"/>）が
+    /// 対象範囲そのものを狭めるのとはそこが違う。絞っているあいだは、要約の「選択 N 件」と
+    /// 画面に出ている行数が一致する。
+    ///
+    /// **既定は無効。** 検査直後は既定のチェックを見直すところから始まるので、
+    /// 未チェックの行が最初から隠れていては選びようがない。
+    /// </summary>
+    [ObservableProperty]
+    private bool _showOnlySelectedChanges;
 
     /// <summary>検査結果の差分明細で選択中の行。</summary>
     [ObservableProperty]
@@ -913,11 +936,33 @@ public sealed partial class MainViewModel : ObservableObject
     /// **ここでコレクションを触らないこと。** 呼ばれるのは DataGrid がセルの編集
     /// トランザクションを開いている最中で、その状態で
     /// <see cref="System.ComponentModel.ICollectionView.Refresh"/> を呼ぶと落ちる
-    /// (<see cref="TrackViewRefresher"/>)。数えて表示を書き換えるだけに留める。
+    /// (<see cref="GridViewRefresher"/>)。数えて表示を書き換えるだけに留める。
     /// </summary>
     private void OnInspectionSelectionChanged(object? sender, EventArgs e)
     {
         UpdateInspectionSelection(isDefault: false);
+
+        // 「チェック済みのみ」で絞っているあいだは、チェックを外した行が対象から外れる。
+        // 掛け直しはビューに任せられる（編集中なら GridViewRefresher が見送り、
+        // NotifyInspectionEditFinished で掛け直す）。コレクション自体は触らない。
+        //
+        // **絞っていないときは掛け直さない。** 絞り込みの結果は変わらないのに、
+        // チェックを 1 つ付け外しするたび下段の現在行とスクロール位置が飛ぶ。
+        if (ShowOnlySelectedChanges)
+        {
+            _inspectionChangeRefresher?.Request();
+        }
+    }
+
+    /// <summary>
+    /// 差分明細のセル編集が終わったので、見送っていた絞り込みを掛け直す。
+    ///
+    /// **チェックボックスのクリックは編集トランザクションを開く。** その最中は絞り直せず、
+    /// 掛け直しは <see cref="GridViewRefresher"/> が持ち越している。View から呼ぶ。
+    /// </summary>
+    public void NotifyInspectionEditFinished()
+    {
+        _inspectionChangeRefresher?.Resume();
     }
 
     /// <summary>
@@ -1795,6 +1840,52 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
+    /// 差分明細の絞り込みビューを用意する。初回だけ作ればよい。
+    ///
+    /// **絞り込みが要求されるまで作らない。** <c>CollectionView</c> はスレッド親和性を持ち、
+    /// 作った時点から <see cref="InspectionChanges"/> の詰め替えが 1 本のスレッドに縛られる。
+    /// 使いもしない絞り込みのために、明細を作り直すすべての経路へ制約を広げない。
+    /// </summary>
+    private void SetUpInspectionChangeView()
+    {
+        if (_inspectionChangeView is not null)
+        {
+            return;
+        }
+
+        _inspectionChangeView = CollectionViewSource.GetDefaultView(InspectionChanges);
+        _inspectionChangeView.Filter = MatchesInspectionChangeFilter;
+        _inspectionChangeRefresher = new GridViewRefresher(_inspectionChangeView);
+    }
+
+    /// <summary>
+    /// 差分明細を一覧に出すかどうかを判定する。
+    /// </summary>
+    /// <param name="item">判定する行。</param>
+    /// <returns>出すなら true。</returns>
+    private bool MatchesInspectionChangeFilter(object item)
+    {
+        if (item is not TagChangeViewModel change)
+        {
+            return false;
+        }
+
+        return !ShowOnlySelectedChanges || change.IsSelected;
+    }
+
+    /// <summary>
+    /// 絞り込みが変わったら差分明細を絞り直す。
+    ///
+    /// ビューはここで初めて用意する。<see cref="ICollectionView.Filter"/> の設定自体が
+    /// 掛け直しを伴うので、作った直後は <c>Request</c> が二度目になるだけで害は無い。
+    /// </summary>
+    partial void OnShowOnlySelectedChangesChanged(bool value)
+    {
+        SetUpInspectionChangeView();
+        _inspectionChangeRefresher?.Request();
+    }
+
+    /// <summary>
     /// 検査結果の絞り込み対象になっているフォルダ名。絞り込んでいなければ空。
     /// </summary>
     private string InspectionScopeLabel =>
@@ -2379,7 +2470,7 @@ public sealed partial class MainViewModel : ObservableObject
 
         _trackView = CollectionViewSource.GetDefaultView(Tracks);
         _trackView.Filter = MatchesTrackFilter;
-        _trackRefresher = new TrackViewRefresher(_trackView);
+        _trackRefresher = new GridViewRefresher(_trackView);
     }
 
     /// <summary>

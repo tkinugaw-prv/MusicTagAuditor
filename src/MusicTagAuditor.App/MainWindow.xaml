@@ -372,13 +372,24 @@
                   <Button Content="全選択" Command="{Binding SelectAllChangesCommand}" Margin="0,0,8,0" />
                   <Button Content="全選択解除" Command="{Binding DeselectAllChangesCommand}" Margin="0,0,8,0" />
                   <Button Content="選択反転" Command="{Binding InvertChangesCommand}" />
+                  <!--
+                    表示だけの絞り込み。件数・適用対象・CSV 出力は動かさない（docs/SPEC.md 5.3）。
+                    隠すのは適用されない行だけなので、「選択 N 件」と画面の行数が一致する。
+                  -->
+                  <CheckBox Content="チェック済みのみ" VerticalAlignment="Center" Margin="14,0,0,0"
+                            IsChecked="{Binding ShowOnlySelectedChanges}"
+                            ToolTip="適用チェックを付けた行だけを表示します。件数・適用対象・CSV 出力は変わりません" />
                 </StackPanel>
-                <DataGrid ItemsSource="{Binding InspectionChanges}"
+                <DataGrid x:Name="InspectionChangeGrid"
+                          ItemsSource="{Binding InspectionChanges}"
                           SelectedItem="{Binding SelectedChange}"
                           RowStyle="{StaticResource ChangeRowStyle}"
                           CanUserSortColumns="True"
                           EnableRowVirtualization="True"
-                          HorizontalScrollBarVisibility="Auto">
+                          HorizontalScrollBarVisibility="Auto"
+                          CellEditEnding="OnInspectionCellEditEnding"
+                          RowEditEnding="OnInspectionRowEditEnding"
+                          IsKeyboardFocusWithinChanged="OnInspectionGridKeyboardFocusWithinChanged">
                 <DataGrid.Columns>
                   <DataGridCheckBoxColumn Header="適用" Width="50"
                                           Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}"

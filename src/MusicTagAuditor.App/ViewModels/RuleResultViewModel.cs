@@ -33,8 +33,13 @@ public sealed partial class RuleResultViewModel : ObservableObject
     /// <summary>配下から逆算してヘッダーを直している最中か。配下への撃ち返しを止める。</summary>
     private bool _syncingHeader;
 
-    /// <summary>配下を一括で書き換えている最中か。1 件ごとのヘッダー再計算を止める。</summary>
-    private bool _suppressHeaderSync;
+    /// <summary>
+    /// 配下を一括で書き換えている最中か。1 件ごとのヘッダー再計算と親への通知を止める。
+    /// </summary>
+    private bool _isBulkUpdating;
+
+    /// <summary>一括で書き換えている最中にチェックが動いたか。まとめた通知を出すかの判断に使う。</summary>
+    private bool _changedDuringBulkUpdate;
 
     /// <summary>範囲内の明細のうち修正案を持つもの。<see cref="SetScope"/> で作り直す。</summary>
     private TagChangeViewModel[] _scopedFixableChanges = [];
@@ -75,6 +80,9 @@ public sealed partial class RuleResultViewModel : ObservableObject
     ///
     /// 明細は 1,000 件を超えることがあるため、親（<c>MainViewModel</c>）には
     /// ルール単位で 1 本にまとめて伝える。子は自分が生成・所有するので購読が漏れない。
+    ///
+    /// **一括操作では最後に 1 回だけ上げる。** 受け手は件数の数え直しと表示の作り直しを
+    /// 行うので、1,000 件の書き換えで 1,000 回上げると画面が固まる。
     /// </summary>
     public event EventHandler? ChangeSelectionChanged;
 
@@ -156,7 +164,7 @@ public sealed partial class RuleResultViewModel : ObservableObject
     /// <summary>
     /// 配下のチェックをまとめて書き換える。全選択・全解除・選択反転の入口。
     ///
-    /// **ヘッダーの同期は最後に 1 回だけ行う。** 1 件ごとに配下を数え直すと、
+    /// **ヘッダーの同期と親への通知は最後に 1 回だけ行う。** 1 件ごとに配下を数え直すと、
     /// 明細が 1,000 件を超えるルールで O(n²) になる。
     /// </summary>
     /// <param name="next">今のチェック状態から次の状態を決める。</param>
@@ -164,21 +172,7 @@ public sealed partial class RuleResultViewModel : ObservableObject
     {
         ArgumentNullException.ThrowIfNull(next);
 
-        _suppressHeaderSync = true;
-
-        try
-        {
-            foreach (TagChangeViewModel change in FixableChanges)
-            {
-                change.IsSelected = next(change.IsSelected);
-            }
-        }
-        finally
-        {
-            _suppressHeaderSync = false;
-        }
-
-        SyncHeaderFromChanges();
+        BulkUpdateChanges(next);
     }
 
     /// <summary>
@@ -197,18 +191,41 @@ public sealed partial class RuleResultViewModel : ObservableObject
             return;
         }
 
-        _suppressHeaderSync = true;
+        BulkUpdateChanges(_ => value);
+    }
+
+    /// <summary>
+    /// 配下のチェックを一括で書き換える。
+    ///
+    /// **1 件ごとに数え直さない。** ヘッダーの同期も親への通知も最後に 1 回だけ行う。
+    /// 明細が 1,000 件を超えるルールでは、1 件ごとに通知すると受け手が件数を数え直し、
+    /// 表示も作り直すため画面が固まる。
+    /// </summary>
+    /// <param name="next">今のチェック状態から次の状態を決める。</param>
+    private void BulkUpdateChanges(Func<bool, bool> next)
+    {
+        _isBulkUpdating = true;
+        _changedDuringBulkUpdate = false;
 
         try
         {
             foreach (TagChangeViewModel change in FixableChanges)
             {
-                change.IsSelected = value;
+                change.IsSelected = next(change.IsSelected);
             }
         }
         finally
         {
-            _suppressHeaderSync = false;
+            _isBulkUpdating = false;
+        }
+
+        SyncHeaderFromChanges();
+
+        // 1 件も動かなかったのなら通知しない。押しても何も変わらない操作で
+        // 表示を作り直すと、下段の現在行やスクロール位置が無駄に飛ぶ。
+        if (_changedDuringBulkUpdate)
+        {
+            ChangeSelectionChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 
@@ -222,10 +239,14 @@ public sealed partial class RuleResultViewModel : ObservableObject
             return;
         }
 
-        if (!_suppressHeaderSync)
+        // 一括操作の最中。数え直しも通知も BulkUpdateChanges が最後にまとめる。
+        if (_isBulkUpdating)
         {
-            SyncHeaderFromChanges();
+            _changedDuringBulkUpdate = true;
+            return;
         }
+
+        SyncHeaderFromChanges();
 
         ChangeSelectionChanged?.Invoke(this, EventArgs.Empty);
     }

@@ -124,6 +124,40 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// 差分明細のセル編集が終わったら、見送っていた絞り込みを掛け直させる。
+    /// </summary>
+    private void OnInspectionCellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
+    {
+        ScheduleInspectionEditFinished();
+    }
+
+    /// <summary>
+    /// 差分明細の行の編集が終わったら、見送っていた絞り込みを掛け直させる。
+    /// </summary>
+    private void OnInspectionRowEditEnding(object sender, DataGridRowEditEndingEventArgs e)
+    {
+        ScheduleInspectionEditFinished();
+    }
+
+    /// <summary>
+    /// 差分明細から入力が離れたら、編集中の行をその場で確定させる。
+    ///
+    /// **適用チェックのクリックも編集トランザクションを開く。** 開いたままだと
+    /// 「チェック済みのみ」の掛け直しが持ち越されたまま止まり、外したはずの行が残る。
+    /// ファイル一覧と同じく、ウィンドウが非アクティブになっただけなら確定しない。
+    /// </summary>
+    private void OnInspectionGridKeyboardFocusWithinChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (InspectionChangeGrid.IsKeyboardFocusWithin || !IsActive)
+        {
+            return;
+        }
+
+        _ = InspectionChangeGrid.CommitEdit(DataGridEditingUnit.Row, exitEditingMode: true);
+        ScheduleInspectionEditFinished();
+    }
+
+    /// <summary>
     /// 編集トランザクションが閉じたあとに、保留していた絞り込みを掛け直させる。
     ///
     /// **その場では呼ばない。** ここへ来るのは DataGrid が確定処理を行う前で、
@@ -137,5 +171,21 @@ public partial class MainWindow : Window
         }
 
         _ = Dispatcher.BeginInvoke(DispatcherPriority.Background, () => viewModel.NotifyTrackEditFinished());
+    }
+
+    /// <summary>
+    /// 差分明細の編集トランザクションが閉じたあとに、保留していた絞り込みを掛け直させる。
+    ///
+    /// **その場では呼ばない。** 理由は <see cref="ScheduleTrackEditFinished"/> と同じで、
+    /// ここへ来るのは DataGrid が確定処理を行う前である。
+    /// </summary>
+    private void ScheduleInspectionEditFinished()
+    {
+        if (DataContext is not MainViewModel viewModel)
+        {
+            return;
+        }
+
+        _ = Dispatcher.BeginInvoke(DispatcherPriority.Background, () => viewModel.NotifyInspectionEditFinished());
     }
 }
