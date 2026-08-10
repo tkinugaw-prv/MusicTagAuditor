@@ -523,6 +523,9 @@
                         ItemsSource="{Binding Tracks}"
                         RowStyle="{StaticResource TrackRowStyle}"
                         CanUserSortColumns="True"
+                        CanUserResizeColumns="True"
+                        ctl:ColumnResize.Enabled="True"
+                        ColumnHeaderStyle="{StaticResource ResizableColumnHeader}"
                         EnableRowVirtualization="True"
                         EnableColumnVirtualization="True"
                         SelectionMode="Extended"
@@ -536,6 +539,11 @@
                     幅は star にして、ウィンドウを広げた分が文字列の列に回るようにする。
                     MinWidth は見出しが欠けない下限。star 列の MinWidth 合計が表示幅を超えると
                     固定幅の列まで削られて見出しごと消えるため、固定幅の列にも下限を入れる。
+
+                    ここでの幅は初期配分でしかない。**見切れた値は利用者が列幅を変えて読む。**
+                    ただし WPF 既定のリサイズは総幅を表示幅より広げないため、全列が
+                    MinWidth に張り付くこの表では 1px も動かせない。ctl:ColumnResize が
+                    その制限を外す（理由は ColumnResize.cs）。元に戻すのは見出しの右クリック。
                   -->
                   <!-- ファイル名・フォルダ・形式は編集できない。リネームは対象外（docs/SPEC.md 2.2） -->
                   <DataGridTextColumn Header="ファイル" Binding="{Binding FileName}" IsReadOnly="True" Width="1.6*" MinWidth="160"
