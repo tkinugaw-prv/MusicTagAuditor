@@ -14,6 +14,7 @@ Main features:
 - Detects problems with 24 inspection rules, each producing a proposed fix and the evidence behind it
 - **Automatically snapshots tags immediately before applying**, then reads every written field back and verifies it
 - Manual cell editing, bulk entry per folder, and dictionary-backed input suggestions
+- **Scoping inspection results to the selected folder**, keeping the display, bulk selection, applying, and CSV export within that same range
 - An editable, validated normalization dictionary (composers / people / ensembles / typos / protected values)
 - CSV export of inspection results, and backups that ship with a PowerShell restore script usable without the app
 

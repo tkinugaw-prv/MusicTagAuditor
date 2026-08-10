@@ -79,7 +79,7 @@ WPF / MVVM によるデスクトップアプリケーション本体。
 
 | フォルダ・ファイル | 役割 |
 |---|---|
-| `ViewModels/` | 画面ごとの ViewModel(`MainViewModel` / `DictionaryViewModel` / `AddToDictionaryViewModel` / `FolderNodeViewModel` / `TrackRowViewModel` / `RuleResultViewModel` / `TagChangeViewModel` / `BackupEntryViewModel` / `DictionaryRowViewModels`)。**グリッドに束ねる行は Core のモデルを直接使わずここでラップする**(理由は [docs/DEVELOPMENT.md](DEVELOPMENT.md)「グリッドに束ねるのは ViewModel にする」)。`TrackViewRefresher` はファイル一覧グリッドの編集中に絞り込みを掛け直すための補助クラスで、同フォルダに置いている |
+| `ViewModels/` | 画面ごとの ViewModel(`MainViewModel` / `DictionaryViewModel` / `AddToDictionaryViewModel` / `FolderNodeViewModel` / `TrackRowViewModel` / `RuleResultViewModel` / `TagChangeViewModel` / `BackupEntryViewModel` / `DictionaryRowViewModels`)。**グリッドに束ねる行は Core のモデルを直接使わずここでラップする**(理由は [docs/DEVELOPMENT.md](DEVELOPMENT.md)「グリッドに束ねるのは ViewModel にする」)。`RuleResultViewModel` は検査結果の絞り込み範囲(`SetScope` / `ScopedChanges`)も担い、件数と一括操作の対象を範囲内に揃える。`TrackViewRefresher` はファイル一覧グリッドの編集中に絞り込みを掛け直すための補助クラスで、同フォルダに置いている |
 | `Converters/` | XAML バインディング用のコンバータ群(Enum⇔bool/Visibility、件数⇔Visibility、タグフィールド名のラベル変換など) |
 | `Controls/Placeholder.cs` | `TextBox` にプレースホルダ文字列を持たせる添付プロパティ |
 | `Controls/SuggestBox.cs` | 辞書の候補を絞り込みながら出す入力欄(`TextBox` 派生)。挙動だけを持ち、見た目と候補一覧のポップアップは `Themes/DarkTheme.xaml` のテンプレート(`PART_Popup` / `PART_Suggestions`)が担う。照合ロジックも持たず `Core` の `DictionarySuggester` に委ねる。**暗黙スタイルは派生型に当たらないため、テーマ側に `ctl:SuggestBox` のスタイルが必須**(詳細は [docs/DEVELOPMENT.md](DEVELOPMENT.md)「派生コントロールにはスタイルを明示する」) |
@@ -102,7 +102,7 @@ WPF / MVVM によるデスクトップアプリケーション本体。
 |---|---|---|
 | `tests/MusicTagAuditor.Core.Tests` | `MusicTagAuditor.Core` | 検査ルール・辞書・バックアップ・適用処理などドメインロジックの単体テスト |
 | `tests/MusicTagAuditor.TagIo.Tests` | `MusicTagAuditor.TagIo` | タグ読み書きの往復テストに加え、`Integration/` 配下に実ライブラリを対象にした結合テストを持つ。対象パスは環境変数 `MUSICTAGAUDITOR_LIBRARY_ROOT` で指定し、フォルダが存在しない場合は該当テストをスキップする |
-| `tests/MusicTagAuditor.App.Tests` | `MusicTagAuditor.App` | `ViewModels/` の単体テスト(検査結果の選択状態、ルール別集計、手編集の差分、`TrackViewRefresher` の絞り込み掛け直しなど) |
+| `tests/MusicTagAuditor.App.Tests` | `MusicTagAuditor.App` | `ViewModels/` の単体テスト(検査結果の選択状態、ルール別集計、検査結果のフォルダ絞り込み、手編集の差分、`TrackViewRefresher` の絞り込み掛け直しなど)。WPF の `CollectionView` はスレッド親和性を持つため、フォルダ選択を伴うテストは `DispatcherTestRunner` で 1 本のディスパッチャスレッドに固定して走らせる |
 
 ---
 
