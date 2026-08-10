@@ -90,6 +90,58 @@ public sealed class RuleResultViewModelTests
     }
 
     /// <summary>
+    /// 一括操作の通知は、何件動かしても 1 回にまとめる。
+    ///
+    /// 受け手（<c>MainViewModel</c>）は件数の数え直しと下段の絞り直しを行う。
+    /// 明細 1 件ごとに上げると、1,000 件を超えるルールで画面が固まる。
+    /// </summary>
+    [Fact]
+    public void ChangeSelectionChanged_一括操作では1回にまとめる()
+    {
+        RuleResultViewModel rule = new(
+            CreateResult(
+                Severity.Error,
+                CreateChange("01.m4a", Severity.Error, ["Classic"]),
+                CreateChange("02.m4a", Severity.Error, ["Classic"]),
+                CreateChange("03.m4a", Severity.Error, ["Classic"])));
+
+        int raised = 0;
+        rule.ChangeSelectionChanged += (_, _) => raised++;
+
+        rule.UpdateChangeSelection(_ => false);
+
+        Assert.Equal(1, raised);
+
+        // ルール行のチェックも同じ扱い。
+        rule.IsSelected = true;
+
+        Assert.Equal(2, raised);
+    }
+
+    /// <summary>
+    /// 1 件も動かない一括操作では通知しない。
+    ///
+    /// 何も変わらないのに表示を作り直すと、下段の現在行とスクロール位置が無駄に飛ぶ。
+    /// </summary>
+    [Fact]
+    public void ChangeSelectionChanged_変化が無ければ発火しない()
+    {
+        RuleResultViewModel rule = new(
+            CreateResult(
+                Severity.Error,
+                CreateChange("01.m4a", Severity.Error, ["Classic"]),
+                CreateChange("02.m4a", Severity.Error, ["Classic"])));
+
+        int raised = 0;
+        rule.ChangeSelectionChanged += (_, _) => raised++;
+
+        // ⛔ かつ修正値ありなので既定でチェック済み。同じ状態を書いても変化しない。
+        rule.UpdateChangeSelection(_ => true);
+
+        Assert.Equal(0, raised);
+    }
+
+    /// <summary>
     /// 修正案を 1 件も持たないルールは、チェックできないものとして扱う。
     /// 画面のチェックボックスを無効にする判断に使う。
     /// </summary>

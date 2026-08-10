@@ -76,7 +76,9 @@ DataGrid のセル編集で使う場合は `GridEditingSuggestBoxStyle` を当�
 
 `App` 側にラッパー ViewModel を置き、**書き込みだけを `Core` のモデルへ素通しする**（`ViewModels/RuleResultViewModel.cs` / `ViewModels/TagChangeViewModel.cs`）。適用対象や CSV 出力が読む値は `Core` 側が唯一の真実のままにしておき、ラッパーは選択状態を自前で持たない。
 
-集計の更新ハンドラでは**コレクションを触らないこと**。呼ばれるのは DataGrid がセルの編集トランザクションを開いている最中で、その状態で `ICollectionView.Refresh()` を撃つと落ちる（下記「手編集」節と `ViewModels/TrackViewRefresher.cs`）。数えて表示を書き換えるだけに留める。
+集計の更新ハンドラでは**コレクションを触らないこと**。呼ばれるのは DataGrid がセルの編集トランザクションを開いている最中で、その状態で `ICollectionView.Refresh()` を撃つと落ちる（下記「手編集」節と `ViewModels/GridViewRefresher.cs`）。数えて表示を書き換えるだけに留める。掛け直しが要るなら `GridViewRefresher.Request()` に預ける。編集中なら見送り、編集が終わってから掛け直す。
+
+一括操作の通知は**最後に 1 回だけ上げる**（`RuleResultViewModel.ChangeSelectionChanged`）。受け手は件数を数え直し、下段の絞り込みも掛け直す。明細 1 件ごとに上げると、1,000 件を超えるルールの「全選択」で画面が固まる。
 
 ### アイコン
 
@@ -169,7 +171,16 @@ R-304（曲名中の発音区別符号の欠落）は誤検出が増えるため
 
 **範囲外のチェック状態には触れない。** 適用対象の唯一の真実は `TagChange.IsSelected`（Core 側）のままにし、どこまでを対象として見せるかだけを変える。絞り込みを外せば元の選択がそのまま戻る。
 
-絞り込みは `ICollectionView.Refresh()` ではなくコレクションの詰め替えで実装している。検査結果グリッドのチェックボックス列は編集可能で、編集トランザクション中に `Refresh()` を撃つと落ちる（`TrackViewRefresher` の項）。ただし詰め替えも編集中には安全でないため、`ApplyInspectionScope` の呼び出し元はツリー選択・チェックボックス・検査完了・適用後の刈り込みに限る。**明細のチェック変更（`OnInspectionSelectionChanged`）からは呼ばない。**
+絞り込みは `ICollectionView.Refresh()` ではなくコレクションの詰め替えで実装している。検査結果グリッドのチェックボックス列は編集可能で、編集トランザクション中に `Refresh()` を撃つと落ちる（`GridViewRefresher` の項）。ただし詰め替えも編集中には安全でないため、`ApplyInspectionScope` の呼び出し元はツリー選択・チェックボックス・検査完了・適用後の刈り込みに限る。**明細のチェック変更（`OnInspectionSelectionChanged`）からは呼ばない。**
+
+### 下段の「チェック済みのみ」
+
+差分明細をチェック済みの行だけに絞る（`docs/SPEC.md` 5.3）。フォルダの絞り込みと違って**表示だけ**を変える。隠すのは適用されない行だけなので、件数・一括選択・適用・CSV 出力はどれも動かさない。絞っているあいだは「選択 N 件」と画面の行数が一致するため、見えている範囲と書き込む範囲は食い違わない。
+
+こちらは `InspectionChanges` の既定ビューに `Filter` を掛けて実装する。詰め替えではない。**絞り込みの条件（チェック状態）が編集トランザクションの最中に変わる**ため、掛け直しは `GridViewRefresher` に預けて編集の終わりまで持ち越す。View 側は `CellEditEnding` / `RowEditEnding` と、グリッドからフォーカスが外れたときの `CommitEdit` で `NotifyInspectionEditFinished` を呼ぶ。
+
+- **ビューは絞り込みが要求されるまで作らない。** `CollectionView` はスレッド親和性を持ち、作った時点から `InspectionChanges` の詰め替えが 1 本のスレッドに縛られる。使いもしない絞り込みのために、明細を作り直すすべての経路へ制約を広げない（テストも `DispatcherTestRunner` が要るようになる）
+- **絞っていないときは掛け直さない。** 結果は変わらないのに、チェックを 1 つ付け外しするたび下段の現在行とスクロール位置が飛ぶ
 
 ### 適用
 
