@@ -319,6 +319,45 @@ public sealed class RemainingRuleTests
     }
 
     /// <summary>
+    /// R-210: ファイル名と曲名が同じ作曲家を指すとき、根拠にその名前を 2 回書かないことを確認する。
+    ///
+    /// 実ライブラリの該当はすべてこの形で、分けて書くと同じ名前が根拠列に並ぶ。
+    /// 根拠は読めることが要件である（docs/SPEC.md 5.3）。
+    /// </summary>
+    [Fact]
+    public void MergesRationaleWhenFileNameAndTitleAgree()
+    {
+        TagChange change = Assert.Single(
+            ChangesOf(
+                Inspect(Track(
+                    "x/01 Weber Oberon.flac",
+                    (TagField.Composer, ["Dmitri Shostakovich"]),
+                    (TagField.Title, ["01 Weber Oberon"]))),
+                "R-210"));
+
+        Assert.Contains("ファイル名・曲名「01 Weber Oberon」", change.Rationale, StringComparison.Ordinal);
+        Assert.Equal(1, CountOf(change.Rationale, "Carl Maria von Weber"));
+    }
+
+    /// <summary>
+    /// R-210: ファイル名と曲名が別の作曲家を指すときは、両方を出所ごとに並べることを確認する。
+    /// </summary>
+    [Fact]
+    public void ListsBothSourcesWhenTheyDisagree()
+    {
+        TagChange change = Assert.Single(
+            ChangesOf(
+                Inspect(Track(
+                    "x/01 Weber Oberon.flac",
+                    (TagField.Composer, ["Dmitri Shostakovich"]),
+                    (TagField.Title, ["Schubert Sym8-1 Allegro moderato"]))),
+                "R-210"));
+
+        Assert.Contains("ファイル名「01 Weber Oberon」に「Carl Maria von Weber」", change.Rationale, StringComparison.Ordinal);
+        Assert.Contains("曲名「Schubert Sym8-1 Allegro moderato」に「Franz Schubert」", change.Rationale, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// R-210: <c>title</c> 側の作曲家名でも検出することを確認する。
     /// </summary>
     [Fact]
@@ -531,6 +570,14 @@ public sealed class RemainingRuleTests
         System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
 
         return System.Text.Encoding.Latin1.GetString(System.Text.Encoding.GetEncoding(932).GetBytes(original));
+    }
+
+    /// <summary>
+    /// 文字列に含まれる語の出現回数を数える。根拠の重複を見るために使う。
+    /// </summary>
+    private static int CountOf(string text, string word)
+    {
+        return (text.Length - text.Replace(word, string.Empty, StringComparison.Ordinal).Length) / word.Length;
     }
 
     /// <summary>

@@ -196,20 +196,39 @@ public sealed class ComposerMismatchRule : IInspectionRule
     /// <returns>差分プレビューに出す根拠。</returns>
     private static string BuildRationale(TrackTags track, ComposerMismatchHit hit)
     {
-        List<string> sources = [];
+        string fileName = Path.GetFileNameWithoutExtension(track.RelativePath);
 
+        // ファイル名と曲名が同じ作曲家を指す場合はまとめる。実ライブラリの該当はすべてこの形で、
+        // 分けて書くと同じ名前が根拠列に 2 回並ぶ。根拠は読めることが要件である（docs/SPEC.md 5.3）。
+        string found = hit.FromFileName is not null && hit.FromTitle is not null
+            && string.Equals(hit.FromFileName, hit.FromTitle, StringComparison.Ordinal)
+                ? string.Equals(fileName, track.Title, StringComparison.Ordinal)
+                    ? $"ファイル名・曲名「{fileName}」に「{hit.FromFileName}」"
+                    : $"ファイル名「{fileName}」と曲名「{track.Title}」に「{hit.FromFileName}」"
+                : string.Join(" / ", Sources(track, hit, fileName));
+
+        return $"composer は「{hit.Tagged}」だが、{found}が出てくる。"
+            + "曲名が別の作曲家名を正当に含む作品もあるため、誤りとは限らない。CD 実物の確認が要る";
+    }
+
+    /// <summary>
+    /// 手がかりを出所ごとに列挙する。ファイル名と曲名が別の作曲家を指す場合に使う。
+    /// </summary>
+    /// <param name="track">対象ファイル。</param>
+    /// <param name="hit">見つかった食い違い。</param>
+    /// <param name="fileName">拡張子を除いたファイル名。</param>
+    /// <returns>根拠に並べる文。</returns>
+    private static IEnumerable<string> Sources(TrackTags track, ComposerMismatchHit hit, string fileName)
+    {
         if (hit.FromFileName is not null)
         {
-            sources.Add($"ファイル名「{Path.GetFileNameWithoutExtension(track.RelativePath)}」に「{hit.FromFileName}」");
+            yield return $"ファイル名「{fileName}」に「{hit.FromFileName}」";
         }
 
         if (hit.FromTitle is not null)
         {
-            sources.Add($"曲名「{track.Title}」に「{hit.FromTitle}」");
+            yield return $"曲名「{track.Title}」に「{hit.FromTitle}」";
         }
-
-        return $"composer は「{hit.Tagged}」だが、{string.Join(" / ", sources)}が出てくる。"
-            + "曲名が別の作曲家名を正当に含む作品もあるため、誤りとは限らない。CD 実物の確認が要る";
     }
 }
 
