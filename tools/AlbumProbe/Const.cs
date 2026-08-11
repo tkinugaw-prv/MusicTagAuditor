@@ -14,6 +14,9 @@ public static class Const
     /// <summary>レポートの既定のファイル名。</summary>
     public const string REPORT_FILE_NAME = "album-probe-report.md";
 
+    /// <summary>作品エントリの雛形のファイル名（docs/SPEC.md 7.4.6）。レポートと同じ場所に出す。</summary>
+    public const string WORKS_TEMPLATE_FILE_NAME = "works-template.json";
+
     /// <summary>
     /// 複合キーを 1 本の文字列にまとめるときの区切り。
     /// タグの値に現れない制御文字を選ぶ。区切りが値に含まれると別のキーが同一視される。

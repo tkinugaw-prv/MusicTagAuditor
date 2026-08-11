@@ -80,13 +80,18 @@ public static class ComposerMismatch
 
     /// <summary>
     /// 値の中に、指定した作曲家とは違う作曲家名が出てくれば返す。
+    ///
+    /// R-210 の判定そのもの。<c>tools/AlbumProbe</c> は作品エントリの雛形を作るときに、
+    /// <c>album</c> の値が別の作曲家を指していないかを見るのに使う。
     /// </summary>
     /// <param name="dictionary">正規化辞書の索引。</param>
-    /// <param name="value">ファイル名または曲名。</param>
-    /// <param name="taggedCanonical">そのファイルの <c>composer</c> の正規形。</param>
+    /// <param name="value">判定する値（ファイル名・曲名・アルバム名など）。</param>
+    /// <param name="taggedCanonical">比較の基準になる作曲家の正規形。</param>
     /// <returns>見つかった別の作曲家の正規形。無ければ null。</returns>
-    private static string? FindOther(DictionaryIndex dictionary, string? value, string taggedCanonical)
+    public static string? FindOther(DictionaryIndex dictionary, string? value, string taggedCanonical)
     {
+        ArgumentNullException.ThrowIfNull(dictionary);
+
         if (string.IsNullOrWhiteSpace(value))
         {
             return null;

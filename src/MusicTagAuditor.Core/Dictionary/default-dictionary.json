@@ -215,6 +215,23 @@
     { "entityId": "de-muenchener-bach-orchester", "canonical": "Münchener Bach-Orchester", "aliases": [], "aliasesJa": ["ミュンヘン・バッハ管弦楽団"] }
   ],
 
+  "_worksComment": [
+    "docs/SPEC.md 7.4 の作品エントリ。アルバム名の {作品名} の供給元になる。",
+    "所蔵に完全に依存するため同梱の既定辞書には入れない（13章 D5）。スキーマだけを示す。",
+    "canonical の言語は「ジャンル名は英語・固有の題名は原語」（TAGGING_POLICY.md 3.5 規則8）。",
+    "初期投入は tools/AlbumProbe の雛形出力を使う（7.4.6）。"
+  ],
+
+  "works": [],
+
+  "_albumOverridesComment": [
+    "docs/SPEC.md 7.4.5 のアルバム単位の個別例外。",
+    "TAGGING_POLICY.md 3.5 の規則4（版）・規則6（コンピレーション）・規則7（同一演奏の別リリース）で使う。",
+    "規則そのものを一般化しないため、作品エントリではなくアルバム単位に紐づける。"
+  ],
+
+  "albumOverrides": [],
+
   "_typosComment": [
     "docs/TAGGING_POLICY.md 5.4 の実測一覧。照合は正規表現で行う。",
     "完全一致だと「Finale- Allgro molto」と「Finale: Allgro molto」を取りこぼす。",
