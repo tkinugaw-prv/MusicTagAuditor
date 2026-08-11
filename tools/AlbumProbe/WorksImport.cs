@@ -1,0 +1,97 @@
+using System.Text.Json;
+using MusicTagAuditor.Core.Dictionary;
+
+namespace AlbumProbe;
+
+/// <summary>
+/// 作品エントリと個別例外を利用者辞書へ取り込む（docs/SPEC.md 7.4.6）。
+///
+/// **辞書の読み書きは本体と同じ <see cref="DictionaryLoader"/> / <see cref="DictionaryWriter"/> を使う。**
+/// JSON を手で継ぎ足すと、キーの綴りが本体の書き方と食い違って読めない辞書ができる。
+/// 実際に手で足した <c>works</c> と本体が書いた <c>Works</c> が衝突した（2026-08-12）。
+///
+/// 取り込むのは <c>works</c> と <c>albumOverrides</c> だけで、他のセクションには触らない。
+/// 保存は <see cref="DictionaryWriter.WriteFile"/> 経由なので直前版が <c>.bak</c> に残る。
+/// </summary>
+public static class WorksImport
+{
+    /// <summary>読み込み設定。雛形はコメント（<c>_</c> 始まり）を持つので許す。</summary>
+    private static readonly JsonSerializerOptions READ_OPTIONS = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        ReadCommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true,
+    };
+
+    /// <summary>
+    /// 取り込みを実行する。
+    /// </summary>
+    /// <param name="sourcePath">作品エントリを書いた JSON のパス。</param>
+    /// <param name="dictionaryDirectory">利用者辞書のフォルダ。</param>
+    /// <returns>終了コード。</returns>
+    public static int Run(string sourcePath, string dictionaryDirectory)
+    {
+        if (!File.Exists(sourcePath))
+        {
+            Console.Error.WriteLine($"取り込む JSON が見つかりません: {sourcePath}");
+            return 1;
+        }
+
+        TagDictionary? source;
+
+        try
+        {
+            source = JsonSerializer.Deserialize<TagDictionary>(File.ReadAllText(sourcePath), READ_OPTIONS);
+        }
+        catch (JsonException exception)
+        {
+            Console.Error.WriteLine($"JSON を読めません: {exception.Message}");
+            return 1;
+        }
+
+        if (source is null || (source.Works.Count == 0 && source.AlbumOverrides.Count == 0))
+        {
+            Console.Error.WriteLine("works も albumOverrides も入っていません。");
+            return 1;
+        }
+
+        DictionaryStore store = new(dictionaryDirectory);
+
+        Console.WriteLine($"辞書: {store.FilePath}");
+        Console.WriteLine(
+            $"取り込み前: works={store.Dictionary.Works.Count} albumOverrides={store.Dictionary.AlbumOverrides.Count}");
+
+        TagDictionary merged = store.Dictionary with
+        {
+            Works = source.Works,
+            AlbumOverrides = source.AlbumOverrides,
+        };
+
+        // **検証で止める。** 自然キーや別名が重複すると索引は先勝ちで、後から書いたほうは
+        // 黙って捨てられる。登録したのに効かない状態を作らない（SPEC 7.4.1）。
+        IReadOnlyList<DictionaryIssue> issues = DictionaryValidator.Validate(merged);
+
+        foreach (DictionaryIssue issue in issues.Where(issue => issue.Severity == DictionaryIssueSeverity.Error))
+        {
+            Console.Error.WriteLine($"  {issue.Summary}");
+        }
+
+        if (DictionaryValidator.HasError(issues))
+        {
+            Console.Error.WriteLine("エラーがあるため取り込みませんでした。");
+            return 1;
+        }
+
+        store.Save(merged);
+
+        int warnings = issues.Count(issue => issue.Severity == DictionaryIssueSeverity.Warning);
+
+        Console.WriteLine(
+            $"取り込み後: works={merged.Works.Count} albumOverrides={merged.AlbumOverrides.Count}"
+            + (warnings > 0 ? $"（警告 {warnings} 件）" : string.Empty));
+        Console.WriteLine($"直前版: {store.FilePath}{DictionaryWriter.BACKUP_SUFFIX}");
+        Console.WriteLine("アプリを起動し直して、再スキャン → 検査を実行してください。");
+
+        return 0;
+    }
+}

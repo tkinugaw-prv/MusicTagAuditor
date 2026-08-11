@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace MusicTagAuditor.Core.Dictionary;
 
@@ -24,10 +25,20 @@ public static class DictionaryWriter
     /// <see cref="JavaScriptEncoder.UnsafeRelaxedJsonEscaping"/> を使うのは、既定のエンコーダだと
     /// 日本語もウムラウトも <c>\uXXXX</c> に落ちて**辞書が人間に読めなくなる**ため。
     /// 出力先は HTML ではなく設定ファイルなので、この緩和で困らない。
+    ///
+    /// **命名規則と null の扱いをここで明示する。**<see cref="DictionaryJsonContext"/> に付けた
+    /// <c>JsonSourceGenerationOptions</c> は、そのコンテキスト自身の <c>Options</c> にしか効かない。
+    /// このように別の <see cref="JsonSerializerOptions"/> を作って <c>TypeInfoResolver</c> だけを
+    /// 差し替えると命名規則は引き継がれず、**PascalCase で書き出される**。
+    /// 読み込み側は大小文字を区別しないため動作は壊れないが、利用者が手で育てた辞書が
+    /// 保存のたびに同梱辞書と違う綴りへ書き換わる。実際に `Composers` / `Works` と書かれた
+    /// 辞書ができていた（2026-08-12 に判明）。
     /// </summary>
     private static readonly JsonSerializerOptions WRITE_OPTIONS = new()
     {
         WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         TypeInfoResolver = DictionaryJsonContext.Default,
     };

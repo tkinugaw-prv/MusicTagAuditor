@@ -14,13 +14,32 @@ public static class Program
     /// <summary>
     /// 測定を実行してレポートを書き出す。
     /// </summary>
-    /// <param name="args">[0] ライブラリのルート、[1] レポートの出力先。いずれも省略可。</param>
+    /// <param name="args">
+    /// [0] ライブラリのルート、[1] レポートの出力先。いずれも省略可。
+    /// <c>--import-works &lt;path&gt;</c> を渡した場合は測定せず、作品エントリの取り込みだけを行う。
+    /// </param>
     /// <returns>終了コード。</returns>
     public static async Task<int> Main(string[] args)
     {
         ArgumentNullException.ThrowIfNull(args);
 
         Console.OutputEncoding = System.Text.Encoding.UTF8;
+
+        // 本体アプリと同じ辞書を読む。測定値が本体の判定と食い違わないようにするため。
+        string dictionaryDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            Const.DICTIONARY_DIRECTORY_NAME);
+
+        if (args.Length > 0 && string.Equals(args[0], Const.IMPORT_WORKS_OPTION, StringComparison.Ordinal))
+        {
+            if (args.Length < 2)
+            {
+                Console.Error.WriteLine($"使い方: {Const.IMPORT_WORKS_OPTION} <works.json>");
+                return 1;
+            }
+
+            return WorksImport.Run(args[1], dictionaryDirectory);
+        }
 
         string libraryRoot = args.Length > 0 ? args[0] : Const.DEFAULT_LIBRARY_ROOT;
         string reportPath = args.Length > 1
@@ -32,11 +51,6 @@ public static class Program
             Console.Error.WriteLine($"ライブラリが見つかりません: {libraryRoot}");
             return 1;
         }
-
-        // 本体アプリと同じ辞書を読む。測定値が本体の判定と食い違わないようにするため。
-        string dictionaryDirectory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            Const.DICTIONARY_DIRECTORY_NAME);
 
         DictionaryIndex dictionary = new(DictionaryLoader.LoadOrCreate(dictionaryDirectory));
 

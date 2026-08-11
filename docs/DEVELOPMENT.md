@@ -409,6 +409,18 @@ dotnet run --project tools/AlbumProbe/AlbumProbe.csproj -- "D:\Music\Classic"
 
 **まとめる鍵はフォルダ名だけ。`album` の値を鍵にしない**（`SPEC.md` 7.4.6）。`Brahms 交響曲全集` のような複数作品にまたがる値が橋渡しになって別作品が融合する。実測でブラームスの交響曲 1〜4 番が 1 件に潰れた。
 
+`canonical` を埋めたら、同じツールで辞書へ取り込む。
+
+```bash
+dotnet run --project tools/AlbumProbe/AlbumProbe.csproj -- --import-works "works.json"
+```
+
+**辞書の JSON を手で継ぎ足さないこと。** 取り込みは本体と同じ `DictionaryLoader` / `DictionaryWriter` を通し、`DictionaryValidator` でエラーがあれば保存しない。直前版は `.bak` に残る。
+
+### 辞書の書き出しは camelCase を明示する
+
+`JsonSourceGenerationOptions` は**そのコンテキスト自身の `Options` にしか効かない**。`DictionaryWriter` のように別の `JsonSerializerOptions` を作って `TypeInfoResolver` だけを差し替えると命名規則が引き継がれず、**PascalCase で書き出される**。読み込み側が `PropertyNameCaseInsensitive = true` なので動作は壊れず、気づかないまま利用者の辞書が同梱辞書と違う綴りに書き換わっていた（2026-08-12 に判明。手で足した `works` と本体が書いた `Works` が衝突して発覚）。`DictionaryStoreTests.WritesCamelCaseKeys` で固定してある。
+
 正規化辞書は本体アプリと同じ `%APPDATA%\MusicTagAuditor\dictionary.json` を読む。測定値が本体の判定と食い違わないようにするため。
 
 **数字が動いたら 3.5 補足2 を更新すること。** 次の作業で動く。
