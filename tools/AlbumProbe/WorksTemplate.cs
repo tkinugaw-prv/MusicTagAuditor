@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using MusicTagAuditor.Core.Dictionary;
+using MusicTagAuditor.Core.Inspection;
 using MusicTagAuditor.Core.Normalization;
 
 namespace AlbumProbe;
@@ -26,10 +27,16 @@ public static class WorksTemplate
         @"[\p{IsHiragana}\p{IsKatakana}\p{IsCJKUnifiedIdeographs}]",
         RegexOptions.Compiled);
 
-    /// <summary>雛形の書き出し設定。人が編集するファイルなので整形して出す。</summary>
+    /// <summary>
+    /// 雛形の書き出し設定。
+    ///
+    /// **プロパティ名は辞書と同じ camelCase にする。** 雛形は `dictionary.json` へそのまま
+    /// 貼り付けて使うものなので、名前が違うと読み込めない。
+    /// </summary>
     private static readonly JsonSerializerOptions JSON = new()
     {
         WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
@@ -72,7 +79,15 @@ public static class WorksTemplate
                 continue;
             }
 
-            Merge(groups, unit.Composers[0], hints, unit.Folder, unit.Albums);
+            // 出すエイリアスは演奏者を落とした形（`ブルックナー 8`）だけにする。フォルダ名そのもの
+            // （`ブルックナー 8 - カラヤン`）まで並べると、同じ作品が指揮者の数だけエイリアスに増える。
+            // 引くときは 7.4.3 の手順どおり「全体 → 最初の `-` より前」の順で試すので、後者だけで足りる。
+            string preferred = hints[^1];
+
+            // 文字化けした値は候補にしない。復元しても「アルバム情報なし」等で意味を持たない（6.6 / R-403）。
+            string[] albums = [.. unit.Albums.Where(album => !MojibakeDetector.TryDecode(album, out _))];
+
+            Merge(groups, unit.Composers[0], hints, preferred, unit.Folder, albums);
         }
 
         IReadOnlyList<AmbiguousAlbum> ambiguous = DropAmbiguousAlbums(groups);
@@ -152,12 +167,14 @@ public static class WorksTemplate
     /// <param name="groups">既存のグループ。</param>
     /// <param name="composer">単位の作曲家。</param>
     /// <param name="hints">単位のフォルダ由来の手がかり。合流の鍵になる。</param>
+    /// <param name="preferred">エイリアスとして出す形。</param>
     /// <param name="folder">単位のフォルダ。由来を残すために持つ。</param>
     /// <param name="albums">単位の <c>album</c> の値。候補として持つだけで、合流の鍵にはしない。</param>
     private static void Merge(
         List<WorkGroup> groups,
         string composer,
         IReadOnlyList<string> hints,
+        string preferred,
         string folder,
         IReadOnlyList<string> albums)
     {
@@ -171,7 +188,7 @@ public static class WorksTemplate
 
         if (matched.Length == 0)
         {
-            groups.Add(new WorkGroup(composer, keys, [.. hints], [folder], [.. albums]));
+            groups.Add(new WorkGroup(composer, keys, [preferred], [folder], [.. albums]));
             return;
         }
 
@@ -183,7 +200,7 @@ public static class WorksTemplate
             groups.Remove(other);
         }
 
-        target.Add(keys, hints, folder, albums);
+        target.Add(keys, preferred, folder, albums);
     }
 
     /// <summary>
@@ -274,8 +291,7 @@ public static class WorksTemplate
         {
             foreach (string alias in group.Aliases)
             {
-                if (MusicTagAuditor.Core.Inspection.ComposerMismatch.FindOther(dictionary, alias, group.Composer)
-                    is { } other)
+                if (ComposerMismatch.FindOther(dictionary, alias, group.Composer) is { } other)
                 {
                     found.Add(new ForeignAlias(group.Composer, alias, other, group.Folders[0]));
                 }
@@ -415,10 +431,10 @@ public static class WorksTemplate
         /// <summary>
         /// 単位を 1 つ足す。
         /// </summary>
-        public void Add(IEnumerable<string> keys, IEnumerable<string> aliases, string folder, IEnumerable<string> albums)
+        public void Add(IEnumerable<string> keys, string alias, string folder, IEnumerable<string> albums)
         {
             Keys.UnionWith(keys);
-            AddNew(Aliases, aliases);
+            AddAlias(alias);
             AddNew(Albums, albums);
 
             if (!Folders.Contains(folder, StringComparer.OrdinalIgnoreCase))
@@ -428,12 +444,29 @@ public static class WorksTemplate
         }
 
         /// <summary>
+        /// エイリアスを足す。**正規化キーが同じものは足さない。**
+        /// <c>シューベルト 8</c> と <c>シューベルト8</c> は辞書では同じキーになり、
+        /// 両方を登録すると <c>DictionaryValidator</c> が重複として警告する。
+        /// </summary>
+        public void AddAlias(string alias)
+        {
+            string key = NormalizationKey.Create(alias);
+
+            if (key.Length == 0 || Aliases.Any(existing => NormalizationKey.Create(existing) == key))
+            {
+                return;
+            }
+
+            Aliases.Add(alias);
+        }
+
+        /// <summary>
         /// 別のグループを取り込む。手がかりが橋渡しになって 2 つのグループが繋がった場合に使う。
         /// </summary>
         public void Absorb(WorkGroup other)
         {
             Keys.UnionWith(other.Keys);
-            AddNew(Aliases, other.Aliases);
+            other.Aliases.ForEach(AddAlias);
             AddNew(Albums, other.Albums);
             Folders.AddRange(other.Folders.Where(folder => !Folders.Contains(folder, StringComparer.OrdinalIgnoreCase)));
         }
@@ -445,7 +478,7 @@ public static class WorksTemplate
         {
             if (Keys.Add(key))
             {
-                Aliases.Add(album);
+                AddAlias(album);
             }
         }
 
