@@ -40,7 +40,7 @@ public sealed class AddWorkViewModelTests
         AddWorkViewModel viewModel = Create();
 
         Assert.Equal(
-            ["Bruckner Sym.8", "ブルックナー 8 - ショルティ", "ブルックナー 8"],
+            ["Bruckner Symphony No.8", "ブルックナー 8 - ショルティ", "ブルックナー 8"],
             viewModel.Candidates.Select(candidate => candidate.Value));
 
         Assert.All(viewModel.Candidates, candidate => Assert.True(candidate.IsSelected));
@@ -63,8 +63,45 @@ public sealed class AddWorkViewModelTests
         WorkEntry work = Assert.Single(viewModel.Apply().Works);
 
         Assert.Equal("Anton Bruckner", work.Composer);
-        Assert.Equal(["Bruckner Sym.8"], work.Aliases);
+        Assert.Equal(["Bruckner Symphony No.8"], work.Aliases);
         Assert.Equal(["ブルックナー 8", "交響曲第8番"], work.AliasesJa);
+    }
+
+    /// <summary>
+    /// 作品名の候補を出し、押したときだけ入力欄に入ることを確認する（docs/SPEC.md 7.3.2）。
+    ///
+    /// 候補が無いと `Nielsen Symphony No.4` を見ながら `Symphony No. 4` を毎回手で打つことになる。
+    /// **それでも既定値にはしない。** 現在の album は誤っていることがある。
+    /// </summary>
+    [Fact]
+    public void OffersWorkNameCandidatesWithoutFillingTheField()
+    {
+        AddWorkViewModel viewModel = Create();
+
+        Assert.Equal(string.Empty, viewModel.Canonical);
+
+        WorkNameCandidate candidate = viewModel.NameCandidates[0];
+
+        Assert.Equal("Symphony No. 8", candidate.Value);
+        Assert.Equal("album", candidate.Source);
+
+        viewModel.UseNameCandidateCommand.Execute(candidate);
+
+        Assert.Equal("Symphony No. 8", viewModel.Canonical);
+    }
+
+    /// <summary>
+    /// album とフォルダ名が別の番号を指しているときは名指しで警告する（docs/SPEC.md 7.4.3 手順5）。
+    ///
+    /// 実ライブラリには `シューベルト 9` のフォルダに `Schubert Symphony No.8` という album が
+    /// 付いた単位がある。候補を並べるだけでは、この食い違いは見落とされる。
+    /// </summary>
+    [Fact]
+    public void WarnsWhenAlbumAndFolderPointToDifferentNumbers()
+    {
+        AddWorkViewModel viewModel = Create(folder: Path.Combine("ブルックナー", "ブルックナー 9 - ショルティ"));
+
+        Assert.Contains("album は 8 番、フォルダ名は 9 番", viewModel.Notice, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -88,23 +125,27 @@ public sealed class AddWorkViewModelTests
     /// ブルックナー 8 番の単位を対象にしたダイアログを作る。
     /// </summary>
     /// <param name="works">辞書に入れておく作品。</param>
+    /// <param name="folder">単位のフォルダ。album と食い違う番号を試すときに変える。</param>
     /// <returns>ビューモデル。</returns>
-    private static AddWorkViewModel Create(IReadOnlyList<WorkEntry>? works = null)
+    private static AddWorkViewModel Create(IReadOnlyList<WorkEntry>? works = null, string? folder = null)
     {
         TagDictionary dictionary = new()
         {
-            Composers = [new ComposerEntry { Canonical = "Anton Bruckner", AliasesJa = ["ブルックナー"] }],
+            Composers =
+            [
+                new ComposerEntry { Canonical = "Anton Bruckner", Aliases = ["Bruckner"], AliasesJa = ["ブルックナー"] },
+            ],
             Works = works ?? [],
         };
 
         AlbumUnit unit = new(
-            Path.Combine("ブルックナー", "ブルックナー 8 - ショルティ"),
+            folder ?? Path.Combine("ブルックナー", "ブルックナー 8 - ショルティ"),
             1,
             [],
             ["Anton Bruckner"],
             ["Georg Solti"],
             ["1990"],
-            ["Bruckner Sym.8"]);
+            ["Bruckner Symphony No.8"]);
 
         return new AddWorkViewModel(dictionary, new DictionaryIndex(dictionary), unit, "Anton Bruckner");
     }

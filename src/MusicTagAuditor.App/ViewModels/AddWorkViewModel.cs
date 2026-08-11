@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using MusicTagAuditor.Core.Dictionary;
 using MusicTagAuditor.Core.Inspection;
 
@@ -16,6 +17,12 @@ namespace MusicTagAuditor.App.ViewModels;
 /// </summary>
 public sealed partial class AliasCandidateViewModel : ObservableObject
 {
+    /// <summary><c>album</c> 由来の候補の出所。</summary>
+    public const string SOURCE_ALBUM = "album";
+
+    /// <summary>フォルダ名由来の候補の出所。</summary>
+    public const string SOURCE_FOLDER = "フォルダ名";
+
     /// <summary>登録するか。</summary>
     [ObservableProperty]
     private bool _isSelected = true;
@@ -88,12 +95,21 @@ public sealed partial class AddWorkViewModel : ObservableObject
 
         foreach (string album in unit.Albums)
         {
-            Candidates.Add(new AliasCandidateViewModel(album, "album"));
+            Candidates.Add(new AliasCandidateViewModel(album, AliasCandidateViewModel.SOURCE_ALBUM));
         }
 
         foreach (string hint in DictionaryEditor.SuggestWorkAliases(unit.Folder, index))
         {
-            Candidates.Add(new AliasCandidateViewModel(hint, "フォルダ名"));
+            Candidates.Add(new AliasCandidateViewModel(hint, AliasCandidateViewModel.SOURCE_FOLDER));
+        }
+
+        foreach (WorkNameCandidate candidate in WorkNameSuggester.Suggest(
+                     dictionary,
+                     index,
+                     composer,
+                     Candidates.Select(alias => new WorkNameCandidate(alias.Value, alias.Source))))
+        {
+            NameCandidates.Add(candidate);
         }
 
         UpdateNotice();
@@ -112,6 +128,14 @@ public sealed partial class AddWorkViewModel : ObservableObject
 
     /// <summary>別名の候補。</summary>
     public ObservableCollection<AliasCandidateViewModel> Candidates { get; } = [];
+
+    /// <summary>
+    /// 作品名の候補（docs/SPEC.md 7.3.2）。
+    ///
+    /// **押したときだけ入力欄に入る。既定値にはしない。** 現在の <c>album</c> の値は誤っていることがあり、
+    /// 機械が正規形として採用してはならない（<c>TAGGING_POLICY.md</c> 3.5 補足2）。
+    /// </summary>
+    public ObservableCollection<WorkNameCandidate> NameCandidates { get; } = [];
 
     /// <summary>見出しに出す説明。</summary>
     public string Header => string.Create(
@@ -142,6 +166,19 @@ public sealed partial class AddWorkViewModel : ObservableObject
     public TagDictionary Apply()
     {
         return DictionaryEditor.AddWork(_dictionary, Composer, Canonical.Trim(), BuildAliases());
+    }
+
+    /// <summary>
+    /// 候補を作品名の欄に入れる。**入るのは押したときだけ**で、そのあと手で直せる。
+    /// </summary>
+    /// <param name="candidate">選ばれた候補。</param>
+    [RelayCommand]
+    private void UseNameCandidate(WorkNameCandidate? candidate)
+    {
+        if (candidate is not null)
+        {
+            Canonical = candidate.Value;
+        }
     }
 
     /// <summary>
@@ -182,8 +219,35 @@ public sealed partial class AddWorkViewModel : ObservableObject
             return;
         }
 
+        // album とフォルダ名が別の番号を指しているなら、どちらかのタグが誤っている（7.4.3 手順5）。
+        // 候補を並べるだけでは見落とされる食い違いなので、名指しで出す。
+        string[] albumNumbers = NumbersOf(AliasCandidateViewModel.SOURCE_ALBUM);
+        string[] folderNumbers = NumbersOf(AliasCandidateViewModel.SOURCE_FOLDER);
+
+        if (albumNumbers.Length > 0 && folderNumbers.Length > 0 && !albumNumbers.Intersect(folderNumbers, StringComparer.Ordinal).Any())
+        {
+            Notice = $"album は {string.Join(" / ", albumNumbers)} 番、フォルダ名は {string.Join(" / ", folderNumbers)} 番を指しています。"
+                + " どちらかのタグが誤っている可能性があります。候補を選ぶ前に、実物がどちらの曲かを確かめてください。";
+
+            return;
+        }
+
         Notice = "作品名は「ジャンル名は英語、固有の題名は原語」で書きます（TAGGING_POLICY 3.5 規則8）。"
             + " 原語が非ラテン文字なら英語圏での一般的な題名を使います（The Nutcracker）。"
             + " 版・稿の違いでエントリを分けないでください（規則4）。";
+    }
+
+    /// <summary>
+    /// 指定した出所の手がかりに含まれる番号を集める。
+    /// </summary>
+    private string[] NumbersOf(string source)
+    {
+        return
+        [
+            .. Candidates
+                .Where(candidate => candidate.Source == source)
+                .SelectMany(candidate => WorkNameSuggester.ExtractNumbers(candidate.Value))
+                .Distinct(StringComparer.Ordinal),
+        ];
     }
 }
