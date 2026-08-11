@@ -64,9 +64,7 @@ public static class WorksImport
         DictionaryStore store = new(dictionaryDirectory);
 
         Console.WriteLine($"辞書: {store.FilePath}");
-        Console.WriteLine(
-            $"取り込み前: works={(store.Dictionary.Works ?? []).Count}"
-            + $" albumOverrides={(store.Dictionary.AlbumOverrides ?? []).Count}");
+        Console.WriteLine($"取り込み前: {DictionarySummary.Describe(store.Dictionary)}");
 
         TagDictionary merged = store.Dictionary with
         {
@@ -94,7 +92,7 @@ public static class WorksImport
         int warnings = issues.Count(issue => issue.Severity == DictionaryIssueSeverity.Warning);
 
         Console.WriteLine(
-            $"取り込み後: works={works.Count} albumOverrides={overrides.Count}"
+            $"取り込み後: {DictionarySummary.Describe(merged)}"
             + (warnings > 0 ? $"（警告 {warnings} 件）" : string.Empty));
         Console.WriteLine($"直前版: {store.FilePath}{DictionaryWriter.BACKUP_SUFFIX}");
         Console.WriteLine("アプリを起動し直して、再スキャン → 検査を実行してください。");

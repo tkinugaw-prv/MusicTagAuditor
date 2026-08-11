@@ -65,6 +65,7 @@ public static class Program
         report.Line();
         report.Line($"対象: `{libraryRoot}`");
         report.Line($"辞書: `{DictionaryLoader.GetUserDictionaryPath(dictionaryDirectory)}`");
+        report.Line($"辞書の構成: {DictionarySummary.Describe(dictionary.Dictionary)}");
         report.Line($"読み取り {scan.Tracks.Count:N0} 件 / 失敗 {scan.Failures.Count:N0} 件 "
             + $"/ {scan.Elapsed.TotalSeconds:F1} 秒");
 
