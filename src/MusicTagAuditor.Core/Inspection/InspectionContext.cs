@@ -44,6 +44,9 @@ public sealed class InspectionContext
     /// <summary>フォルダごとのファイル。</summary>
     private readonly Dictionary<string, IReadOnlyList<TrackTags>> _tracksByFolder;
 
+    /// <summary>アルバム単位。要求されるまで作らない。R-504 以外は使わないため。</summary>
+    private IReadOnlyList<AlbumUnit>? _units;
+
     /// <summary>
     /// 文脈を組み立てる。
     /// </summary>
@@ -73,6 +76,12 @@ public sealed class InspectionContext
 
     /// <summary>検査の設定。</summary>
     public InspectionOptions Options { get; }
+
+    /// <summary>
+    /// アルバム単位（フォルダ + <c>discnumber</c>）。アルバム名の判定に使う
+    /// （docs/TAGGING_POLICY.md 3.5 補足2）。
+    /// </summary>
+    public IReadOnlyList<AlbumUnit> Units => _units ??= AlbumUnit.Build(Tracks, Dictionary);
 
     /// <summary>
     /// 指定ファイルと同じフォルダにあるファイルを返す。

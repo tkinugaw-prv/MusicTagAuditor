@@ -1,7 +1,234 @@
 using System.Text.RegularExpressions;
+using MusicTagAuditor.Core.Dictionary;
 using MusicTagAuditor.Core.Models;
 
 namespace MusicTagAuditor.Core.Inspection.Rules;
+
+/// <summary>
+/// R-504: <c>album</c> が 3.5 の書式と不一致（docs/TAGGING_POLICY.md 3.5 / docs/SPEC.md 7.4）。
+///
+/// 書式は <c>{作曲家}: {作品名} - {date}/{artist}</c>。**アルバム単位（フォルダ + <c>discnumber</c>）で
+/// 判定し、単位内の全ファイルへ同じ値を出す。** ファイル単位で判定すると、複数ディスク・複数フォルダに
+/// 分かれた 1 アルバムが割れる（3.5 規則3）。
+///
+/// 決められない要素があれば**保留**にする。保留は適用対象外で、条件が揃えば自動的に再判定できる
+/// （SPEC 7.4.4）。**推測で埋めない**（7章 原則4）。
+/// </summary>
+public sealed class AlbumNameRule : IInspectionRule
+{
+    /// <inheritdoc />
+    public string Id => "R-504";
+
+    /// <inheritdoc />
+    public Severity Severity => Severity.Warning;
+
+    /// <inheritdoc />
+    public string Description => "album が「作曲家: 作品名 - 年/演奏者」形式と不一致";
+
+    /// <inheritdoc />
+    public IEnumerable<TagChange> Inspect(InspectionContext context)
+    {
+        foreach (AlbumUnit unit in context.Units)
+        {
+            foreach (TagChange change in InspectUnit(unit, context))
+            {
+                yield return change;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 単位 1 つを判定し、単位内の全ファイル分の修正案を返す。
+    /// </summary>
+    private static IEnumerable<TagChange> InspectUnit(AlbumUnit unit, InspectionContext context)
+    {
+        AlbumOverrideEntry? nameOverride = context.Dictionary
+            .TryResolveAlbumOverride(unit.Folder, unit.Disc, out AlbumOverrideEntry found) ? found : null;
+
+        // 規則6 の対象外。主作品が定まらないアルバムは一覧にも出さない。
+        // 「直す必要があるのに出ていない」ではなく「対象外だと決めた」ものなので、検出にしない。
+        if (nameOverride?.Exclude == true)
+        {
+            return [];
+        }
+
+        string? composer = nameOverride?.Composer ?? Single(unit.Composers);
+
+        if (composer is null)
+        {
+            return Hold(unit, HoldReason.WorkUnknown, unit.Composers.Count == 0
+                ? "composer が未設定のためアルバム名を決められない"
+                : $"単位内に作曲家が {unit.Composers.Count} 人いる（{string.Join(" / ", unit.Composers)}）。"
+                    + "主作品が定まるなら albumOverrides で作曲家を指定する（3.5 規則5）。"
+                    + "定まらないなら対象外にする（規則6）");
+        }
+
+        string workSource = $"個別例外で作品名を「{nameOverride?.WorkName}」と指定（{nameOverride?.Note}）";
+        string? work = nameOverride?.WorkName;
+
+        if (work is null)
+        {
+            work = FindWork(unit, context, composer, out workSource);
+
+            if (work is null)
+            {
+                return Hold(unit, HoldReason.WorkUnknown, workSource);
+            }
+        }
+
+        string? date = Single(unit.Dates);
+
+        if (date is null)
+        {
+            return Hold(unit, HoldReason.DateUnknown, unit.Dates.Count == 0
+                ? "date が未設定のため年を決められない。推測で埋めない（3.5 規則2）"
+                : $"単位内で date が割れている（{string.Join(" / ", unit.Dates)}）。"
+                    + "1 つのフォルダに別々の録音が入っていないかを先に疑う（3.5 規則2）");
+        }
+
+        string? artist = Single(unit.Artists);
+
+        if (artist is null)
+        {
+            return Hold(unit, HoldReason.ArtistUnknown, unit.Artists.Count == 0
+                ? "artist が未設定のため演奏者を決められない"
+                : $"単位内で artist が割れている（{string.Join(" / ", unit.Artists)}）");
+        }
+
+        string album = $"{composer}: {work} - {date}/{artist}";
+
+        return
+        [
+            .. unit.Tracks
+                .Where(track => !string.Equals(track.Album, album, StringComparison.Ordinal))
+                .Select(track => new TagChange(
+                    track.RelativePath,
+                    TagField.Album,
+                    track.GetValues(TagField.Album),
+                    [album],
+                    "R-504",
+                    $"{workSource}。3.5 の書式で組み立てた",
+                    Severity.Warning)),
+        ];
+    }
+
+    /// <summary>
+    /// 作品エントリを引く（docs/SPEC.md 7.4.3 手順4・5）。
+    ///
+    /// **<c>album</c> の値とフォルダ名の両方から引き、食い違ったら諦める。**<c>album</c> は
+    /// 誤っているファイルが実在するため単独では信用しない（3.5 補足2）。
+    /// </summary>
+    /// <param name="unit">アルバム単位。</param>
+    /// <param name="context">ライブラリ全体の文脈。</param>
+    /// <param name="composer">単位の作曲家。</param>
+    /// <param name="source">根拠、または諦めた理由。</param>
+    /// <returns>作品名。決められなければ null。</returns>
+    private static string? FindWork(AlbumUnit unit, InspectionContext context, string composer, out string source)
+    {
+        string? fromAlbum = null;
+
+        foreach (string album in unit.Albums)
+        {
+            if (context.Dictionary.TryResolveWork(composer, album, out WorkEntry entry))
+            {
+                fromAlbum = entry.Canonical;
+                break;
+            }
+        }
+
+        string? fromFolder = FindWorkInFolder(unit.Folder, context, composer);
+
+        if (fromAlbum is not null && fromFolder is not null)
+        {
+            if (!string.Equals(fromAlbum, fromFolder, StringComparison.Ordinal))
+            {
+                source = $"album からは「{fromAlbum}」、フォルダ名からは「{fromFolder}」と読める。"
+                    + "どちらかのタグが誤っている可能性があるため決められない";
+
+                return null;
+            }
+
+            source = $"album とフォルダ名の両方が作品「{fromAlbum}」を指す";
+            return fromAlbum;
+        }
+
+        if (fromAlbum is not null)
+        {
+            source = $"album「{unit.Albums[0]}」から作品「{fromAlbum}」を特定";
+            return fromAlbum;
+        }
+
+        if (fromFolder is not null)
+        {
+            source = $"フォルダ名から作品「{fromFolder}」を特定";
+            return fromFolder;
+        }
+
+        source = $"作曲家「{composer}」の作品エントリに一致する手がかりが無い。辞書に作品を足す（SPEC 7.4）";
+        return null;
+    }
+
+    /// <summary>
+    /// フォルダ名から作品を引く。
+    ///
+    /// **末端のセグメントから親へ遡る。** 作品名が親フォルダにしか出てこない構成があるため
+    /// （`ワーグナー\ワルキューレ\第二幕`。3.5 規則3 の B 種別）。
+    /// セグメントは全体と「最初の <c>-</c> より前」の 2 通りで引く。フォルダ名には演奏者が
+    /// 付いていることが多い（`ブルックナー 8 - Wand`）。
+    /// </summary>
+    private static string? FindWorkInFolder(string folder, InspectionContext context, string composer)
+    {
+        string[] segments = folder.Split(
+            Path.DirectorySeparatorChar,
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        foreach (string segment in segments.Reverse())
+        {
+            if (context.Dictionary.TryResolveWork(composer, segment, out WorkEntry whole))
+            {
+                return whole.Canonical;
+            }
+
+            string head = segment.Split('-')[0].Trim();
+
+            if (head.Length > 0
+                && !string.Equals(head, segment, StringComparison.Ordinal)
+                && context.Dictionary.TryResolveWork(composer, head, out WorkEntry fromHead))
+            {
+                return fromHead.Canonical;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// 単位内の全ファイルを保留として返す。
+    /// </summary>
+    private static IEnumerable<TagChange> Hold(AlbumUnit unit, HoldReason reason, string rationale)
+    {
+        return
+        [
+            .. unit.Tracks.Select(track => new TagChange(
+                track.RelativePath,
+                TagField.Album,
+                track.GetValues(TagField.Album),
+                [],
+                "R-504",
+                rationale,
+                Severity.Warning,
+                reason)),
+        ];
+    }
+
+    /// <summary>
+    /// 値が 1 つに定まっていればそれを返す。定まらなければ null。
+    /// </summary>
+    private static string? Single(IReadOnlyList<string> values)
+    {
+        return values.Count == 1 ? values[0] : null;
+    }
+}
 
 /// <summary>
 /// R-501: 同一アルバム名に複数の作曲家／演奏者が混在。

@@ -23,7 +23,7 @@ public sealed class RealLibraryInspectionTests(ITestOutputHelper output)
         string root = IntegrationConst.RequireLibraryRoot();
 
         ScanResult scan = await new LibraryScanner(new TagReader()).ScanAsync(root);
-        DictionaryIndex dictionary = new(DictionaryLoader.LoadDefault());
+        DictionaryIndex dictionary = IntegrationConst.LoadUserDictionary();
         InspectionContext context = new(scan, dictionary);
 
         InspectionResult result = new InspectionEngine().Inspect(context);
@@ -64,6 +64,31 @@ public sealed class RealLibraryInspectionTests(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// 利用者辞書が検証を通ることを確認する。
+    ///
+    /// **作品エントリは手で書くため、ここで止まらないと気づけない。** 自然キー（作曲家 + 作品名）や
+    /// エイリアスが重複しても索引は先勝ちで、後から書いたほうは黙って捨てられる（docs/SPEC.md 7.4.1）。
+    /// </summary>
+    [RealLibraryFact]
+    public void ValidatesUserDictionary()
+    {
+        TagDictionary dictionary = IntegrationConst.LoadUserDictionary().Dictionary;
+
+        IReadOnlyList<DictionaryIssue> issues = DictionaryValidator.Validate(dictionary);
+
+        output.WriteLine(
+            $"作品 {dictionary.Works.Count} 件 / 個別例外 {dictionary.AlbumOverrides.Count} 件"
+            + $" / 指摘 {issues.Count} 件");
+
+        foreach (DictionaryIssue issue in issues)
+        {
+            output.WriteLine($"  {issue.Summary}");
+        }
+
+        Assert.False(DictionaryValidator.HasError(issues));
+    }
+
+    /// <summary>
     /// 保護対象（docs/TAGGING_POLICY.md 2.3）が検査から除外されていることを確認する。
     /// 除外できていないと R-207 / R-208 が誤検出だらけになる。
     /// </summary>
@@ -73,7 +98,7 @@ public sealed class RealLibraryInspectionTests(ITestOutputHelper output)
         string root = IntegrationConst.RequireLibraryRoot();
 
         ScanResult scan = await new LibraryScanner(new TagReader()).ScanAsync(root);
-        DictionaryIndex dictionary = new(DictionaryLoader.LoadDefault());
+        DictionaryIndex dictionary = IntegrationConst.LoadUserDictionary();
 
         string[] protectedPaths = [.. scan.Tracks
             .Where(track => track.GetValues(TagField.AlbumArtist).Any(dictionary.IsProtectedAlbumArtist))

@@ -20,6 +20,64 @@ public sealed class RemainingRuleTests
     private static readonly DictionaryIndex DICTIONARY = new(DictionaryLoader.LoadDefault());
 
     /// <summary>
+    /// R-504 用の辞書。既定辞書に作品エントリと個別例外を足したもの。
+    ///
+    /// **同梱の既定辞書には作品エントリを入れない**（docs/SPEC.md 13章 D5）。所蔵に依存するため。
+    /// ここでは判定の形だけを確かめるので、必要な数件だけを組み立てる。
+    /// </summary>
+    private static readonly DictionaryIndex WORKS_DICTIONARY = new(DictionaryLoader.LoadDefault() with
+    {
+        Works =
+        [
+            new WorkEntry
+            {
+                Composer = "Anton Bruckner",
+                Canonical = "Symphony No. 8",
+                Aliases = ["Symphony No.8"],
+                AliasesJa = ["ブルックナー 8"],
+            },
+            new WorkEntry
+            {
+                Composer = "Franz Schubert",
+                Canonical = "Symphony No. 8",
+                Aliases = ["Symphony No.8"],
+                AliasesJa = ["シューベルト 8"],
+            },
+            new WorkEntry
+            {
+                Composer = "Franz Schubert",
+                Canonical = "Symphony No. 9",
+                Aliases = ["Symphony No.9"],
+                AliasesJa = ["シューベルト 9"],
+            },
+        ],
+        AlbumOverrides =
+        [
+            new AlbumOverrideEntry
+            {
+                Folder = "リスト 交響詩",
+                Exclude = true,
+                Note = "3.5 規則6 交響詩 4 曲",
+            },
+            new AlbumOverrideEntry
+            {
+                Folder = @"ショスタコーヴィチ\オリンピア盤",
+                WorkName = "Symphony No. 5 (Olympia)",
+                Note = "3.5 規則7 同一演奏の別リリース",
+            },
+        ],
+    });
+
+    /// <summary>ブルックナー 8 番の 1 ファイル分のタグ。R-504 のテストで繰り返し使う。</summary>
+    private static readonly (TagField Field, string[] Values)[] BRUCKNER_8 =
+    [
+        (TagField.Composer, ["Anton Bruckner"]),
+        (TagField.Album, ["Symphony No.8"]),
+        (TagField.Artist, ["Günter Wand"]),
+        (TagField.Date, ["1993"]),
+    ];
+
+    /// <summary>
     /// R-301: 辞書の誤記を置換することを確認する。
     /// **区切り文字が違っても取りこぼさない**（docs/TAGGING_POLICY.md 5.4）。
     /// </summary>
@@ -612,6 +670,199 @@ public sealed class RemainingRuleTests
     }
 
     /// <summary>
+    /// R-504: 3.5 の書式でアルバム名を組み立てることを確認する。
+    /// **単位内の全ファイルに同じ値を出す**（規則3）。
+    /// </summary>
+    [Fact]
+    public void BuildsAlbumNameFromWorkEntry()
+    {
+        InspectionResult result = Works(
+            Track("ブルックナー/ブルックナー 8 - Wand/01.flac", BRUCKNER_8),
+            Track("ブルックナー/ブルックナー 8 - Wand/02.flac", BRUCKNER_8));
+
+        IReadOnlyList<TagChange> changes = ChangesOf(result, "R-504");
+
+        Assert.Equal(2, changes.Count);
+        Assert.All(changes, change =>
+        {
+            Assert.Equal("Anton Bruckner: Symphony No. 8 - 1993/Günter Wand", change.AfterText);
+            Assert.True(change.IsSelected);
+            Assert.Equal("確定", change.Classification);
+        });
+    }
+
+    /// <summary>
+    /// R-504: 複数ディスクは別の単位になるが、同じアルバム名になることを確認する（3.5 規則3）。
+    /// </summary>
+    [Fact]
+    public void GivesSameAlbumNameToEveryDiscOfOneAlbum()
+    {
+        InspectionResult result = Works(
+            Track("ブルックナー/ブルックナー 8 - Wand/01.flac", [.. BRUCKNER_8, (TagField.DiscNumber, ["1/2"])]),
+            Track("ブルックナー/ブルックナー 8 - Wand/05.flac", [.. BRUCKNER_8, (TagField.DiscNumber, ["2/2"])]));
+
+        Assert.All(
+            ChangesOf(result, "R-504"),
+            change => Assert.Equal("Anton Bruckner: Symphony No. 8 - 1993/Günter Wand", change.AfterText));
+    }
+
+    /// <summary>
+    /// R-504: フォルダ名だけからでも作品を引けることを確認する。
+    /// フォルダ名には演奏者が付いているので「最初の <c>-</c> より前」でも引く。
+    /// </summary>
+    [Fact]
+    public void FindsWorkFromFolderNameWithoutAlbumTag()
+    {
+        TagChange change = Assert.Single(
+            ChangesOf(
+                Works(Track("ブルックナー/ブルックナー 8 - Wand/01.flac",
+                    (TagField.Composer, ["Anton Bruckner"]),
+                    (TagField.Artist, ["Günter Wand"]),
+                    (TagField.Date, ["1993"]))),
+                "R-504"));
+
+        Assert.Equal("Anton Bruckner: Symphony No. 8 - 1993/Günter Wand", change.AfterText);
+        Assert.Contains("フォルダ名", change.Rationale, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// R-504: <c>album</c> とフォルダ名が別の作品を指すなら保留することを確認する。
+    ///
+    /// **<c>album</c> だけを信用しない。** 実ライブラリには `シューベルト 9` のフォルダに
+    /// `Schubert Symphony No.8` が付いた例がある（docs/TAGGING_POLICY.md 3.5 補足2）。
+    /// </summary>
+    [Fact]
+    public void HoldsWhenAlbumAndFolderDisagree()
+    {
+        TagChange change = Assert.Single(
+            ChangesOf(
+                Works(Track("シューベルト/シューベルト 9 - ベーム/01.flac",
+                    (TagField.Composer, ["Franz Schubert"]),
+                    (TagField.Album, ["Symphony No.8"]),
+                    (TagField.Artist, ["Karl Böhm"]),
+                    (TagField.Date, ["1963"]))),
+                "R-504"));
+
+        Assert.False(change.HasFix);
+        Assert.Equal(HoldReason.WorkUnknown, change.HoldReason);
+        Assert.Equal("保留", change.Classification);
+    }
+
+    /// <summary>
+    /// R-504: 決められない要素があれば保留し、理由をコードで持つことを確認する（SPEC 7.4.4）。
+    /// </summary>
+    [Theory]
+    [InlineData(null, "Günter Wand", HoldReason.DateUnknown)]
+    [InlineData("1993", null, HoldReason.ArtistUnknown)]
+    public void HoldsWhenElementIsMissing(string? date, string? artist, HoldReason expected)
+    {
+        (TagField Field, string[] Values)[] fields =
+        [
+            (TagField.Composer, ["Anton Bruckner"]),
+            (TagField.Album, ["Symphony No.8"]),
+            .. date is null ? Array.Empty<(TagField, string[])>() : [(TagField.Date, [date])],
+            .. artist is null ? Array.Empty<(TagField, string[])>() : [(TagField.Artist, [artist])],
+        ];
+
+        TagChange change = Assert.Single(
+            ChangesOf(Works(Track("ブルックナー/ブルックナー 8 - Wand/01.flac", fields)), "R-504"));
+
+        Assert.Equal(expected, change.HoldReason);
+        Assert.False(change.IsSelected);
+    }
+
+    /// <summary>
+    /// R-504: <c>date</c> が単位内で割れていたら保留することを確認する。
+    /// **最古年・最頻値のような機械的な選び方をしない**（3.5 規則2）。
+    /// </summary>
+    [Fact]
+    public void HoldsWhenDateIsSplitWithinUnit()
+    {
+        InspectionResult result = Works(
+            Track("ブルックナー/ブルックナー 8 - Wand/01.flac", [.. BRUCKNER_8]),
+            Track("ブルックナー/ブルックナー 8 - Wand/02.flac",
+                (TagField.Composer, ["Anton Bruckner"]),
+                (TagField.Album, ["Symphony No.8"]),
+                (TagField.Artist, ["Günter Wand"]),
+                (TagField.Date, ["1994"])));
+
+        Assert.All(
+            ChangesOf(result, "R-504"),
+            change => Assert.Equal(HoldReason.DateUnknown, change.HoldReason));
+    }
+
+    /// <summary>
+    /// R-504: 単位内に作曲家が複数いたら保留することを確認する（3.5 規則5・規則6 の対象）。
+    /// </summary>
+    [Fact]
+    public void HoldsWhenUnitHasMultipleComposers()
+    {
+        InspectionResult result = Works(
+            Track("ドヴォルザーク/ドヴォルザーク 9 - カラヤン/01.flac",
+                (TagField.Composer, ["Antonín Dvořák"]),
+                (TagField.Artist, ["Herbert von Karajan"]),
+                (TagField.Date, ["1985"])),
+            Track("ドヴォルザーク/ドヴォルザーク 9 - カラヤン/05.flac",
+                (TagField.Composer, ["Bedřich Smetana"]),
+                (TagField.Artist, ["Herbert von Karajan"]),
+                (TagField.Date, ["1985"])));
+
+        Assert.All(
+            ChangesOf(result, "R-504"),
+            change => Assert.Equal(HoldReason.WorkUnknown, change.HoldReason));
+    }
+
+    /// <summary>
+    /// R-504: 既に正しい書式のファイルを検出しないことを確認する。
+    /// </summary>
+    [Fact]
+    public void DoesNotFlagAlbumAlreadyInFormat()
+    {
+        InspectionResult result = Works(
+            Track("ブルックナー/ブルックナー 8 - Wand/01.flac",
+                (TagField.Composer, ["Anton Bruckner"]),
+                (TagField.Album, ["Anton Bruckner: Symphony No. 8 - 1993/Günter Wand"]),
+                (TagField.Artist, ["Günter Wand"]),
+                (TagField.Date, ["1993"])));
+
+        Assert.Empty(ChangesOf(result, "R-504"));
+    }
+
+    /// <summary>
+    /// R-504: <c>albumOverrides</c> で対象外にした単位を検出しないことを確認する（3.5 規則6）。
+    /// **一覧にも出さない。** 直す必要があるのに出ていないのではなく、対象外だと決めたものである。
+    /// </summary>
+    [Fact]
+    public void SkipsExcludedFolder()
+    {
+        InspectionResult result = Works(
+            Track("リスト 交響詩/01.flac",
+                (TagField.Composer, ["Franz Liszt"]),
+                (TagField.Artist, ["Karl Böhm"]),
+                (TagField.Date, ["1970"])));
+
+        Assert.Empty(ChangesOf(result, "R-504"));
+    }
+
+    /// <summary>
+    /// R-504: <c>albumOverrides</c> の作品名で組み立てることを確認する（3.5 規則4・規則7）。
+    /// </summary>
+    [Fact]
+    public void UsesWorkNameFromOverride()
+    {
+        TagChange change = Assert.Single(
+            ChangesOf(
+                Works(Track("ショスタコーヴィチ/オリンピア盤/01.flac",
+                    (TagField.Composer, ["Dmitri Shostakovich"]),
+                    (TagField.Artist, ["Yevgeny Mravinsky"]),
+                    (TagField.Date, ["1978"]))),
+                "R-504"));
+
+        Assert.Equal("Dmitri Shostakovich: Symphony No. 5 (Olympia) - 1978/Yevgeny Mravinsky", change.AfterText);
+        Assert.Contains("個別例外", change.Rationale, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 楽章番号の書式判定を確認する。
     /// </summary>
     [Theory]
@@ -659,13 +910,29 @@ public sealed class RemainingRuleTests
     /// </summary>
     private static InspectionResult Inspect(params TrackTags[] tracks)
     {
-        return Inspect(tracks, enableDiacritic: false);
+        return Inspect(tracks, DICTIONARY, enableDiacritic: false);
+    }
+
+    /// <summary>
+    /// 作品エントリを持つ辞書で検査を実行する。R-504 のテストで使う。
+    /// </summary>
+    private static InspectionResult Works(params TrackTags[] tracks)
+    {
+        return Inspect(tracks, WORKS_DICTIONARY, enableDiacritic: false);
     }
 
     /// <summary>
     /// 検査を実行する。
     /// </summary>
     private static InspectionResult Inspect(TrackTags[] tracks, bool enableDiacritic)
+    {
+        return Inspect(tracks, DICTIONARY, enableDiacritic);
+    }
+
+    /// <summary>
+    /// 検査を実行する。
+    /// </summary>
+    private static InspectionResult Inspect(TrackTags[] tracks, DictionaryIndex dictionary, bool enableDiacritic)
     {
         ScanResult scan = new(LIBRARY_ROOT, tracks, [], TimeSpan.Zero);
 
@@ -676,7 +943,7 @@ public sealed class RemainingRuleTests
                 : new HashSet<string>(StringComparer.Ordinal),
         };
 
-        return new InspectionEngine().Inspect(new InspectionContext(scan, DICTIONARY, options));
+        return new InspectionEngine().Inspect(new InspectionContext(scan, dictionary, options));
     }
 
     /// <summary>
