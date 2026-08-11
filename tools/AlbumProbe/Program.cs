@@ -34,11 +34,12 @@ public static class Program
         {
             if (args.Length < 2)
             {
-                Console.Error.WriteLine($"使い方: {Const.IMPORT_WORKS_OPTION} <works.json>");
+                Console.Error.WriteLine($"使い方: {Const.IMPORT_WORKS_OPTION} <works.json> [辞書のフォルダ]");
                 return 1;
             }
 
-            return WorksImport.Run(args[1], dictionaryDirectory);
+            // 第 3 引数で辞書のフォルダを差し替えられる。試すときに %APPDATA% を汚さないため。
+            return WorksImport.Run(args[1], args.Length > 2 ? args[2] : dictionaryDirectory);
         }
 
         string libraryRoot = args.Length > 0 ? args[0] : Const.DEFAULT_LIBRARY_ROOT;

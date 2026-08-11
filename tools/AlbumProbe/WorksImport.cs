@@ -49,7 +49,13 @@ public static class WorksImport
             return 1;
         }
 
-        if (source is null || (source.Works.Count == 0 && source.AlbumOverrides.Count == 0))
+        // **null を空として扱う。** JSON に `"works": null` と書かれていると、
+        // プロパティ初期化子（`= []`）ではなく null が入る。実際に本体が書いた辞書が
+        // `"Works": null` を持っていた（2026-08-12）。辞書のほかの読み取り箇所も同じ形で守っている。
+        IReadOnlyList<WorkEntry> works = source?.Works ?? [];
+        IReadOnlyList<AlbumOverrideEntry> overrides = source?.AlbumOverrides ?? [];
+
+        if (works.Count == 0 && overrides.Count == 0)
         {
             Console.Error.WriteLine("works も albumOverrides も入っていません。");
             return 1;
@@ -59,12 +65,13 @@ public static class WorksImport
 
         Console.WriteLine($"辞書: {store.FilePath}");
         Console.WriteLine(
-            $"取り込み前: works={store.Dictionary.Works.Count} albumOverrides={store.Dictionary.AlbumOverrides.Count}");
+            $"取り込み前: works={(store.Dictionary.Works ?? []).Count}"
+            + $" albumOverrides={(store.Dictionary.AlbumOverrides ?? []).Count}");
 
         TagDictionary merged = store.Dictionary with
         {
-            Works = source.Works,
-            AlbumOverrides = source.AlbumOverrides,
+            Works = works,
+            AlbumOverrides = overrides,
         };
 
         // **検証で止める。** 自然キーや別名が重複すると索引は先勝ちで、後から書いたほうは
@@ -87,7 +94,7 @@ public static class WorksImport
         int warnings = issues.Count(issue => issue.Severity == DictionaryIssueSeverity.Warning);
 
         Console.WriteLine(
-            $"取り込み後: works={merged.Works.Count} albumOverrides={merged.AlbumOverrides.Count}"
+            $"取り込み後: works={works.Count} albumOverrides={overrides.Count}"
             + (warnings > 0 ? $"（警告 {warnings} 件）" : string.Empty));
         Console.WriteLine($"直前版: {store.FilePath}{DictionaryWriter.BACKUP_SUFFIX}");
         Console.WriteLine("アプリを起動し直して、再スキャン → 検査を実行してください。");
