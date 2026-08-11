@@ -105,6 +105,7 @@ DataGrid のセル編集で使う場合は `GridEditingSuggestBoxStyle` を当�
 | `tests/MusicTagAuditor.Core.Tests` | `net10.0` | ドメインのテスト |
 | `tests/MusicTagAuditor.TagIo.Tests` | `net10.0` | タグ読み書きの往復テスト |
 | `tools/TagIoProbe` | `net10.0` | タグライブラリ選定の検証スパイク（選定後は破棄可） |
+| `tools/AlbumProbe` | `net10.0` | アルバム名の書式（`TAGGING_POLICY.md` 3.5）を決めた実測の再現。読み取りのみ |
 
 ---
 
@@ -371,4 +372,20 @@ dotnet run --project tools/TagIoProbe/TagIoProbe.csproj -- "D:\Music\Classic"
 ```
 
 実ライブラリのファイルは読み取りのみ。検体は `tools/TagIoProbe/work/` に複製され、書き込みはその複製に対してのみ行う。結果は `tools/TagIoProbe/work/report.md` に出力される。
+
+### アルバム単位の実測
+
+```bash
+dotnet run --project tools/AlbumProbe/AlbumProbe.csproj -- "D:\Music\Classic"
+```
+
+`TAGGING_POLICY.md` 3.5（アルバム名の書式）を決めた実測を再現する。**読み取りのみで、ライブラリには書き込まない。** 第 2 引数でレポートの出力先を指定できる（省略時は実行ファイルと同じ場所）。
+
+正規化辞書は本体アプリと同じ `%APPDATA%\MusicTagAuditor\dictionary.json` を読む。測定値が本体の判定と食い違わないようにするため。
+
+**数字が動いたら 3.5 補足2 を更新すること。** 次の作業で動く。
+
+- `composer` 系ルール（R-201 / R-203 / R-204 / R-401）の適用 → 複数作曲家の単位数が変わる
+- `date` を埋める → 保留の単位数が減る
+- 辞書に作曲家を追加する → R-210 の検出数と誤検出が増える（`TAGGING_POLICY.md` 6.9）
 
