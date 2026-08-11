@@ -107,6 +107,71 @@ public sealed record EnsembleEntry
 }
 
 /// <summary>
+/// 作品 1 つ分（docs/SPEC.md 7.4）。
+///
+/// <c>TAGGING_POLICY.md</c> 3.5 のアルバム名 <c>{作曲家}: {作品名} - {date}/{artist}</c> における
+/// <c>{作品名}</c> の唯一の供給元。<c>title</c>（楽章名）からも <c>album</c>（汎用名）からも
+/// 一意には取れないため、辞書に持つ。
+///
+/// **自然キーは <see cref="Composer"/> + <see cref="Canonical"/> の組。** 別途 ID は持たない。
+/// 団体（<see cref="EnsembleEntry.EntityId"/>）は改名をまたいで同一性を保つ必要があるが、
+/// 作品名は改名しないため同じ仕掛けは要らない。
+///
+/// **1 作品 1 エントリ。版で分けない**（3.5 規則4）。版・稿の情報は <c>comment</c> に置き、
+/// 版だけが違う録音を所蔵した場合はそのアルバムだけ <see cref="AlbumOverrideEntry"/> で例外にする。
+/// </summary>
+public sealed record WorkEntry
+{
+    /// <summary>
+    /// この作品の作曲家。<c>composers</c> の正規形と一致させる。
+    ///
+    /// **引くときのキーの一部になる。** <c>Symphony No.5</c> は作曲家が違えば別の作品であり、
+    /// 作曲家で絞らずに引くと R-501 が検出している衝突をそのまま再生産する。
+    /// </summary>
+    public string Composer { get; init; } = string.Empty;
+
+    /// <summary>
+    /// 作品名。アルバム名にそのまま入る値。
+    /// 言語は「ジャンル名は英語・固有の題名は原語」（docs/TAGGING_POLICY.md 3.5 規則8）。
+    /// </summary>
+    public string Canonical { get; init; } = string.Empty;
+
+    /// <summary>ラテン文字の別表記。現在の <c>album</c> の値・フォルダ名のうちラテン文字のもの。</summary>
+    public IReadOnlyList<string> Aliases { get; init; } = [];
+
+    /// <summary>日本語表記。略称（<c>ベト7</c>）と正式な日本語名（<c>交響曲第8番</c>）の両方。</summary>
+    public IReadOnlyList<string> AliasesJa { get; init; } = [];
+}
+
+/// <summary>
+/// アルバム単位の個別例外 1 件（docs/SPEC.md 7.4.5）。
+///
+/// docs/TAGGING_POLICY.md 3.5 の規則4（版の違い）・規則6（コンピレーション）・規則7（同一演奏の
+/// 別リリース）は、いずれも「そのアルバムだけ」の例外を認めている。**規則そのものを一般化しない**
+/// ため、作品エントリではなくアルバム単位に紐づける。
+/// </summary>
+public sealed record AlbumOverrideEntry
+{
+    /// <summary>ライブラリルートからの相対パス。</summary>
+    public string Folder { get; init; } = string.Empty;
+
+    /// <summary>対象のディスク番号。null ならそのフォルダの全ディスク。</summary>
+    public int? Disc { get; init; }
+
+    /// <summary>単位の作曲家を明示する。主作品 + カップリング（3.5 規則5）で使う。</summary>
+    public string? Composer { get; init; }
+
+    /// <summary>作品名を明示する。版の違い（規則4）・同一演奏の別リリース（規則7）で使う。</summary>
+    public string? WorkName { get; init; }
+
+    /// <summary>アルバム名の対象外にするか。本物のコンピレーション（規則6）で使う。</summary>
+    public bool Exclude { get; init; }
+
+    /// <summary>例外の理由。**書く運用とする。** 理由の無い例外は後から消せない。</summary>
+    public string? Note { get; init; }
+}
+
+/// <summary>
 /// 楽語のスペルミス 1 件（docs/TAGGING_POLICY.md 5.4）。
 ///
 /// **照合は正規表現で行う。** 完全一致だと区切り文字違いを取りこぼす。
@@ -140,6 +205,15 @@ public sealed record TagDictionary
 
     /// <summary>演奏団体。</summary>
     public IReadOnlyList<EnsembleEntry> Ensembles { get; init; } = [];
+
+    /// <summary>
+    /// 作品（docs/SPEC.md 7.4）。アルバム名の <c>{作品名}</c> の供給元。
+    /// **同梱の既定辞書には入れない。** 所蔵に完全に依存するため（13章 D5）。
+    /// </summary>
+    public IReadOnlyList<WorkEntry> Works { get; init; } = [];
+
+    /// <summary>アルバム単位の個別例外（docs/SPEC.md 7.4.5）。</summary>
+    public IReadOnlyList<AlbumOverrideEntry> AlbumOverrides { get; init; } = [];
 
     /// <summary>楽語のスペルミス。</summary>
     public IReadOnlyList<TypoEntry> Typos { get; init; } = [];

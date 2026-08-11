@@ -51,6 +51,7 @@ public sealed class InspectionEngine
             new PerformerNotCanonicalRule(),
             new ComposerInArtistRule(),
             new ComposerInAlbumArtistRule(),
+            new ComposerMismatchRule(),
             new SemicolonValueRule(),
             new DuplicateConcatenationRule(),
             new PersonNameFormatRule(),
@@ -66,6 +67,7 @@ public sealed class InspectionEngine
             new AlbumNameCollisionRule(),
             new JapaneseAlbumNameRule(),
             new MovementNumberStyleRule(),
+            new AlbumNameRule(),
         ];
     }
 

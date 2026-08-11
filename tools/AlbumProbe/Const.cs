@@ -14,6 +14,9 @@ public static class Const
     /// <summary>レポートの既定のファイル名。</summary>
     public const string REPORT_FILE_NAME = "album-probe-report.md";
 
+    /// <summary>作品エントリの雛形のファイル名（docs/SPEC.md 7.4.6）。レポートと同じ場所に出す。</summary>
+    public const string WORKS_TEMPLATE_FILE_NAME = "works-template.json";
+
     /// <summary>
     /// 複合キーを 1 本の文字列にまとめるときの区切り。
     /// タグの値に現れない制御文字を選ぶ。区切りが値に含まれると別のキーが同一視される。
@@ -32,12 +35,4 @@ public static class Const
 
     /// <summary>ライブラリルート直下を表す表示（docs/SPEC.md 5.2）。</summary>
     public const string ROOT_FOLDER_LABEL = "(root)";
-
-    /// <summary>
-    /// ファイル名を語に割るときの区切り。
-    /// 部分一致で照合すると <c>Bach</c> が <c>Bach-Chor</c> に当たるため、語単位に割ってから引く
-    /// （docs/SPEC.md 6.2）。
-    /// </summary>
-    public static readonly char[] NAME_TOKEN_SEPARATORS =
-        [' ', '-', '_', '.', ',', ':', ';', '(', ')', '[', ']', '\u3000', '\u30fb'];
 }

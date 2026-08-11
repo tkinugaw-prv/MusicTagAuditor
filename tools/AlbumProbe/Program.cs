@@ -65,10 +65,18 @@ public static class Program
         Measurements.WritePerformerCollisions(report, units);
         Measurements.WriteComposerMismatch(report, scan, dictionary);
 
+        // 作品エントリの雛形はレポートと同じ場所に出す（docs/SPEC.md 7.4.6）。
+        string templatePath = Path.Combine(
+            Path.GetDirectoryName(Path.GetFullPath(reportPath)) ?? AppContext.BaseDirectory,
+            Const.WORKS_TEMPLATE_FILE_NAME);
+
+        int works = await WorksTemplate.WriteAsync(report, units, dictionary, templatePath).ConfigureAwait(false);
+
         await report.SaveAsync(reportPath).ConfigureAwait(false);
 
         Console.WriteLine();
         Console.WriteLine($"レポート: {reportPath}");
+        Console.WriteLine($"作品エントリの雛形: {templatePath}（{works} 件）");
 
         return 0;
     }

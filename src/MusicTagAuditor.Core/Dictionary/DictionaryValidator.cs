@@ -1,4 +1,4 @@
-using MusicTagAuditor.Core.Normalization;
+﻿using MusicTagAuditor.Core.Normalization;
 
 namespace MusicTagAuditor.Core.Dictionary;
 
@@ -55,6 +55,12 @@ public static class DictionaryValidator
     /// <summary>保護対象の種別名。</summary>
     public const string CATEGORY_PROTECTED = "保護対象";
 
+    /// <summary>作品の種別名。</summary>
+    public const string CATEGORY_WORK = "作品";
+
+    /// <summary>個別例外の種別名。</summary>
+    public const string CATEGORY_OVERRIDE = "個別例外";
+
     /// <summary>
     /// 辞書全体を検証する。
     /// </summary>
@@ -76,6 +82,8 @@ public static class DictionaryValidator
         ValidateEnsembles(dictionary, issues, ensembleKeys);
         ValidateTypos(dictionary, issues);
         ValidateProtected(dictionary, issues);
+        ValidateWorks(dictionary, issues);
+        ValidateAlbumOverrides(dictionary, issues);
         ValidateCrossCategory(issues, composerKeys, personKeys, ensembleKeys);
 
         return issues;
@@ -353,6 +361,136 @@ public static class DictionaryValidator
             {
                 issues.Add(new DictionaryIssue(
                     DictionaryIssueSeverity.Warning, CATEGORY_PROTECTED, value, "同じ値が重複しています。"));
+            }
+        }
+    }
+
+    /// <summary>
+    /// 作品エントリを検証する（docs/SPEC.md 7.4）。
+    ///
+    /// **自然キーは <c>composer</c> + <c>canonical</c>。** 同じ組を 2 つ作ると索引は先勝ちになり、
+    /// 後から書いたほうは黙って捨てられる。エイリアスの衝突も同じ作曲家の中でだけ起きる。
+    /// </summary>
+    private static void ValidateWorks(TagDictionary dictionary, List<DictionaryIssue> issues)
+    {
+        // 作曲家の正規形。作品の composer がここに無いと、検査時にキーが一致せず引けない。
+        HashSet<string> composers = new(
+            (dictionary.Composers ?? []).Select(composer => composer.Canonical),
+            StringComparer.Ordinal);
+
+        HashSet<string> naturalKeys = new(StringComparer.Ordinal);
+
+        // 「作曲家 + 別名の正規化キー」→ 最初に使った作品。
+        Dictionary<string, string> aliasOwners = [];
+
+        foreach (WorkEntry work in dictionary.Works ?? [])
+        {
+            string label = string.IsNullOrWhiteSpace(work.Canonical) ? "(空欄)" : work.Canonical;
+
+            if (string.IsNullOrWhiteSpace(work.Canonical))
+            {
+                issues.Add(new DictionaryIssue(
+                    DictionaryIssueSeverity.Error, CATEGORY_WORK, label, "作品名が空です。"));
+            }
+
+            if (string.IsNullOrWhiteSpace(work.Composer))
+            {
+                issues.Add(new DictionaryIssue(
+                    DictionaryIssueSeverity.Error, CATEGORY_WORK, label, "作曲家が空です。作曲家を鍵に引くため必須です。"));
+
+                continue;
+            }
+
+            if (!composers.Contains(work.Composer))
+            {
+                issues.Add(new DictionaryIssue(
+                    DictionaryIssueSeverity.Error,
+                    CATEGORY_WORK,
+                    label,
+                    $"作曲家「{work.Composer}」が作曲家の正規形と一致しません。この作品は引けません。"));
+            }
+
+            if (string.IsNullOrWhiteSpace(work.Canonical))
+            {
+                continue;
+            }
+
+            if (!naturalKeys.Add($"{work.Composer}\u0001{work.Canonical}"))
+            {
+                issues.Add(new DictionaryIssue(
+                    DictionaryIssueSeverity.Error,
+                    CATEGORY_WORK,
+                    label,
+                    $"「{work.Composer}」の「{work.Canonical}」が重複しています。"
+                    + " 1 作品 1 エントリにまとめてください（版で分けないこと）。"));
+            }
+
+            foreach (string name in AllNames(work.Canonical, work.Aliases, work.AliasesJa))
+            {
+                string key = NormalizationKey.Create(name);
+
+                if (key.Length == 0)
+                {
+                    issues.Add(new DictionaryIssue(
+                        DictionaryIssueSeverity.Warning, CATEGORY_WORK, label, "空の別名があります。無視されます。"));
+
+                    continue;
+                }
+
+                string scoped = $"{work.Composer}\u0001{key}";
+
+                if (aliasOwners.TryGetValue(scoped, out string? existing))
+                {
+                    issues.Add(new DictionaryIssue(
+                        existing == work.Canonical ? DictionaryIssueSeverity.Warning : DictionaryIssueSeverity.Error,
+                        CATEGORY_WORK,
+                        label,
+                        existing == work.Canonical
+                            ? $"「{name}」は同じエントリ内で重複しています。"
+                            : $"「{name}」は同じ作曲家の「{existing}」が既に使っています。"
+                                + " 後から書いたほうは索引に載らず、登録しても効きません。"));
+
+                    continue;
+                }
+
+                aliasOwners[scoped] = work.Canonical;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 個別例外を検証する（docs/SPEC.md 7.4.5）。
+    /// </summary>
+    private static void ValidateAlbumOverrides(TagDictionary dictionary, List<DictionaryIssue> issues)
+    {
+        foreach (AlbumOverrideEntry entry in dictionary.AlbumOverrides ?? [])
+        {
+            string label = string.IsNullOrWhiteSpace(entry.Folder) ? "(空欄)" : entry.Folder;
+
+            if (string.IsNullOrWhiteSpace(entry.Folder))
+            {
+                issues.Add(new DictionaryIssue(
+                    DictionaryIssueSeverity.Error, CATEGORY_OVERRIDE, label, "フォルダが空です。"));
+
+                continue;
+            }
+
+            if (!entry.Exclude
+                && string.IsNullOrWhiteSpace(entry.WorkName)
+                && string.IsNullOrWhiteSpace(entry.Composer))
+            {
+                issues.Add(new DictionaryIssue(
+                    DictionaryIssueSeverity.Warning,
+                    CATEGORY_OVERRIDE,
+                    label,
+                    "対象外にも作品名の指定にもなっていません。この例外は何もしません。"));
+            }
+
+            if (string.IsNullOrWhiteSpace(entry.Note))
+            {
+                // 理由の書いていない例外は、後から消してよいか判断できなくなる。
+                issues.Add(new DictionaryIssue(
+                    DictionaryIssueSeverity.Warning, CATEGORY_OVERRIDE, label, "理由（note）が空です。"));
             }
         }
     }
