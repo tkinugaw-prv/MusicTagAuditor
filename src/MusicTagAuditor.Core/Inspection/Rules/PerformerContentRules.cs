@@ -140,7 +140,7 @@ public sealed class ComposerInAlbumArtistRule : IInspectionRule
 }
 
 /// <summary>
-/// R-210: ファイル名・<c>title</c> に <c>composer</c> と違う作曲家名が出てくる
+/// R-210: ファイル名・<c>title</c>・フォルダ名に <c>composer</c> と違う作曲家名が出てくる
 /// （docs/TAGGING_POLICY.md 6.9 / docs/SPEC.md 6.2）。
 ///
 /// <c>composer</c> が「辞書の正規形として正しいが、そのファイルの作曲家ではない」状態は、値が辞書と
@@ -162,14 +162,14 @@ public sealed class ComposerMismatchRule : IInspectionRule
     public Severity Severity => Severity.Info;
 
     /// <inheritdoc />
-    public string Description => "ファイル名・title に composer と違う作曲家名が出てくる";
+    public string Description => "ファイル名・title・フォルダ名に composer と違う作曲家名が出てくる";
 
     /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
     {
         foreach (TrackTags track in context.Tracks)
         {
-            ComposerMismatchHit? hit = ComposerMismatch.Find(track, context.Dictionary);
+            ComposerMismatchHit? hit = ComposerMismatch.Find(track, context.Dictionary, context.GetSiblings(track));
 
             if (hit is null)
             {
@@ -198,37 +198,40 @@ public sealed class ComposerMismatchRule : IInspectionRule
     {
         string fileName = Path.GetFileNameWithoutExtension(track.RelativePath);
 
-        // ファイル名と曲名が同じ作曲家を指す場合はまとめる。実ライブラリの該当はすべてこの形で、
+        // ファイル名と曲名が同じ作曲家を指す場合はまとめる。実ライブラリの該当はこの形が多く、
         // 分けて書くと同じ名前が根拠列に 2 回並ぶ。根拠は読めることが要件である（docs/SPEC.md 5.3）。
-        string found = hit.FromFileName is not null && hit.FromTitle is not null
-            && string.Equals(hit.FromFileName, hit.FromTitle, StringComparison.Ordinal)
-                ? string.Equals(fileName, track.Title, StringComparison.Ordinal)
-                    ? $"ファイル名・曲名「{fileName}」に「{hit.FromFileName}」"
-                    : $"ファイル名「{fileName}」と曲名「{track.Title}」に「{hit.FromFileName}」"
-                : string.Join(" / ", Sources(track, hit, fileName));
+        bool merged = hit.FromFileName is not null
+            && hit.FromTitle is not null
+            && string.Equals(hit.FromFileName, hit.FromTitle, StringComparison.Ordinal);
 
-        return $"composer は「{hit.Tagged}」だが、{found}が出てくる。"
+        List<string> sources = [];
+
+        if (merged)
+        {
+            sources.Add(string.Equals(fileName, track.Title, StringComparison.Ordinal)
+                ? $"ファイル名・曲名「{fileName}」に「{hit.FromFileName}」"
+                : $"ファイル名「{fileName}」と曲名「{track.Title}」に「{hit.FromFileName}」");
+        }
+        else
+        {
+            if (hit.FromFileName is not null)
+            {
+                sources.Add($"ファイル名「{fileName}」に「{hit.FromFileName}」");
+            }
+
+            if (hit.FromTitle is not null)
+            {
+                sources.Add($"曲名「{track.Title}」に「{hit.FromTitle}」");
+            }
+        }
+
+        if (hit.FromFolder is not null)
+        {
+            sources.Add($"フォルダ「{InspectionContext.GetFolder(track.RelativePath)}」に「{hit.FromFolder}」");
+        }
+
+        return $"composer は「{hit.Tagged}」だが、{string.Join(" / ", sources)}が出てくる。"
             + "曲名が別の作曲家名を正当に含む作品もあるため、誤りとは限らない。CD 実物の確認が要る";
-    }
-
-    /// <summary>
-    /// 手がかりを出所ごとに列挙する。ファイル名と曲名が別の作曲家を指す場合に使う。
-    /// </summary>
-    /// <param name="track">対象ファイル。</param>
-    /// <param name="hit">見つかった食い違い。</param>
-    /// <param name="fileName">拡張子を除いたファイル名。</param>
-    /// <returns>根拠に並べる文。</returns>
-    private static IEnumerable<string> Sources(TrackTags track, ComposerMismatchHit hit, string fileName)
-    {
-        if (hit.FromFileName is not null)
-        {
-            yield return $"ファイル名「{fileName}」に「{hit.FromFileName}」";
-        }
-
-        if (hit.FromTitle is not null)
-        {
-            yield return $"曲名「{track.Title}」に「{hit.FromTitle}」";
-        }
     }
 }
 

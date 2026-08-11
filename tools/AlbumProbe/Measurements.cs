@@ -245,11 +245,19 @@ public static class Measurements
         ArgumentNullException.ThrowIfNull(scan);
         ArgumentNullException.ThrowIfNull(dictionary);
 
-        List<(string Path, string Tagged, string FromFileName, string FromTitle)> hits = [];
+        List<(string Path, string Tagged, string FromFileName, string FromTitle, string FromFolder)> hits = [];
+
+        // フォルダ名を手がかりに使うため、フォルダ単位で引けるようにしておく（R-210）。
+        var byFolder = scan.Tracks
+            .GroupBy(track => Path.GetDirectoryName(track.RelativePath) ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => (IReadOnlyList<TrackTags>)[.. group], StringComparer.OrdinalIgnoreCase);
 
         foreach (TrackTags track in scan.Tracks.OrderBy(t => t.RelativePath, StringComparer.OrdinalIgnoreCase))
         {
-            ComposerMismatchHit? hit = ComposerMismatch.Find(track, dictionary);
+            IReadOnlyList<TrackTags> folderTracks =
+                byFolder[Path.GetDirectoryName(track.RelativePath) ?? string.Empty];
+
+            ComposerMismatchHit? hit = ComposerMismatch.Find(track, dictionary, folderTracks);
 
             if (hit is not null)
             {
@@ -257,25 +265,29 @@ public static class Measurements
                     track.RelativePath,
                     hit.Tagged,
                     hit.FromFileName ?? string.Empty,
-                    hit.FromTitle ?? string.Empty));
+                    hit.FromTitle ?? string.Empty,
+                    hit.FromFolder ?? string.Empty));
             }
         }
 
-        report.Heading(2, $"5. ファイル名・曲名と composer の食い違い（R-210） — "
+        report.Heading(2, $"5. ファイル名・曲名・フォルダ名と composer の食い違い（R-210） — "
             + $"{hits.Count} ファイル / {scan.Tracks.Count} ファイル");
         report.Line("**要確認であって誤りの証拠ではない。** 曲名が別の作曲家名を正当に含む作品がある（6.9）。");
         report.Line("**辞書に載っている作曲家名しか検出できない。** 辞書が育つほど誤検出は増える。");
         report.Line("`composer` が未設定のファイルは対象外（R-401 が扱う）。");
+        report.Line("フォルダ名は**フォルダ内の composer が 1 種類のときだけ**手がかりにする。"
+            + "カップリング盤は併録曲がフォルダ名と違う作曲家になるのが正しいため（3.5 規則5）。");
         report.Line();
-        report.TableHeader("ファイル", "composer タグ", "ファイル名から", "曲名から");
+        report.TableHeader("ファイル", "composer タグ", "ファイル名から", "曲名から", "フォルダ名から");
 
-        foreach ((string path, string tagged, string fromFileName, string fromTitle) in hits)
+        foreach ((string path, string tagged, string fromFileName, string fromTitle, string fromFolder) in hits)
         {
             report.TableRow(
                 $"`{path}`",
                 tagged,
                 fromFileName.Length == 0 ? "-" : fromFileName,
-                fromTitle.Length == 0 ? "-" : fromTitle);
+                fromTitle.Length == 0 ? "-" : fromTitle,
+                fromFolder.Length == 0 ? "-" : fromFolder);
         }
     }
 

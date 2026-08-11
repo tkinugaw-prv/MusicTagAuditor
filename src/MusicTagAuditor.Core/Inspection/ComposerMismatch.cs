@@ -9,15 +9,20 @@ namespace MusicTagAuditor.Core.Inspection;
 /// <param name="Tagged"><c>composer</c> タグの正規形。</param>
 /// <param name="FromFileName">ファイル名に出てくる別の作曲家の正規形。無ければ null。</param>
 /// <param name="FromTitle"><c>title</c> に出てくる別の作曲家の正規形。無ければ null。</param>
-public sealed record ComposerMismatchHit(string Tagged, string? FromFileName, string? FromTitle);
+/// <param name="FromFolder">フォルダ名に出てくる別の作曲家の正規形。無ければ null。</param>
+public sealed record ComposerMismatchHit(
+    string Tagged,
+    string? FromFileName,
+    string? FromTitle,
+    string? FromFolder);
 
 /// <summary>
-/// ファイル名・<c>title</c> に <c>composer</c> と違う作曲家名が出てくるファイルを見つける
+/// ファイル名・<c>title</c>・フォルダ名に <c>composer</c> と違う作曲家名が出てくるファイルを見つける
 /// （R-210 / docs/TAGGING_POLICY.md 6.9）。
 ///
 /// <c>composer</c> が「辞書の正規形として正しいが、そのファイルの作曲家ではない」状態は
-/// 値が辞書と一致してしまうため、R-201 でも R-501 でも検出できない。手掛かりはファイル名と
-/// <c>title</c> に出てくる作曲家名しかない。
+/// 値が辞書と一致してしまうため、R-201 でも R-501 でも検出できない。手掛かりはファイル名・
+/// <c>title</c>・フォルダ名に出てくる作曲家名しかない。
 ///
 /// **一致しても誤りとは限らない。** ブラームス『ハイドンの主題による変奏曲』のように、曲名が
 /// 別の作曲家の名前を正当に含む作品がある。この判別は機械ではできないので、判定は返すだけにして
@@ -39,7 +44,7 @@ public static class ComposerMismatch
         [' ', '\t', ',', ';', ':', '/', '-', '_', '(', ')', '[', ']', '&', '.', '　', '、', '・'];
 
     /// <summary>
-    /// <c>composer</c> と違う作曲家名がファイル名・<c>title</c> に出てくるかを調べる。
+    /// <c>composer</c> と違う作曲家名がファイル名・<c>title</c>・フォルダ名に出てくるかを調べる。
     ///
     /// **<c>composer</c> が未設定のファイルは対象にしない。** 6.9 は「値が辞書の正規形と一致するのに
     /// そのファイルの作曲家ではない」状態を指す。未設定は R-401 が扱うため、ここで拾うと同じ
@@ -47,11 +52,19 @@ public static class ComposerMismatch
     /// </summary>
     /// <param name="track">対象ファイル。</param>
     /// <param name="dictionary">正規化辞書の索引。</param>
+    /// <param name="folderTracks">
+    /// 同じフォルダのファイル（対象自身を含む）。フォルダ名を手がかりに使ってよいかの判定に要る。
+    /// 空を渡すとフォルダ名は手がかりにしない。
+    /// </param>
     /// <returns>見つかった食い違い。無ければ null。</returns>
-    public static ComposerMismatchHit? Find(TrackTags track, DictionaryIndex dictionary)
+    public static ComposerMismatchHit? Find(
+        TrackTags track,
+        DictionaryIndex dictionary,
+        IReadOnlyList<TrackTags> folderTracks)
     {
         ArgumentNullException.ThrowIfNull(track);
         ArgumentNullException.ThrowIfNull(dictionary);
+        ArgumentNullException.ThrowIfNull(folderTracks);
 
         string? tagged = track.Composer;
 
@@ -69,13 +82,72 @@ public static class ComposerMismatch
             Path.GetFileNameWithoutExtension(track.RelativePath),
             canonical);
         string? fromTitle = FindOther(dictionary, track.Title, canonical);
+        string? fromFolder = FindInFolder(track, dictionary, folderTracks, canonical);
 
-        if (fromFileName is null && fromTitle is null)
+        if (fromFileName is null && fromTitle is null && fromFolder is null)
         {
             return null;
         }
 
-        return new ComposerMismatchHit(canonical, fromFileName, fromTitle);
+        return new ComposerMismatchHit(canonical, fromFileName, fromTitle, fromFolder);
+    }
+
+    /// <summary>
+    /// フォルダ名に別の作曲家名が出てくるかを調べる。
+    ///
+    /// **フォルダ内の <c>composer</c> が 1 種類のときだけ手がかりにする。** カップリング盤
+    /// （docs/TAGGING_POLICY.md 3.5 規則5）はフォルダ名が主作品の作曲家を名乗るので、
+    /// 併録曲のファイルは「フォルダ名と違う作曲家」になるのが**正しい**。この除外をしないと
+    /// 主作品 + カップリングの 4 単位が丸ごと誤検出になる。
+    ///
+    /// 逆に、フォルダ全体が 1 人の作曲家で埋まっているのにフォルダ名が別の作曲家を指す場合は、
+    /// 6.9 の「演奏会 1 回分のプログラムが主作品の作曲家で埋められていた」と同じ形になる。
+    /// </summary>
+    /// <param name="track">対象ファイル。</param>
+    /// <param name="dictionary">正規化辞書の索引。</param>
+    /// <param name="folderTracks">同じフォルダのファイル。</param>
+    /// <param name="canonical">対象ファイルの <c>composer</c> の正規形。</param>
+    /// <returns>見つかった別の作曲家の正規形。無ければ null。</returns>
+    private static string? FindInFolder(
+        TrackTags track,
+        DictionaryIndex dictionary,
+        IReadOnlyList<TrackTags> folderTracks,
+        string canonical)
+    {
+        if (folderTracks.Count == 0 || CountComposers(dictionary, folderTracks) != 1)
+        {
+            return null;
+        }
+
+        string folder = Path.GetDirectoryName(track.RelativePath) ?? string.Empty;
+
+        foreach (string segment in folder.Split(
+                     Path.DirectorySeparatorChar,
+                     StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (FindOther(dictionary, segment, canonical) is { } other)
+            {
+                return other;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// フォルダ内の <c>composer</c> が何種類あるかを数える。表記揺れは 1 種類として数える。
+    /// </summary>
+    /// <param name="dictionary">正規化辞書の索引。</param>
+    /// <param name="folderTracks">同じフォルダのファイル。</param>
+    /// <returns>相異なる作曲家の数。未設定は数えない。</returns>
+    private static int CountComposers(DictionaryIndex dictionary, IReadOnlyList<TrackTags> folderTracks)
+    {
+        return folderTracks
+            .Select(sibling => sibling.Composer)
+            .Where(composer => !string.IsNullOrWhiteSpace(composer))
+            .Select(composer => dictionary.TryResolveComposer(composer, out string resolved) ? resolved : composer!)
+            .Distinct(StringComparer.Ordinal)
+            .Count();
     }
 
     /// <summary>

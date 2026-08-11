@@ -445,6 +445,72 @@ public sealed class RemainingRuleTests
     }
 
     /// <summary>
+    /// R-210: フォルダ名の作曲家名でも検出することを確認する。
+    ///
+    /// 実ライブラリの `チャイコフスキー\チャイコフスキー 6 - ムラヴィンスキー 1982` が該当する。
+    /// ファイル名にも曲名にも作曲家名が出てこないため、フォルダ名を見ないと拾えない。
+    /// </summary>
+    [Fact]
+    public void DetectsComposerMismatchInFolderName()
+    {
+        IReadOnlyList<TagChange> changes = ChangesOf(
+            Inspect(
+                Track("チャイコフスキー/チャイコフスキー 6 - ムラヴィンスキー 1982/01.flac",
+                    (TagField.Composer, ["Dmitri Shostakovich"]),
+                    (TagField.Title, ["1. Adagio - Allegro non troppo"])),
+                Track("チャイコフスキー/チャイコフスキー 6 - ムラヴィンスキー 1982/02.flac",
+                    (TagField.Composer, ["Dmitri Shostakovich"]),
+                    (TagField.Title, ["2. Allegro con grazia"]))),
+            "R-210");
+
+        // フォルダ全体が同じ状態なので、単位内の全ファイルが出る。
+        Assert.Equal(2, changes.Count);
+        Assert.All(changes, change =>
+        {
+            Assert.Contains("Pyotr Ilyich Tchaikovsky", change.Rationale, StringComparison.Ordinal);
+            Assert.Contains("フォルダ", change.Rationale, StringComparison.Ordinal);
+        });
+    }
+
+    /// <summary>
+    /// R-210: フォルダ名が <c>composer</c> と一致していれば拾わないことを確認する。
+    ///
+    /// **これが最も多い形である。** 拾ってしまうとライブラリのほぼ全ファイルが検出される。
+    /// </summary>
+    [Fact]
+    public void DoesNotFlagFolderNameMatchingComposer()
+    {
+        Assert.Empty(
+            ChangesOf(
+                Inspect(Track("ブルックナー/ブルックナー 3 - ベーム/01.flac",
+                    (TagField.Composer, ["Anton Bruckner"]),
+                    (TagField.Title, ["1. Mehr langsam, Misterioso"]))),
+                "R-210"));
+    }
+
+    /// <summary>
+    /// R-210: カップリング盤の併録曲をフォルダ名で誤検出しないことを確認する。
+    ///
+    /// フォルダ名は主作品の作曲家を名乗るので、併録曲は「フォルダ名と違う作曲家」になるのが
+    /// **正しい**（docs/TAGGING_POLICY.md 3.5 規則5）。**フォルダ内の composer が 1 種類のときだけ**
+    /// フォルダ名を手がかりにすることで除外する。これを外すと該当 4 単位が丸ごと誤検出になる。
+    /// </summary>
+    [Fact]
+    public void DoesNotFlagCouplingInMultiComposerFolder()
+    {
+        Assert.Empty(
+            ChangesOf(
+                Inspect(
+                    Track("ドヴォルザーク/ドヴォルザーク 9 - カラヤン/01.flac",
+                        (TagField.Composer, ["Antonín Dvořák"]),
+                        (TagField.Title, ["1. Adagio - Allegro molto"])),
+                    Track("ドヴォルザーク/ドヴォルザーク 9 - カラヤン/05.flac",
+                        (TagField.Composer, ["Bedřich Smetana"]),
+                        (TagField.Title, ["Vltava"]))),
+                "R-210"));
+    }
+
+    /// <summary>
     /// R-210: <c>composer</c> 未設定のファイルを拾わないことを確認する。
     ///
     /// 6.9 は「値が辞書の正規形と一致するのに誤り」という状態を指す。未設定は R-401 が扱うため、
