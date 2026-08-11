@@ -1,3 +1,4 @@
+using System.Text;
 using MusicTagAuditor.Core.Dictionary;
 using MusicTagAuditor.Core.Models;
 
@@ -158,6 +159,150 @@ public sealed class DictionaryEditorTests
         };
 
         Assert.Equal("nhk-symphony-orchestra-2", DictionaryEditor.SuggestEntityId(dictionary, "NHK Symphony Orchestra"));
+    }
+
+    /// <summary>
+    /// 足した作品を、その別名で引けるようになることを確認する。
+    /// 検査結果からの導線（docs/SPEC.md 7.3.2）はこれが成り立たないと成立しない。
+    /// </summary>
+    [Fact]
+    public void AddedWorkResolvesByAlias()
+    {
+        TagDictionary before = new()
+        {
+            Composers = [new ComposerEntry { Canonical = "Anton Bruckner" }],
+        };
+
+        TagDictionary after = DictionaryEditor.AddWork(
+            before, "Anton Bruckner", "Symphony No. 8", ["Bruckner Sym.8", "ブルックナー 8"]);
+
+        WorkEntry added = Assert.Single(after.Works);
+
+        Assert.Equal(["Bruckner Sym.8"], added.Aliases);
+        Assert.Equal(["ブルックナー 8"], added.AliasesJa);
+
+        DictionaryIndex index = new(after);
+
+        Assert.True(index.TryResolveWork("Anton Bruckner", "ブルックナー 8", out WorkEntry work));
+        Assert.Equal("Symphony No. 8", work.Canonical);
+
+        // 作曲家が違えば別の作品。作曲家で絞らずに引けてはならない（7.4.3 手順3）。
+        Assert.False(index.TryResolveWork("Johannes Brahms", "ブルックナー 8", out _));
+    }
+
+    /// <summary>
+    /// 同じ作曲家 + 作品名なら行を増やさず別名だけを足すことを確認する。
+    /// 自然キーが重複した作品は索引が先勝ちで捨てるため、行を増やしてはならない（7.4.1）。
+    /// </summary>
+    [Fact]
+    public void MergesAliasesIntoExistingWork()
+    {
+        TagDictionary before = new()
+        {
+            Composers = [new ComposerEntry { Canonical = "Anton Bruckner" }],
+            Works =
+            [
+                new WorkEntry
+                {
+                    Composer = "Anton Bruckner",
+                    Canonical = "Symphony No. 8",
+                    Aliases = ["Symphony No.8"],
+                },
+            ],
+        };
+
+        TagDictionary after = DictionaryEditor.AddWork(
+            before, "Anton Bruckner", "Symphony No. 8", ["Symphony No.8", "Sinfonie Nr. 8"]);
+
+        WorkEntry merged = Assert.Single(after.Works);
+
+        Assert.Equal(["Symphony No.8", "Sinfonie Nr. 8"], merged.Aliases);
+        Assert.Equal(["Symphony No.8"], before.Works[0].Aliases);
+    }
+
+    /// <summary>
+    /// 個別例外を足すと、そのフォルダで引けるようになることを確認する。
+    /// </summary>
+    [Fact]
+    public void AddedAlbumOverrideResolvesByFolder()
+    {
+        TagDictionary after = DictionaryEditor.AddAlbumOverride(
+            new TagDictionary(),
+            new AlbumOverrideEntry
+            {
+                Folder = Path.Combine("その他", "トスカニーニ インター"),
+                Exclude = true,
+                Note = "3.5 規則6 コンピレーション",
+            });
+
+        DictionaryIndex index = new(after);
+
+        Assert.True(index.TryResolveAlbumOverride(Path.Combine("その他", "トスカニーニ インター"), 1, out AlbumOverrideEntry entry));
+        Assert.True(entry.Exclude);
+    }
+
+    /// <summary>
+    /// 同じフォルダ + disc の個別例外は置き換えることを確認する。
+    ///
+    /// **Unicode の正規化形が違っても同じフォルダとして扱う。** 濁点付きの仮名は NFC と NFD の
+    /// どちらでも保存でき、見た目が同じでも文字列としては一致しない（docs/SPEC.md 7.4.5）。
+    /// 2 件になると先に見つかったほうしか効かず、直したつもりの内容が反映されない。
+    /// </summary>
+    [Fact]
+    public void ReplacesAlbumOverrideForSameFolderAndDisc()
+    {
+        string nfc = Path.Combine("リムスキー・コルサコフ", "シェエラザード").Normalize(NormalizationForm.FormC);
+        string nfd = nfc.Normalize(NormalizationForm.FormD);
+
+        TagDictionary before = DictionaryEditor.AddAlbumOverride(
+            new TagDictionary(),
+            new AlbumOverrideEntry { Folder = nfc, Disc = 1, Exclude = true, Note = "最初の理由" });
+
+        TagDictionary after = DictionaryEditor.AddAlbumOverride(
+            before,
+            new AlbumOverrideEntry { Folder = nfd, Disc = 1, WorkName = "Scheherazade", Note = "3.5 規則4 版の違い" });
+
+        AlbumOverrideEntry entry = Assert.Single(after.AlbumOverrides);
+
+        Assert.Equal("Scheherazade", entry.WorkName);
+        Assert.False(entry.Exclude);
+    }
+
+    /// <summary>
+    /// disc が違う個別例外は別の項目として足すことを確認する。
+    /// </summary>
+    [Fact]
+    public void KeepsAlbumOverridesForDifferentDiscs()
+    {
+        TagDictionary before = DictionaryEditor.AddAlbumOverride(
+            new TagDictionary(),
+            new AlbumOverrideEntry { Folder = "ワーグナー", Disc = 1, WorkName = "Die Walküre", Note = "1 枚目" });
+
+        TagDictionary after = DictionaryEditor.AddAlbumOverride(
+            before,
+            new AlbumOverrideEntry { Folder = "ワーグナー", Disc = 2, WorkName = "Siegfried", Note = "2 枚目" });
+
+        Assert.Equal(2, after.AlbumOverrides.Count);
+    }
+
+    /// <summary>
+    /// フォルダ名からの別名候補が、作曲家フォルダを飛ばして演奏者を落とした形も出すことを確認する
+    /// （docs/SPEC.md 7.3.2）。
+    ///
+    /// 全体でしか引かないと、同じ作品が演奏者の数だけ別のエイリアスになる。
+    /// </summary>
+    [Fact]
+    public void SuggestsFolderAliasesWithoutComposerSegment()
+    {
+        DictionaryIndex index = new(new TagDictionary
+        {
+            Composers = [new ComposerEntry { Canonical = "Anton Bruckner", AliasesJa = ["ブルックナー"] }],
+        });
+
+        IReadOnlyList<string> candidates = DictionaryEditor.SuggestWorkAliases(
+            Path.Combine("ブルックナー", "ブルックナー 8 - Wand"), index);
+
+        Assert.Equal(["ブルックナー 8 - Wand", "ブルックナー 8"], candidates);
     }
 
     /// <summary>
