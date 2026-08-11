@@ -364,8 +364,13 @@ public sealed class DictionaryIndex
     /// どちらでも保存でき、見た目は同じでも文字列としては一致しない。実ライブラリの
     /// <c>シェエラザード</c> が NFD で保存されており、辞書に手で書いた NFC の綴りと合わず、
     /// 個別例外が効かなかった（2026-08-12）。
+    ///
+    /// 個別例外を足す側（<see cref="DictionaryEditor"/>）も同じ形で突き合わせる必要があるため公開する。
+    /// 別々に書くと、引けない例外を重複として弾くような食い違いが起きる。
     /// </summary>
-    private static string NormalizeFolder(string? folder)
+    /// <param name="folder">ライブラリルートからの相対フォルダ。</param>
+    /// <returns>比較用にそろえたパス。</returns>
+    public static string NormalizeFolder(string? folder)
     {
         return (folder ?? string.Empty)
             .Trim()

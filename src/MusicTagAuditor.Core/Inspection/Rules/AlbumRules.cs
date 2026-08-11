@@ -16,8 +16,11 @@ namespace MusicTagAuditor.Core.Inspection.Rules;
 /// </summary>
 public sealed class AlbumNameRule : IInspectionRule
 {
+    /// <summary>ルール ID。検査結果からの導線（docs/SPEC.md 7.3.2）が対象を選ぶのに使う。</summary>
+    public const string RULE_ID = "R-504";
+
     /// <inheritdoc />
-    public string Id => "R-504";
+    public string Id => RULE_ID;
 
     /// <inheritdoc />
     public Severity Severity => Severity.Warning;
@@ -106,7 +109,7 @@ public sealed class AlbumNameRule : IInspectionRule
                     TagField.Album,
                     track.GetValues(TagField.Album),
                     [album],
-                    "R-504",
+                    RULE_ID,
                     $"{workSource}。3.5 の書式で組み立てた",
                     Severity.Warning)),
         ];
@@ -214,7 +217,7 @@ public sealed class AlbumNameRule : IInspectionRule
                 TagField.Album,
                 track.GetValues(TagField.Album),
                 [],
-                "R-504",
+                RULE_ID,
                 rationale,
                 Severity.Warning,
                 reason)),
@@ -243,8 +246,11 @@ public sealed class AlbumNameRule : IInspectionRule
 /// </summary>
 public sealed class AlbumNameCollisionRule : IInspectionRule
 {
+    /// <summary>ルール ID。検査結果からの導線（docs/SPEC.md 7.3.2）が対象を選ぶのに使う。</summary>
+    public const string RULE_ID = "R-501";
+
     /// <inheritdoc />
-    public string Id => "R-501";
+    public string Id => RULE_ID;
 
     /// <inheritdoc />
     public Severity Severity => Severity.Warning;

@@ -339,8 +339,18 @@
                         Command="{Binding ExportCsvCommand}" Margin="0,0,8,0"
                         ToolTip="明細と集計の 2 ファイルを書き出します" />
                 <Button DockPanel.Dock="Left" Content="選択行を辞書に追加"
-                        Command="{Binding AddSelectedChangeToDictionaryCommand}" Margin="0,0,14,0"
+                        Command="{Binding AddSelectedChangeToDictionaryCommand}" Margin="0,0,8,0"
                         ToolTip="修正案を出せなかった行を辞書に登録して再検査します" />
+                <!--
+                  作品エントリを育てる主経路（docs/SPEC.md 7.3.2）。
+                  作曲家もフォルダも明細から決まるので、辞書タブで手打ちさせない。
+                -->
+                <Button DockPanel.Dock="Left" Content="作品を辞書に追加"
+                        Command="{Binding AddWorkFromChangeCommand}" Margin="0,0,8,0"
+                        ToolTip="R-504 の保留行（HOLD_WORK_UNKNOWN）から、その単位の作品を辞書に登録します。単位内に作曲家が複数ある行では押せません" />
+                <Button DockPanel.Dock="Left" Content="このアルバムを対象外にする"
+                        Command="{Binding AddAlbumOverrideFromChangeCommand}" Margin="0,0,14,0"
+                        ToolTip="R-504 の保留行と R-501 の明細から、そのアルバム単位の個別例外を登録します" />
                 <TextBlock Style="{StaticResource StatusTextStyle}"
                            Text="{Binding InspectionSummary}" TextWrapping="Wrap" />
               </DockPanel>
@@ -779,6 +789,13 @@
                            Text="{Binding FilePath}" TextTrimming="CharacterEllipsis"
                            ToolTip="{Binding FilePath}" />
               </DockPanel>
+              <!--
+                どの辞書を読んでいるかを画面から読めるようにする（docs/SPEC.md 7.3）。
+                件数が見えないと、検出結果が想定と違うときに「ルールの誤り」なのか
+                「別の辞書を読んでいる」のかを切り分けられない。
+              -->
+              <TextBlock Style="{StaticResource HintTextStyle}" Margin="0,3,0,0"
+                         Text="{Binding SummaryText}" TextWrapping="Wrap" />
             </StackPanel>
 
             <TabControl Grid.Row="1">
@@ -1056,6 +1073,147 @@
                       </TextBlock.Style>
                     </TextBlock>
                   </Grid>
+                </Grid>
+              </TabItem>
+
+              <!-- 作品。アルバム名の {作品名} の唯一の供給元（docs/SPEC.md 7.3.1 / 7.4） -->
+              <TabItem Header="作品">
+                <Grid Margin="12">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="300" MinWidth="180" />
+                    <ColumnDefinition Width="5" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+
+                  <DockPanel Grid.Column="0">
+                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0">
+                      <Button Content="追加" Command="{Binding AddWorkCommand}"
+                              Style="{StaticResource SmallOutlineButtonStyle}" Margin="0,0,6,0" />
+                      <Button Content="削除" Command="{Binding RemoveWorkCommand}"
+                              Style="{StaticResource SmallOutlineButtonStyle}" />
+                    </StackPanel>
+                    <ListBox ItemsSource="{Binding Works}" SelectedItem="{Binding SelectedWork}"
+                             DisplayMemberPath="DisplayName" />
+                  </DockPanel>
+
+                  <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" />
+
+                  <Grid Grid.Column="2" Margin="12,0,0,0">
+                    <Grid MaxWidth="900" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                      <Grid.Style>
+                        <Style TargetType="Grid">
+                          <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedWork}" Value="{x:Null}">
+                              <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </Grid.Style>
+                      <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                      </Grid.RowDefinitions>
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="12" />
+                        <ColumnDefinition Width="*" />
+                      </Grid.ColumnDefinitions>
+
+                      <!--
+                        作曲家は辞書の作曲家から選ばせる（docs/SPEC.md 7.3.1）。自由入力にすると、
+                        綴りが正規形と 1 文字でも違えば索引に載らず、登録しても引けない作品が黙って増える。
+                      -->
+                      <TextBlock Grid.Row="0" Grid.ColumnSpan="3" Text="作曲家（辞書の作曲家から選ぶ。空にできない）"
+                                 Style="{StaticResource FieldLabel}" />
+                      <ComboBox Grid.Row="1" Grid.ColumnSpan="3"
+                                ItemsSource="{Binding ComposerCanonicals}"
+                                SelectedItem="{Binding SelectedWork.Composer}"
+                                IsEditable="False" />
+
+                      <TextBlock Grid.Row="2" Grid.ColumnSpan="3" Text="作品名（アルバム名にそのまま入る値）"
+                                 Style="{StaticResource FieldLabel}" Margin="0,14,0,5" />
+                      <TextBox Grid.Row="3" Grid.ColumnSpan="3"
+                               Text="{Binding SelectedWork.Canonical, UpdateSourceTrigger=PropertyChanged}" />
+
+                      <TextBlock Grid.Row="4" Grid.Column="0" Text="別名（1 行 1 件）"
+                                 Style="{StaticResource FieldLabel}" Margin="0,14,0,5" />
+                      <TextBlock Grid.Row="4" Grid.Column="2" Text="日本語表記（1 行 1 件）"
+                                 Style="{StaticResource FieldLabel}" Margin="0,14,0,5" />
+                      <TextBox Grid.Row="5" Grid.Column="0" Height="220"
+                               Style="{StaticResource DarkMultilineTextBoxStyle}"
+                               Text="{Binding SelectedWork.AliasesText, UpdateSourceTrigger=PropertyChanged}" />
+                      <TextBox Grid.Row="5" Grid.Column="2" Height="220"
+                               Style="{StaticResource DarkMultilineTextBoxStyle}"
+                               Text="{Binding SelectedWork.AliasesJaText, UpdateSourceTrigger=PropertyChanged}" />
+                    </Grid>
+
+                    <TextBlock Text="左の一覧から作品を選ぶと、ここで編集できます。&#x0a;検査結果タブの保留行から「作品を辞書に追加」で足すのが本来の入口です。">
+                      <TextBlock.Style>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource PlaceholderText}">
+                          <Setter Property="Visibility" Value="Collapsed" />
+                          <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedWork}" Value="{x:Null}">
+                              <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </TextBlock.Style>
+                    </TextBlock>
+                  </Grid>
+                </Grid>
+              </TabItem>
+
+              <!-- 個別例外（docs/SPEC.md 7.3.1 / 7.4.5） -->
+              <TabItem Header="個別例外">
+                <Grid Margin="12">
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                  </Grid.RowDefinitions>
+
+                  <DockPanel Grid.Row="0" Margin="0,0,0,10">
+                    <!--
+                      追加の入口はここに置かない。フォルダは検査結果から埋める（docs/SPEC.md 7.3.2）。
+                      手で相対パスを打つと、打ち間違えても例外が黙って効かなくなるだけで原因が分からない。
+                    -->
+                    <Button DockPanel.Dock="Left" Content="削除" Command="{Binding RemoveAlbumOverrideCommand}"
+                            Style="{StaticResource SmallOutlineButtonStyle}" Margin="0,0,14,0" />
+                    <TextBlock Style="{StaticResource HintTextStyle}" VerticalAlignment="Center" TextWrapping="Wrap"
+                               Text="そのアルバムだけの例外（TAGGING_POLICY 3.5 規則4・規則6・規則7）。追加は検査結果タブの「このアルバムを対象外にする」から行う。disc が空欄ならそのフォルダの全ディスクに効く。" />
+                  </DockPanel>
+
+                  <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Padding="1">
+                    <DataGrid ItemsSource="{Binding AlbumOverrides}"
+                              SelectedItem="{Binding SelectedAlbumOverride}"
+                              SelectionMode="Single"
+                              HorizontalScrollBarVisibility="Auto">
+                      <DataGrid.Columns>
+                        <DataGridTextColumn Header="フォルダ" Binding="{Binding Folder, UpdateSourceTrigger=PropertyChanged}" Width="2*" MinWidth="220"
+                                            ElementStyle="{StaticResource EllipsisTextStyle}"
+                                            EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
+                        <DataGridTextColumn Header="disc" Binding="{Binding DiscText, UpdateSourceTrigger=PropertyChanged}" Width="60"
+                                            ElementStyle="{StaticResource NumericCellTextStyle}"
+                                            EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
+                        <DataGridTextColumn Header="作曲家" Binding="{Binding Composer, UpdateSourceTrigger=PropertyChanged}" Width="150"
+                                            ElementStyle="{StaticResource EllipsisTextStyle}"
+                                            EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
+                        <DataGridTextColumn Header="作品名" Binding="{Binding WorkName, UpdateSourceTrigger=PropertyChanged}" Width="180"
+                                            ElementStyle="{StaticResource EllipsisTextStyle}"
+                                            EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
+                        <DataGridCheckBoxColumn Header="対象外" Width="60"
+                                                Binding="{Binding Exclude, UpdateSourceTrigger=PropertyChanged}"
+                                                ElementStyle="{StaticResource GridCheckBoxStyle}"
+                                                EditingElementStyle="{StaticResource GridCheckBoxStyle}" />
+                        <DataGridTextColumn Header="理由" Binding="{Binding Note, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="200"
+                                            ElementStyle="{StaticResource EllipsisTextStyle}"
+                                            EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
+                      </DataGrid.Columns>
+                    </DataGrid>
+                  </Border>
                 </Grid>
               </TabItem>
 

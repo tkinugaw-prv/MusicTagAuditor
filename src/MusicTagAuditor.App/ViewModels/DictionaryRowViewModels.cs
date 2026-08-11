@@ -342,6 +342,169 @@ public sealed partial class EnsembleRowViewModel : ObservableObject, IDictionary
 }
 
 /// <summary>
+/// 作品 1 件の編集行（docs/SPEC.md 7.3.1 / 7.4）。
+///
+/// **作曲家は辞書の作曲家から選ばせる。** 自由入力にすると、綴りが正規形と 1 文字でも違えば
+/// 索引に載らず、登録しても引けない作品が黙って増える（7.4.1）。
+/// </summary>
+public sealed partial class WorkRowViewModel : ObservableObject, IDictionaryRow
+{
+    /// <summary>この作品の作曲家。</summary>
+    private string _composer;
+
+    /// <summary>作品名。アルバム名にそのまま入る値。</summary>
+    [ObservableProperty]
+    private string _canonical;
+
+    /// <summary>ラテン文字の別名。1 行 1 件。</summary>
+    [ObservableProperty]
+    private string _aliasesText;
+
+    /// <summary>日本語表記。1 行 1 件。</summary>
+    [ObservableProperty]
+    private string _aliasesJaText;
+
+    /// <summary>
+    /// 辞書のエントリから編集行を作る。
+    /// </summary>
+    /// <param name="entry">元のエントリ。</param>
+    public WorkRowViewModel(WorkEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        _composer = entry.Composer;
+        _canonical = entry.Canonical;
+        _aliasesText = AliasText.Join(entry.Aliases);
+        _aliasesJaText = AliasText.Join(entry.AliasesJa);
+    }
+
+    /// <summary>
+    /// この作品の作曲家。<c>composers</c> の正規形と一致させる。
+    ///
+    /// **null を受けても空文字に寄せる。** 選択欄の候補が作り直されると WPF は選択なしとして
+    /// null を書き込んでくる。素通しすると、以後この行を保存するたびに落ちる。
+    /// </summary>
+    public string Composer
+    {
+        get => _composer;
+
+        set
+        {
+            if (SetProperty(ref _composer, value ?? string.Empty))
+            {
+                OnPropertyChanged(nameof(DisplayName));
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public string SearchText => $"{Composer}\n{Canonical}\n{AliasesText}\n{AliasesJaText}";
+
+    /// <summary>一覧に出す名前。作曲家が違えば別の作品なので、作曲家も添える（7.4.1）。</summary>
+    public string DisplayName => Composer.Length == 0
+        ? Canonical
+        : $"{Composer}: {Canonical}";
+
+    /// <summary>
+    /// 編集内容を辞書のエントリに戻す。
+    /// </summary>
+    /// <returns>エントリ。</returns>
+    public WorkEntry ToEntry()
+    {
+        return new WorkEntry
+        {
+            Composer = Composer.Trim(),
+            Canonical = Canonical.Trim(),
+            Aliases = AliasText.Split(AliasesText),
+            AliasesJa = AliasText.Split(AliasesJaText),
+        };
+    }
+
+    /// <summary>一覧の表示を更新する。</summary>
+    partial void OnCanonicalChanged(string value)
+    {
+        OnPropertyChanged(nameof(DisplayName));
+    }
+}
+
+/// <summary>
+/// アルバム単位の個別例外 1 件の編集行（docs/SPEC.md 7.3.1 / 7.4.5）。
+///
+/// **フォルダは検査結果から埋める前提**で、ここでは編集・削除のためだけに持つ（7.3.2）。
+/// 手で相対パスを打つと、打ち間違えても例外が黙って効かなくなるだけで原因が画面から分からない。
+/// </summary>
+public sealed partial class AlbumOverrideRowViewModel : ObservableObject, IDictionaryRow
+{
+    /// <summary>ライブラリルートからの相対パス。</summary>
+    [ObservableProperty]
+    private string _folder;
+
+    /// <summary>対象のディスク番号。空欄はそのフォルダの全ディスク（7.4.5）。</summary>
+    [ObservableProperty]
+    private string _discText;
+
+    /// <summary>単位の作曲家を明示する。主作品 + カップリング（3.5 規則5）で使う。</summary>
+    [ObservableProperty]
+    private string _composer;
+
+    /// <summary>作品名を明示する。版の違い（規則4）・同一演奏の別リリース（規則7）で使う。</summary>
+    [ObservableProperty]
+    private string _workName;
+
+    /// <summary>アルバム名の対象外にするか。本物のコンピレーション（規則6）で使う。</summary>
+    [ObservableProperty]
+    private bool _exclude;
+
+    /// <summary>例外の理由。**書く運用とする。** 理由の無い例外は後から消せない。</summary>
+    [ObservableProperty]
+    private string _note;
+
+    /// <summary>
+    /// 辞書のエントリから編集行を作る。
+    /// </summary>
+    /// <param name="entry">元のエントリ。</param>
+    public AlbumOverrideRowViewModel(AlbumOverrideEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        _folder = entry.Folder;
+        _discText = entry.Disc?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+        _composer = entry.Composer ?? string.Empty;
+        _workName = entry.WorkName ?? string.Empty;
+        _exclude = entry.Exclude;
+        _note = entry.Note ?? string.Empty;
+    }
+
+    /// <inheritdoc />
+    public string SearchText => $"{Folder}\n{Composer}\n{WorkName}\n{Note}";
+
+    /// <summary>
+    /// 編集内容を辞書のエントリに戻す。ディスク番号として読めない入力は「全ディスク」として扱う。
+    /// </summary>
+    /// <returns>エントリ。</returns>
+    public AlbumOverrideEntry ToEntry()
+    {
+        return new AlbumOverrideEntry
+        {
+            Folder = Folder.Trim(),
+            Disc = int.TryParse(DiscText.Trim(), CultureInfo.InvariantCulture, out int disc) ? disc : null,
+            Composer = Blank(Composer),
+            WorkName = Blank(WorkName),
+            Exclude = Exclude,
+            Note = Blank(Note),
+        };
+    }
+
+    /// <summary>
+    /// 空欄を null にする。JSON に空文字を書くと「指定した」ように見える。
+    /// </summary>
+    private static string? Blank(string value)
+    {
+        return value.Trim().Length == 0 ? null : value.Trim();
+    }
+}
+
+/// <summary>
 /// 楽語の誤記 1 件の編集行（docs/TAGGING_POLICY.md 5.4）。
 /// </summary>
 public sealed partial class TypoRowViewModel : ObservableObject, IDictionaryRow
