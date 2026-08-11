@@ -32,12 +32,4 @@ public static class Const
 
     /// <summary>ライブラリルート直下を表す表示（docs/SPEC.md 5.2）。</summary>
     public const string ROOT_FOLDER_LABEL = "(root)";
-
-    /// <summary>
-    /// ファイル名を語に割るときの区切り。
-    /// 部分一致で照合すると <c>Bach</c> が <c>Bach-Chor</c> に当たるため、語単位に割ってから引く
-    /// （docs/SPEC.md 6.2）。
-    /// </summary>
-    public static readonly char[] NAME_TOKEN_SEPARATORS =
-        [' ', '-', '_', '.', ',', ':', ';', '(', ')', '[', ']', '\u3000', '\u30fb'];
 }

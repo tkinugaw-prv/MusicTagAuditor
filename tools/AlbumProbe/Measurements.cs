@@ -1,4 +1,5 @@
 using MusicTagAuditor.Core.Dictionary;
+using MusicTagAuditor.Core.Inspection;
 using MusicTagAuditor.Core.Models;
 using MusicTagAuditor.Core.Scanning;
 
@@ -227,10 +228,13 @@ public static class Measurements
     /// ファイル名・曲名に <c>composer</c> と違う作曲家名が出てくるファイルを出す（R-210 / 6.9）。
     ///
     /// <c>composer</c> が「辞書の正規形として正しいが、そのファイルの作曲家ではない」状態は
-    /// 値が辞書と一致してしまうため他のどのルールでも検出できない。
+    /// 値が辞書と一致してしまうため R-201 でも R-501 でも検出できない。
     ///
     /// **一致しても誤りとは限らない。** ブラームス『ハイドンの主題による変奏曲』のように、
     /// 曲名が別の作曲家の名前を正当に含む作品がある（docs/TAGGING_POLICY.md 6.9）。
+    ///
+    /// 判定は本体の検査ルール（R-210）と同じ <see cref="ComposerMismatch"/> を使う。
+    /// 実装が割れると、本表と本体の検出件数を突き合わせられなくなる。
     /// </summary>
     /// <param name="report">出力先。</param>
     /// <param name="scan">走査結果。</param>
@@ -245,22 +249,15 @@ public static class Measurements
 
         foreach (TrackTags track in scan.Tracks.OrderBy(t => t.RelativePath, StringComparer.OrdinalIgnoreCase))
         {
-            string tagged = track.Composer ?? string.Empty;
-            string canonical = dictionary.TryResolveComposer(tagged, out string resolved) ? resolved : tagged;
+            ComposerMismatchHit? hit = ComposerMismatch.Find(track, dictionary);
 
-            string fromFileName = FindOtherComposer(
-                dictionary,
-                Path.GetFileNameWithoutExtension(track.RelativePath),
-                canonical);
-            string fromTitle = FindOtherComposer(dictionary, track.Title, canonical);
-
-            if (fromFileName.Length > 0 || fromTitle.Length > 0)
+            if (hit is not null)
             {
                 hits.Add((
                     track.RelativePath,
-                    canonical.Length == 0 ? Const.NO_VALUE : canonical,
-                    fromFileName,
-                    fromTitle));
+                    hit.Tagged,
+                    hit.FromFileName ?? string.Empty,
+                    hit.FromTitle ?? string.Empty));
             }
         }
 
@@ -268,6 +265,7 @@ public static class Measurements
             + $"{hits.Count} ファイル / {scan.Tracks.Count} ファイル");
         report.Line("**要確認であって誤りの証拠ではない。** 曲名が別の作曲家名を正当に含む作品がある（6.9）。");
         report.Line("**辞書に載っている作曲家名しか検出できない。** 辞書が育つほど誤検出は増える。");
+        report.Line("`composer` が未設定のファイルは対象外（R-401 が扱う）。");
         report.Line();
         report.TableHeader("ファイル", "composer タグ", "ファイル名から", "曲名から");
 
@@ -316,37 +314,4 @@ public static class Measurements
         }
     }
 
-    /// <summary>
-    /// 値の中に、指定した作曲家とは違う作曲家名が出てくれば返す。
-    ///
-    /// **語単位で引く。** 部分一致にすると <c>Bach</c> が <c>Bach-Chor</c> に当たる
-    /// （docs/SPEC.md 6.2）。
-    /// </summary>
-    /// <param name="dictionary">正規化辞書の索引。</param>
-    /// <param name="value">ファイル名または曲名。</param>
-    /// <param name="taggedCanonical">そのファイルの <c>composer</c> の正規形。</param>
-    /// <returns>見つかった別の作曲家の正規形。無ければ空文字。</returns>
-    private static string FindOtherComposer(DictionaryIndex dictionary, string? value, string taggedCanonical)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return string.Empty;
-        }
-
-        string[] tokens = value.Split(
-            Const.NAME_TOKEN_SEPARATORS,
-            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-        foreach (string token in tokens)
-        {
-            if (dictionary.ContainsComposerName(token, out string? found)
-                && found is not null
-                && !string.Equals(found, taggedCanonical, StringComparison.Ordinal))
-            {
-                return found;
-            }
-        }
-
-        return string.Empty;
-    }
 }

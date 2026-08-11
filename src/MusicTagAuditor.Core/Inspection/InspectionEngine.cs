@@ -51,6 +51,7 @@ public sealed class InspectionEngine
             new PerformerNotCanonicalRule(),
             new ComposerInArtistRule(),
             new ComposerInAlbumArtistRule(),
+            new ComposerMismatchRule(),
             new SemicolonValueRule(),
             new DuplicateConcatenationRule(),
             new PersonNameFormatRule(),

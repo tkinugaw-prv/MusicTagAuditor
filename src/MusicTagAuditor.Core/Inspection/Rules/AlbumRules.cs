@@ -7,8 +7,12 @@ namespace MusicTagAuditor.Core.Inspection.Rules;
 /// R-501: 同一アルバム名に複数の作曲家／演奏者が混在。
 ///
 /// <c>Symphony No.5</c> のような汎用的な名前に、作曲家も演奏者も異なる複数の録音が
-/// 同居している（docs/TAGGING_POLICY.md 6.1）。**自動修正しない。**
-/// 目標形式「作曲家: 作品名 - 演奏者/年」への移行は未着手であり、名前の付け方が決まっていない。
+/// 同居している。**自動修正しない。**
+///
+/// 書式は <c>{作曲家}: {作品名} - {date}/{artist}</c> で確定している
+/// （docs/TAGGING_POLICY.md 3.5）。それでも修正案を出せないのは、<c>{作品名}</c> の唯一の供給元である
+/// 正規化辞書の作品エントリが未整備だからである（docs/SPEC.md 13章 D6）。<c>{作品名}</c> は作品そのものの
+/// 名前であり、<c>title</c>（楽章名）からも <c>album</c>（汎用名）からも一意には取れない。
 /// </summary>
 public sealed class AlbumNameCollisionRule : IInspectionRule
 {
@@ -57,7 +61,7 @@ public sealed class AlbumNameCollisionRule : IInspectionRule
                     [],
                     Id,
                     $"同名のアルバムに {composers.Length} 人の作曲家が混在（{string.Join(" / ", composers)}）。"
-                    + " 「作曲家: 作品名 - 演奏者/年」形式への移行が要る",
+                    + " 「{作曲家}: {作品名} - {date}/{artist}」形式（TAGGING_POLICY 3.5）への移行が要る",
                     Severity.Warning);
             }
         }
@@ -65,11 +69,15 @@ public sealed class AlbumNameCollisionRule : IInspectionRule
 }
 
 /// <summary>
-/// R-502: アルバム名が日本語（docs/TAGGING_POLICY.md 6.1）。
+/// R-502: アルバム名が日本語。
 ///
 /// 日本語略称（<c>ベト7</c>、<c>マーラー2</c>）と正式な日本語名（<c>歌劇「ローエングリン」</c>）の
-/// 混在が未解消である。**どちらも検出する。** 3.1 がラテン文字を求めているのは人名・団体名だけで
-/// アルバム名の規則は未確定なため、どこまで直すかは人間が決める。
+/// 混在が未解消である。**どちらも検出する。**
+///
+/// 書式は <c>{作曲家}: {作品名} - {date}/{artist}</c> で確定しており（docs/TAGGING_POLICY.md 3.5）、
+/// 日本語略称は作品エントリの別名として登録すれば書式への移行過程で解消する。
+/// **アルバム名だけを個別に日本語→英語へ直す作業は行わない**（6.1）。修正案を出せないのは
+/// <c>{作品名}</c> の供給元である作品エントリが未整備だからである（docs/SPEC.md 13章 D6）。
 /// 略称と判別できたものは根拠に作曲家の正規形を出す。
 /// </summary>
 public sealed class JapaneseAlbumNameRule : IInspectionRule
@@ -125,10 +133,11 @@ public sealed class JapaneseAlbumNameRule : IInspectionRule
             && context.Dictionary.TryResolveComposer(match.Groups["name"].Value, out string composer))
         {
             return $"日本語略称。「{composer}」の第 {match.Groups["number"].Value} 番と思われる。"
-                + " 「作曲家: 作品名 - 演奏者/年」形式への移行が要る";
+                + " 「{作曲家}: {作品名} - {date}/{artist}」形式（TAGGING_POLICY 3.5）への移行が要る";
         }
 
-        return "アルバム名が日本語。形式の統一は未着手（TAGGING_POLICY 6.1）";
+        return "アルバム名が日本語。「{作曲家}: {作品名} - {date}/{artist}」形式（TAGGING_POLICY 3.5）"
+            + "への移行が要るが、作品名の供給元（作品エントリ）が未整備のため修正案は出せない";
     }
 }
 

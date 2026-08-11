@@ -7,7 +7,7 @@ using MusicTagAuditor.Core.Scanning;
 namespace MusicTagAuditor.Core.Tests.Inspection;
 
 /// <summary>
-/// 段階 7 で追加した R-3xx / R-4xx / R-5xx のテスト。
+/// 段階 7 で追加した R-3xx / R-4xx / R-5xx と、6.9 由来の R-210 のテスト。
 ///
 /// docs/library-baseline-2026-08-03.md の実測に合わせた判定条件を固定する。
 /// </summary>
@@ -296,6 +296,125 @@ public sealed class RemainingRuleTests
     public void DoesNotFlagReadableValueAsMojibake(string value)
     {
         Assert.Empty(ChangesOf(Inspect(Track("01.flac", (TagField.Title, [value]))), "R-403"));
+    }
+
+    /// <summary>
+    /// R-210: ファイル名に <c>composer</c> と違う作曲家名が出てくることを検出する。
+    ///
+    /// docs/TAGGING_POLICY.md 6.9 の実例。演奏会 1 回分のプログラムが 1 フォルダに入っており、
+    /// 全ファイルが主作品の作曲家で埋められていた。
+    /// </summary>
+    [Fact]
+    public void DetectsComposerMismatchInFileName()
+    {
+        TagChange change = Assert.Single(
+            ChangesOf(
+                Inspect(Track(
+                    "ショスタコーヴィチ/ショス5 - ムラヴィンスキー/01 Weber Oberon.flac",
+                    (TagField.Composer, ["Dmitri Shostakovich"]))),
+                "R-210"));
+
+        Assert.Contains("Carl Maria von Weber", change.Rationale, StringComparison.Ordinal);
+        Assert.Contains("Dmitri Shostakovich", change.Rationale, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// R-210: <c>title</c> 側の作曲家名でも検出することを確認する。
+    /// </summary>
+    [Fact]
+    public void DetectsComposerMismatchInTitle()
+    {
+        TagChange change = Assert.Single(
+            ChangesOf(
+                Inspect(Track(
+                    "ショスタコーヴィチ/ショス5 - ムラヴィンスキー/02.flac",
+                    (TagField.Composer, ["Dmitri Shostakovich"]),
+                    (TagField.Title, ["Schubert Sym8-1 Allegro moderato"]))),
+                "R-210"));
+
+        Assert.Contains("Franz Schubert", change.Rationale, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// R-210: **修正案を出さず、既定でチェックしない**ことを確認する。
+    ///
+    /// 曲名が別の作曲家名を正当に含む作品があり、この判別は機械ではできない。
+    /// 人間に判断を促すためだけのルールである（docs/SPEC.md 6.2）。
+    /// </summary>
+    [Fact]
+    public void DoesNotProposeFixForComposerMismatch()
+    {
+        TagChange change = Assert.Single(
+            ChangesOf(
+                Inspect(Track("x/01 Weber Oberon.flac", (TagField.Composer, ["Dmitri Shostakovich"]))),
+                "R-210"));
+
+        Assert.False(change.HasFix);
+        Assert.False(change.IsSelected);
+        Assert.Equal("要確認", change.Classification);
+    }
+
+    /// <summary>
+    /// R-210: <c>composer</c> と同じ作曲家名なら拾わないことを確認する。
+    /// 表記揺れも同一人物として扱う（正規形に寄せてから比べる）。
+    /// </summary>
+    [Theory]
+    [InlineData("Johannes Brahms")]
+    [InlineData("Brahms")]
+    public void DoesNotFlagSameComposerInFileName(string composer)
+    {
+        Assert.Empty(
+            ChangesOf(
+                Inspect(Track("x/01 Brahms Symphony No.1.flac", (TagField.Composer, [composer]))),
+                "R-210"));
+    }
+
+    /// <summary>
+    /// R-210: 団体名に含まれる作曲家の姓を拾わないことを確認する。
+    ///
+    /// <c>Münchener Bach-Chor</c> は語に割ると <c>Bach</c> が出てくる。**割る前に辞書で団体名を外す**
+    /// （docs/SPEC.md 6.2 / <c>DictionaryIndex.ContainsComposerName</c> と同じ扱い）。
+    /// </summary>
+    [Fact]
+    public void DoesNotFlagEnsembleNameContainingComposerSurname()
+    {
+        Assert.Empty(
+            ChangesOf(
+                Inspect(Track(
+                    "x/01.flac",
+                    (TagField.Composer, ["Johannes Brahms"]),
+                    (TagField.Title, ["Münchener Bach-Chor"]))),
+                "R-210"));
+    }
+
+    /// <summary>
+    /// R-210: 辞書に無い作曲家名は検出しないことを確認する。
+    ///
+    /// ブラームス『ハイドンの主題による変奏曲』は <c>composer</c> が正しく、曲名の <c>Haydn</c> は
+    /// 作品名の一部である。現時点でハイドンが辞書（docs/TAGGING_POLICY.md 5.1）に無いため検出されない。
+    /// **辞書にハイドンを足した時点で誤検出に変わる。** この性質をここに固定しておく。
+    /// </summary>
+    [Fact]
+    public void DoesNotDetectComposerOutsideDictionary()
+    {
+        Assert.Empty(
+            ChangesOf(
+                Inspect(Track(
+                    "ブラームス 1 - ベーム/05 Variation uber ein Thema von Joseph Haydn.flac",
+                    (TagField.Composer, ["Johannes Brahms"]))),
+                "R-210"));
+    }
+
+    /// <summary>
+    /// R-210: <c>composer</c> 未設定のファイルを拾わないことを確認する。
+    ///
+    /// 6.9 は「値が辞書の正規形と一致するのに誤り」という状態を指す。未設定は R-401 が扱うため、
+    /// ここで拾うと同じファイルが二重に明細へ出る。
+    /// </summary>
+    [Fact]
+    public void DoesNotFlagFileWithoutComposer()
+    {
+        Assert.Empty(ChangesOf(Inspect(Track("x/01 Weber Oberon.flac")), "R-210"));
     }
 
     /// <summary>
