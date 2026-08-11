@@ -1,3 +1,4 @@
+﻿using System.Text;
 using MusicTagAuditor.Core.Dictionary;
 using MusicTagAuditor.Core.Inspection;
 using MusicTagAuditor.Core.Inspection.Rules;
@@ -58,6 +59,12 @@ public sealed class RemainingRuleTests
                 Folder = "リスト 交響詩",
                 Exclude = true,
                 Note = "3.5 規則6 交響詩 4 曲",
+            },
+            new AlbumOverrideEntry
+            {
+                Folder = "シェエラザード",
+                Exclude = true,
+                Note = "3.5 規則6 複数の作曲家",
             },
             new AlbumOverrideEntry
             {
@@ -840,6 +847,30 @@ public sealed class RemainingRuleTests
                 (TagField.Composer, ["Franz Liszt"]),
                 (TagField.Artist, ["Karl Böhm"]),
                 (TagField.Date, ["1970"])));
+
+        Assert.Empty(ChangesOf(result, "R-504"));
+    }
+
+    /// <summary>
+    /// R-504: フォルダ名の Unicode 正規化形が違っても個別例外が効くことを確認する。
+    ///
+    /// 濁点付きの仮名は「ザ」1 文字（NFC）と「サ + 濁点」2 文字（NFD）のどちらでも保存できる。
+    /// 実ライブラリの <c>シェエラザード</c> が NFD で保存されており、辞書に手で書いた NFC の
+    /// 綴りと一致せず、対象外にしたはずのフォルダが検出に出ていた（2026-08-12）。
+    /// </summary>
+    [Fact]
+    public void MatchesOverrideAcrossUnicodeForms()
+    {
+        string decomposed = "シェエラザード".Normalize(NormalizationForm.FormD);
+
+        // 前提: 分解形は文字数が増え、単純な文字列比較では一致しない。
+        Assert.NotEqual("シェエラザード", decomposed, StringComparer.Ordinal);
+
+        InspectionResult result = Works(
+            Track($"{decomposed}/01.m4a",
+                (TagField.Composer, ["Nikolai Rimsky-Korsakov"]),
+                (TagField.Artist, ["Yevgeny Mravinsky"]),
+                (TagField.Date, ["1966"])));
 
         Assert.Empty(ChangesOf(result, "R-504"));
     }

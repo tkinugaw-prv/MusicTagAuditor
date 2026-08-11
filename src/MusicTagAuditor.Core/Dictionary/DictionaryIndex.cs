@@ -1,4 +1,5 @@
 ﻿using System.Collections.Frozen;
+using System.Text;
 using System.Text.RegularExpressions;
 using MusicTagAuditor.Core.Normalization;
 
@@ -355,9 +356,14 @@ public sealed class DictionaryIndex
     }
 
     /// <summary>
-    /// フォルダのパスを比較用にそろえる。区切りと前後の空白だけを吸収する。
+    /// フォルダのパスを比較用にそろえる。区切り・前後の空白・Unicode の正規化形を吸収する。
     ///
     /// **正規化キーは使わない。** 記号を落とすとフォルダの区別が付かなくなる。
+    ///
+    /// **NFC へそろえるのは必須。** 濁点付きの仮名は「ザ」1 文字（NFC）と「サ + 濁点」2 文字（NFD）の
+    /// どちらでも保存でき、見た目は同じでも文字列としては一致しない。実ライブラリの
+    /// <c>シェエラザード</c> が NFD で保存されており、辞書に手で書いた NFC の綴りと合わず、
+    /// 個別例外が効かなかった（2026-08-12）。
     /// </summary>
     private static string NormalizeFolder(string? folder)
     {
@@ -365,7 +371,8 @@ public sealed class DictionaryIndex
             .Trim()
             .Replace('/', Path.DirectorySeparatorChar)
             .Replace('\\', Path.DirectorySeparatorChar)
-            .TrimEnd(Path.DirectorySeparatorChar);
+            .TrimEnd(Path.DirectorySeparatorChar)
+            .Normalize(NormalizationForm.FormC);
     }
 
     /// <summary>

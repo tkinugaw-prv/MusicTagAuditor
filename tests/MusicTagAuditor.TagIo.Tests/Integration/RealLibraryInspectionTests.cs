@@ -28,6 +28,12 @@ public sealed class RealLibraryInspectionTests(ITestOutputHelper output)
 
         InspectionResult result = new InspectionEngine().Inspect(context);
 
+        // **どの辞書で測ったかを必ず出す。** 作品エントリは所蔵に依存し、既定辞書には入らない。
+        // 別の辞書を読んでいると R-504 が全件保留になり、本表と突き合わせられない。
+        output.WriteLine($"辞書: {IntegrationConst.GetUserDictionaryPath()}");
+        output.WriteLine(DictionarySummary.Describe(dictionary.Dictionary));
+        output.WriteLine("");
+
         int selected = result.AllChanges.Count(change => change.IsSelected);
         int holds = result.AllChanges.Count(change => change.HoldReason != HoldReason.None);
 

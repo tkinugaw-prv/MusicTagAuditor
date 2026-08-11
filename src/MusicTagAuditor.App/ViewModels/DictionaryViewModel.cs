@@ -214,12 +214,9 @@ public sealed partial class DictionaryViewModel : ObservableObject
                 : $"保存しました（警告 {Issues.Count} 件）: {FilePath}";
 
             Log.Information(
-                "辞書を保存した path={Path} 作曲家={Composers} 人物={Persons} 団体={Ensembles} 誤記={Typos} 警告={Warnings}",
+                "辞書を保存した path={Path} {Summary} 警告={Warnings}",
                 FilePath,
-                edited.Composers.Count,
-                edited.Persons.Count,
-                edited.Ensembles.Count,
-                edited.Typos.Count,
+                DictionarySummary.Describe(edited),
                 Issues.Count);
 
             Saved?.Invoke(this, EventArgs.Empty);

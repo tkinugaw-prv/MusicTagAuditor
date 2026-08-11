@@ -17,6 +17,9 @@ public static class Const
     /// <summary>作品エントリの雛形のファイル名（docs/SPEC.md 7.4.6）。レポートと同じ場所に出す。</summary>
     public const string WORKS_TEMPLATE_FILE_NAME = "works-template.json";
 
+    /// <summary>作品エントリを利用者辞書へ取り込むときのオプション。</summary>
+    public const string IMPORT_WORKS_OPTION = "--import-works";
+
     /// <summary>
     /// 複合キーを 1 本の文字列にまとめるときの区切り。
     /// タグの値に現れない制御文字を選ぶ。区切りが値に含まれると別のキーが同一視される。

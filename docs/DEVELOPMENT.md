@@ -409,6 +409,34 @@ dotnet run --project tools/AlbumProbe/AlbumProbe.csproj -- "D:\Music\Classic"
 
 **まとめる鍵はフォルダ名だけ。`album` の値を鍵にしない**（`SPEC.md` 7.4.6）。`Brahms 交響曲全集` のような複数作品にまたがる値が橋渡しになって別作品が融合する。実測でブラームスの交響曲 1〜4 番が 1 件に潰れた。
 
+`canonical` を埋めたら、同じツールで辞書へ取り込む。
+
+```bash
+dotnet run --project tools/AlbumProbe/AlbumProbe.csproj -- --import-works "works.json"
+```
+
+**辞書の JSON を手で継ぎ足さないこと。** 取り込みは本体と同じ `DictionaryLoader` / `DictionaryWriter` を通し、`DictionaryValidator` でエラーがあれば保存しない。直前版は `.bak` に残る。
+
+### どの辞書を読んだかを必ず残す
+
+起動ログ・保存ログ・`AlbumProbe` のレポート・実ライブラリのテスト出力に、**辞書のパスと構成**（`DictionarySummary.Describe`）を出す。
+
+```
+辞書を読み込んだ path=C:\Users\...\dictionary.json 版=3 作曲家=35 人物=49 団体=40 誤記=40 作品=84 個別例外=18 保護対象=5
+```
+
+**作品エントリと個別例外は同梱の既定辞書に入らない**（所蔵依存。`SPEC.md` 13章 D5）。そのため実行環境によっては本体と別のファイルを読むことがあり、件数が見えないと「ルールの誤り」なのか「別の辞書を読んでいる」のかを切り分けられない。実際に、手で編集した辞書とアプリが読む辞書が別物になっていて、R-504 が全件保留になる原因の特定に時間がかかった（2026-08-12）。
+
+**辞書の各項目は null になりうる。** JSON に `"works": null` と書かれていると、プロパティ初期化子（`= []`）ではなく null が入る。読み取り側は `?? []` で守ること。
+
+### フォルダ名の比較は NFC にそろえる
+
+個別例外（`albumOverrides`）のフォルダ照合は、記号を残すため `NormalizationKey` を使わない。そのぶん **Unicode の正規化形を自分でそろえる必要がある**。濁点付きの仮名は「ザ」1 文字（NFC）と「サ + 濁点」2 文字（NFD）のどちらでも保存でき、見た目が同じでも文字列としては一致しない。実ライブラリの `シェエラザード` が NFD で、辞書に手で書いた NFC と合わず対象外にならなかった（2026-08-12）。
+
+### 辞書の書き出しは camelCase を明示する
+
+`JsonSourceGenerationOptions` は**そのコンテキスト自身の `Options` にしか効かない**。`DictionaryWriter` のように別の `JsonSerializerOptions` を作って `TypeInfoResolver` だけを差し替えると命名規則が引き継がれず、**PascalCase で書き出される**。読み込み側が `PropertyNameCaseInsensitive = true` なので動作は壊れず、気づかないまま利用者の辞書が同梱辞書と違う綴りに書き換わっていた（2026-08-12 に判明。手で足した `works` と本体が書いた `Works` が衝突して発覚）。`DictionaryStoreTests.WritesCamelCaseKeys` で固定してある。
+
 正規化辞書は本体アプリと同じ `%APPDATA%\MusicTagAuditor\dictionary.json` を読む。測定値が本体の判定と食い違わないようにするため。
 
 **数字が動いたら 3.5 補足2 を更新すること。** 次の作業で動く。

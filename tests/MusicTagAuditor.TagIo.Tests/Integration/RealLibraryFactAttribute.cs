@@ -50,11 +50,27 @@ public static class IntegrationConst
     /// <returns>利用者辞書の索引。</returns>
     public static DictionaryIndex LoadUserDictionary()
     {
-        string directory = Path.Combine(
+        return new DictionaryIndex(DictionaryLoader.LoadOrCreate(GetUserDictionaryDirectory()));
+    }
+
+    /// <summary>
+    /// 読んでいる辞書のパスを返す。**テスト出力に必ず出すこと。**
+    /// 実行環境によっては本体と別のファイルを読むことがあり、件数の食い違いの原因になる。
+    /// </summary>
+    /// <returns>辞書ファイルの絶対パス。</returns>
+    public static string GetUserDictionaryPath()
+    {
+        return DictionaryLoader.GetUserDictionaryPath(GetUserDictionaryDirectory());
+    }
+
+    /// <summary>
+    /// 辞書を置くフォルダ。本体アプリと同じ場所。
+    /// </summary>
+    private static string GetUserDictionaryDirectory()
+    {
+        return Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             DICTIONARY_DIRECTORY_NAME);
-
-        return new DictionaryIndex(DictionaryLoader.LoadOrCreate(directory));
     }
 }
 
