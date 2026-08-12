@@ -1,4 +1,5 @@
-using System.Collections.Frozen;
+﻿using System.Collections.Frozen;
+using System.Text;
 using System.Text.RegularExpressions;
 using MusicTagAuditor.Core.Normalization;
 
@@ -27,6 +28,12 @@ public enum EnsembleResolution
 /// </summary>
 public sealed class DictionaryIndex
 {
+    /// <summary>
+    /// 作品を引くキーで、作曲家と手がかりを繋ぐ区切り。
+    /// タグの値に現れない制御文字を選ぶ。区切りが値に含まれると別のキーが同一視される。
+    /// </summary>
+    private const string WORK_KEY_SEPARATOR = "\u0001";
+
     /// <summary>元の辞書。</summary>
     private readonly TagDictionary _dictionary;
 
@@ -44,6 +51,17 @@ public sealed class DictionaryIndex
 
     /// <summary>保護対象の <c>albumartist</c>（正規化キー）。</summary>
     private readonly FrozenSet<string> _protectedKeys;
+
+    /// <summary>
+    /// 「作曲家の正規形 + 手がかりの正規化キー」→ 作品。
+    ///
+    /// **エイリアス単独では引かない**（docs/SPEC.md 7.4.3 手順3）。<c>Symphony No.5</c> は
+    /// 作曲家が違えば別の作品であり、作曲家で絞らないと R-501 が検出している衝突を再生産する。
+    /// </summary>
+    private readonly FrozenDictionary<string, WorkEntry> _workByKey;
+
+    /// <summary>フォルダ（正規化した相対パス）→ 個別例外。</summary>
+    private readonly FrozenDictionary<string, IReadOnlyList<AlbumOverrideEntry>> _overridesByFolder;
 
     /// <summary>typo 検出用にコンパイル済みの正規表現。</summary>
     private readonly IReadOnlyList<(Regex Pattern, TypoEntry Entry)> _typos;
@@ -115,6 +133,31 @@ public sealed class DictionaryIndex
             .Select(NormalizationKey.Create)
             .Where(key => key.Length > 0)
             .ToFrozenSet(StringComparer.Ordinal);
+
+        Dictionary<string, WorkEntry> workByKey = [];
+
+        foreach (WorkEntry work in dictionary.Works ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(work.Composer) || string.IsNullOrWhiteSpace(work.Canonical))
+            {
+                continue;
+            }
+
+            foreach (string name in Names(work.Canonical, work.Aliases, work.AliasesJa))
+            {
+                workByKey.TryAdd(WorkKey(work.Composer, name), work);
+            }
+        }
+
+        _workByKey = workByKey.ToFrozenDictionary(StringComparer.Ordinal);
+
+        _overridesByFolder = Safe(dictionary.AlbumOverrides)
+            .Where(entry => !string.IsNullOrWhiteSpace(entry.Folder))
+            .GroupBy(entry => NormalizeFolder(entry.Folder), StringComparer.OrdinalIgnoreCase)
+            .ToFrozenDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<AlbumOverrideEntry>)[.. group],
+                StringComparer.OrdinalIgnoreCase);
 
         _typos =
         [
@@ -255,6 +298,86 @@ public sealed class DictionaryIndex
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// 作曲家と手がかりから作品を引く（docs/SPEC.md 7.4.3）。
+    ///
+    /// **作曲家で絞ってから引く。** <c>Symphony No.5</c> は作曲家が違えば別の作品である。
+    /// </summary>
+    /// <param name="composerCanonical">作曲家の正規形。</param>
+    /// <param name="hint"><c>album</c> の値やフォルダ名。</param>
+    /// <param name="work">見つかった作品。</param>
+    /// <returns>辞書にあれば true。</returns>
+    public bool TryResolveWork(string? composerCanonical, string? hint, out WorkEntry work)
+    {
+        work = null!;
+
+        if (string.IsNullOrWhiteSpace(composerCanonical) || string.IsNullOrWhiteSpace(hint))
+        {
+            return false;
+        }
+
+        return _workByKey.TryGetValue(WorkKey(composerCanonical, hint), out work!);
+    }
+
+    /// <summary>
+    /// フォルダに対する個別例外を引く（docs/SPEC.md 7.4.5）。
+    ///
+    /// <c>disc</c> を持たない項目はそのフォルダの全ディスクに効く。**ディスク指定のほうを優先する。**
+    /// 「フォルダ全体を対象外にしつつ 1 枚だけ名前を決める」という書き方を許すため。
+    /// </summary>
+    /// <param name="folder">ライブラリルートからの相対フォルダ。</param>
+    /// <param name="disc">ディスク番号。</param>
+    /// <param name="entry">見つかった例外。</param>
+    /// <returns>該当があれば true。</returns>
+    public bool TryResolveAlbumOverride(string? folder, int disc, out AlbumOverrideEntry entry)
+    {
+        entry = null!;
+
+        if (!_overridesByFolder.TryGetValue(NormalizeFolder(folder), out IReadOnlyList<AlbumOverrideEntry>? candidates))
+        {
+            return false;
+        }
+
+        entry = candidates.FirstOrDefault(candidate => candidate.Disc == disc)
+            ?? candidates.FirstOrDefault(candidate => candidate.Disc is null)!;
+
+        return entry is not null;
+    }
+
+    /// <summary>
+    /// 作品を引くためのキーを作る。作曲家の正規形と手がかりの正規化キーを組にする。
+    /// </summary>
+    private static string WorkKey(string composerCanonical, string name)
+    {
+        // 区切りはタグの値に現れない制御文字にする。区切りが値に含まれると別のキーが同一視される。
+        return composerCanonical + WORK_KEY_SEPARATOR + NormalizationKey.Create(name);
+    }
+
+    /// <summary>
+    /// フォルダのパスを比較用にそろえる。区切り・前後の空白・Unicode の正規化形を吸収する。
+    ///
+    /// **正規化キーは使わない。** 記号を落とすとフォルダの区別が付かなくなる。
+    ///
+    /// **NFC へそろえるのは必須。** 濁点付きの仮名は「ザ」1 文字（NFC）と「サ + 濁点」2 文字（NFD）の
+    /// どちらでも保存でき、見た目は同じでも文字列としては一致しない。実ライブラリの
+    /// <c>シェエラザード</c> が NFD で保存されており、辞書に手で書いた NFC の綴りと合わず、
+    /// 個別例外が効かなかった（2026-08-12）。
+    ///
+    /// 個別例外を足す側（<see cref="DictionaryEditor"/>）も同じ形で突き合わせる必要があるため公開する。
+    /// 別々に書くと、引けない例外を重複として弾くような食い違いが起きる。
+    /// </summary>
+    /// <param name="folder">ライブラリルートからの相対フォルダ。</param>
+    /// <returns>比較用にそろえたパス。</returns>
+    public static string NormalizeFolder(string? folder)
+    {
+        return (folder ?? string.Empty)
+            .Trim()
+            .Replace('/', Path.DirectorySeparatorChar)
+            .Replace('\\', Path.DirectorySeparatorChar)
+            .TrimEnd(Path.DirectorySeparatorChar)
+            .Normalize(NormalizationForm.FormC);
     }
 
     /// <summary>

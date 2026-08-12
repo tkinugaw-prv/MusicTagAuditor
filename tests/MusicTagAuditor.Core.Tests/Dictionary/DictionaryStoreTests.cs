@@ -31,6 +31,53 @@ public sealed class DictionaryStoreTests : IDisposable
     }
 
     /// <summary>
+    /// 保存した辞書のキーが camelCase であることを確認する。
+    ///
+    /// <c>JsonSourceGenerationOptions</c> はコンテキスト自身の <c>Options</c> にしか効かない。
+    /// <c>TypeInfoResolver</c> だけを差し替えた <c>JsonSerializerOptions</c> で書くと
+    /// **PascalCase になる**。読み込みは大小文字を区別しないので動作は壊れず、
+    /// 利用者が手で育てた辞書が保存のたびに同梱辞書と違う綴りへ書き換わる状態が続いていた。
+    /// 手で足したキーと衝突して読めなくなるため、ここで固定する。
+    /// </summary>
+    [Fact]
+    public void WritesCamelCaseKeys()
+    {
+        string json = DictionaryWriter.Serialize(new TagDictionary
+        {
+            Version = 1,
+            Composers = [new ComposerEntry { Canonical = "Anton Bruckner" }],
+            Works = [new WorkEntry { Composer = "Anton Bruckner", Canonical = "Symphony No. 8" }],
+            AlbumOverrides = [new AlbumOverrideEntry { Folder = "x", Exclude = true, Note = "y" }],
+        });
+
+        Assert.Contains("\"version\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"composers\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"works\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"albumOverrides\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"aliasesJa\"", json, StringComparison.Ordinal);
+
+        Assert.DoesNotContain("\"Version\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Composers\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Works\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"AlbumOverrides\"", json, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 同梱の既定辞書を読んで書き戻しても、キーの綴りが変わらないことを確認する。
+    /// **保存のたびにファイルの形が変わると、手で編集した箇所との差分が読めなくなる。**
+    /// </summary>
+    [Fact]
+    public void KeepsBundledDictionaryShapeOnRoundTrip()
+    {
+        string json = DictionaryWriter.Serialize(DictionaryLoader.LoadDefault());
+
+        Assert.Contains("\"composers\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"protectedAlbumArtists\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Composers\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"ProtectedAlbumArtists\"", json, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 保存すると索引が作り直されることを確認する。
     /// 索引が古いままだと、追加した値がその場では効かない。
     /// </summary>

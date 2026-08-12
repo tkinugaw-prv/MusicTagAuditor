@@ -15,7 +15,8 @@ Main features:
 - **Automatically snapshots tags immediately before applying**, then reads every written field back and verifies it
 - Manual cell editing, bulk entry per folder, and dictionary-backed input suggestions
 - **Scoping inspection results to the selected folder**, keeping the display, bulk selection, applying, and CSV export within that same range
-- An editable, validated normalization dictionary (composers / people / ensembles / typos / protected values)
+- An editable, validated normalization dictionary (composers / people / ensembles / works / album overrides / typos / protected values)
+- **Growing the dictionary straight from the inspection results** (unknown values, works, and per-album overrides)
 - CSV export of inspection results, and backups that ship with a PowerShell restore script usable without the app
 
 > **Note**: the detailed documentation under `docs/` is written in Japanese. This file covers building, testing, and licensing only.

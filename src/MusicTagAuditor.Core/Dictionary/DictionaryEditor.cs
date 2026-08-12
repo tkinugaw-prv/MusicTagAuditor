@@ -264,6 +264,143 @@ public static class DictionaryEditor
     }
 
     /// <summary>
+    /// 作品を足す（docs/SPEC.md 7.4）。
+    ///
+    /// **自然キーは <c>composer</c> + <c>canonical</c> の組。** 同じ組が既にあれば新しい行を作らず、
+    /// 別名だけを既存のエントリに足す。重複したエントリを作ると索引は先勝ちになり、
+    /// 後から書いたほうは黙って捨てられる（<see cref="DictionaryValidator"/> がエラーにする）。
+    /// </summary>
+    /// <param name="dictionary">元の辞書。</param>
+    /// <param name="composer">作曲家の正規形。<c>composers</c> の正規形と一致させる。</param>
+    /// <param name="canonical">作品名。</param>
+    /// <param name="aliases">別名。日本語表記は自動で <c>aliasesJa</c> に振り分ける。</param>
+    /// <returns>新しい辞書。</returns>
+    public static TagDictionary AddWork(
+        TagDictionary dictionary,
+        string composer,
+        string canonical,
+        IEnumerable<string>? aliases = null)
+    {
+        ArgumentNullException.ThrowIfNull(dictionary);
+        ArgumentException.ThrowIfNullOrWhiteSpace(composer);
+        ArgumentException.ThrowIfNullOrWhiteSpace(canonical);
+
+        string trimmedComposer = composer.Trim();
+        string trimmedCanonical = canonical.Trim();
+
+        (string[] latin, string[] japanese) = SplitByScript(aliases, trimmedCanonical);
+
+        WorkEntry[] works = [.. dictionary.Works ?? []];
+        int index = Array.FindIndex(
+            works,
+            entry => string.Equals(entry.Composer, trimmedComposer, StringComparison.Ordinal)
+                && string.Equals(entry.Canonical, trimmedCanonical, StringComparison.Ordinal));
+
+        if (index >= 0)
+        {
+            WorkEntry target = works[index];
+
+            works[index] = target with
+            {
+                Aliases = Merge(target.Aliases, latin),
+                AliasesJa = Merge(target.AliasesJa, japanese),
+            };
+
+            return dictionary with { Works = works };
+        }
+
+        WorkEntry added = new()
+        {
+            Composer = trimmedComposer,
+            Canonical = trimmedCanonical,
+            Aliases = latin,
+            AliasesJa = japanese,
+        };
+
+        return dictionary with { Works = [.. works, added] };
+    }
+
+    /// <summary>
+    /// 個別例外を足す（docs/SPEC.md 7.4.5）。
+    ///
+    /// **同じフォルダ + <c>disc</c> の項目があれば置き換える。** 同じ単位に 2 つ書いても
+    /// 先に見つかったほうしか効かず、直したつもりの内容が反映されない。
+    /// </summary>
+    /// <param name="dictionary">元の辞書。</param>
+    /// <param name="entry">足す個別例外。</param>
+    /// <returns>新しい辞書。</returns>
+    public static TagDictionary AddAlbumOverride(TagDictionary dictionary, AlbumOverrideEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(dictionary);
+        ArgumentNullException.ThrowIfNull(entry);
+        ArgumentException.ThrowIfNullOrWhiteSpace(entry.Folder);
+
+        AlbumOverrideEntry[] overrides = [.. dictionary.AlbumOverrides ?? []];
+        string folderKey = DictionaryIndex.NormalizeFolder(entry.Folder);
+
+        int index = Array.FindIndex(
+            overrides,
+            existing => string.Equals(
+                    DictionaryIndex.NormalizeFolder(existing.Folder),
+                    folderKey,
+                    StringComparison.OrdinalIgnoreCase)
+                && existing.Disc == entry.Disc);
+
+        if (index >= 0)
+        {
+            overrides[index] = entry;
+
+            return dictionary with { AlbumOverrides = overrides };
+        }
+
+        return dictionary with { AlbumOverrides = [.. overrides, entry] };
+    }
+
+    /// <summary>
+    /// フォルダ名から作品の別名の候補を集める（docs/SPEC.md 7.3.2）。
+    ///
+    /// **人が取捨選択する前提の候補**であり、そのまま登録するものではない。
+    /// フォルダ名には演奏者が付いていることが多い（<c>ブルックナー 8 - Wand</c>）。
+    ///
+    /// **作曲家として引けるセグメントは飛ばす。** 作曲家フォルダは作品名ではない。
+    /// 残ったセグメントは、全体と「最初の <c>-</c> より前」の 2 通りを出す（7.4.3 手順4 と同じ切り方）。
+    /// </summary>
+    /// <param name="folder">ライブラリルートからの相対フォルダ。</param>
+    /// <param name="index">現在の索引。作曲家フォルダの判定に使う。</param>
+    /// <returns>候補。重複と空は落とす。順は浅いフォルダ → 深いフォルダ。</returns>
+    public static IReadOnlyList<string> SuggestWorkAliases(string? folder, DictionaryIndex index)
+    {
+        ArgumentNullException.ThrowIfNull(index);
+
+        List<string> candidates = [];
+
+        string[] segments = (folder ?? string.Empty).Split(
+            Path.DirectorySeparatorChar,
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        foreach (string segment in segments.Where(segment => !index.TryResolveComposer(segment, out _)))
+        {
+            candidates.Add(segment);
+
+            string head = segment.Split('-')[0].Trim();
+
+            if (head.Length > 0
+                && !string.Equals(head, segment, StringComparison.Ordinal)
+                && !index.TryResolveComposer(head, out _))
+            {
+                candidates.Add(head);
+            }
+        }
+
+        return
+        [
+            .. candidates
+                .Where(candidate => NormalizationKey.Create(candidate).Length > 0)
+                .Distinct(StringComparer.Ordinal),
+        ];
+    }
+
+    /// <summary>
     /// 正規形から実体 ID の候補を作る。利用者が毎回考えずに済むようにするための補助。
     /// </summary>
     /// <param name="dictionary">既存の辞書。ID の重複を避けるために使う。</param>
@@ -387,5 +524,15 @@ public static class DictionaryEditor
         IReadOnlyList<string> current = values ?? [];
 
         return current.Contains(value, StringComparer.Ordinal) ? current : [.. current, value];
+    }
+
+    /// <summary>
+    /// 別名の一覧をまとめる。既にあるものは足さない。
+    /// </summary>
+    private static IReadOnlyList<string> Merge(IReadOnlyList<string>? values, IEnumerable<string> added)
+    {
+        IReadOnlyList<string> current = values ?? [];
+
+        return [.. current, .. added.Where(value => !current.Contains(value, StringComparer.Ordinal))];
     }
 }

@@ -62,6 +62,16 @@ public sealed partial class DictionaryViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(RemoveEraCommand))]
     private EnsembleEraRowViewModel? _selectedEra;
 
+    /// <summary>選択中の作品。</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RemoveWorkCommand))]
+    private WorkRowViewModel? _selectedWork;
+
+    /// <summary>選択中の個別例外。</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RemoveAlbumOverrideCommand))]
+    private AlbumOverrideRowViewModel? _selectedAlbumOverride;
+
     /// <summary>選択中の誤記。</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(RemoveTypoCommand))]
@@ -83,6 +93,16 @@ public sealed partial class DictionaryViewModel : ObservableObject
     /// <summary>操作の結果を伝える文言。</summary>
     [ObservableProperty]
     private string _statusText = string.Empty;
+
+    /// <summary>
+    /// 読んでいる辞書の構成（docs/SPEC.md 7.3）。
+    ///
+    /// **どの辞書を読んでいるかが分からないと、検出結果が想定と違うときに
+    /// 「ルールの誤り」なのか「別の辞書を読んでいる」のかを切り分けられない。**
+    /// ログに出るのと同じ内容を画面にも出す（2026-08-12 に切り分けで手間取った）。
+    /// </summary>
+    [ObservableProperty]
+    private string _summaryText = string.Empty;
 
     /// <summary>
     /// ビューモデルを初期化する。
@@ -107,6 +127,18 @@ public sealed partial class DictionaryViewModel : ObservableObject
 
     /// <summary>演奏団体。</summary>
     public ObservableCollection<EnsembleRowViewModel> Ensembles { get; } = [];
+
+    /// <summary>作品（docs/SPEC.md 7.4）。アルバム名の <c>{作品名}</c> の供給元。</summary>
+    public ObservableCollection<WorkRowViewModel> Works { get; } = [];
+
+    /// <summary>アルバム単位の個別例外（docs/SPEC.md 7.4.5）。</summary>
+    public ObservableCollection<AlbumOverrideRowViewModel> AlbumOverrides { get; } = [];
+
+    /// <summary>
+    /// 作品の作曲家に選べる正規形。**自由入力させないための選択肢**（docs/SPEC.md 7.3.1）。
+    /// 作曲家の編集にあわせて作り直す。
+    /// </summary>
+    public ObservableCollection<string> ComposerCanonicals { get; } = [];
 
     /// <summary>楽語の誤記。</summary>
     public ObservableCollection<TypoRowViewModel> Typos { get; } = [];
@@ -208,18 +240,16 @@ public sealed partial class DictionaryViewModel : ObservableObject
             _store.Save(edited);
 
             IsDirty = false;
+            SummaryText = DictionarySummary.Describe(edited);
 
             StatusText = Issues.Count == 0
                 ? $"保存しました: {FilePath}"
                 : $"保存しました（警告 {Issues.Count} 件）: {FilePath}";
 
             Log.Information(
-                "辞書を保存した path={Path} 作曲家={Composers} 人物={Persons} 団体={Ensembles} 誤記={Typos} 警告={Warnings}",
+                "辞書を保存した path={Path} {Summary} 警告={Warnings}",
                 FilePath,
-                edited.Composers.Count,
-                edited.Persons.Count,
-                edited.Ensembles.Count,
-                edited.Typos.Count,
+                DictionarySummary.Describe(edited),
                 Issues.Count);
 
             Saved?.Invoke(this, EventArgs.Empty);
@@ -498,6 +528,59 @@ public sealed partial class DictionaryViewModel : ObservableObject
     }
 
     /// <summary>
+    /// 作品を追加する（docs/SPEC.md 7.3.1）。
+    ///
+    /// 作曲家は選択中のものを引き継ぐ。**空のままにはできない**ので、
+    /// 何も選ばれていなければ辞書の先頭の作曲家を入れておく（7.4.3 の同定キーの一部）。
+    /// </summary>
+    [RelayCommand]
+    private void AddWork()
+    {
+        WorkRowViewModel row = new(new WorkEntry
+        {
+            Composer = SelectedWork?.Composer is { Length: > 0 } composer
+                ? composer
+                : ComposerCanonicals.FirstOrDefault() ?? string.Empty,
+            Canonical = string.Empty,
+        });
+
+        Works.Add(row);
+        SelectedWork = row;
+    }
+
+    /// <summary>
+    /// 作品を削除する。
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanRemoveWork))]
+    private void RemoveWork()
+    {
+        if (SelectedWork is null || !ConfirmRemove(DictionaryValidator.CATEGORY_WORK, SelectedWork.DisplayName))
+        {
+            return;
+        }
+
+        Works.Remove(SelectedWork);
+    }
+
+    /// <summary>
+    /// 個別例外を削除する。
+    ///
+    /// **追加の入口はここに置かない。** フォルダは検査結果から埋める（docs/SPEC.md 7.3.2）。
+    /// 手で相対パスを打つと、打ち間違えても例外が黙って効かなくなるだけで原因が画面から分からない。
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanRemoveAlbumOverride))]
+    private void RemoveAlbumOverride()
+    {
+        if (SelectedAlbumOverride is null
+            || !ConfirmRemove(DictionaryValidator.CATEGORY_OVERRIDE, SelectedAlbumOverride.Folder))
+        {
+            return;
+        }
+
+        AlbumOverrides.Remove(SelectedAlbumOverride);
+    }
+
+    /// <summary>
     /// 誤記を追加する。
     /// </summary>
     [RelayCommand]
@@ -608,6 +691,18 @@ public sealed partial class DictionaryViewModel : ObservableObject
         return SelectedEnsemble is not null && SelectedEra is not null;
     }
 
+    /// <summary>作品を削除できるか。</summary>
+    private bool CanRemoveWork()
+    {
+        return SelectedWork is not null;
+    }
+
+    /// <summary>個別例外を削除できるか。</summary>
+    private bool CanRemoveAlbumOverride()
+    {
+        return SelectedAlbumOverride is not null;
+    }
+
     /// <summary>誤記を削除できるか。</summary>
     private bool CanRemoveTypo()
     {
@@ -707,6 +802,8 @@ public sealed partial class DictionaryViewModel : ObservableObject
         Composers.Clear();
         Persons.Clear();
         Ensembles.Clear();
+        Works.Clear();
+        AlbumOverrides.Clear();
         Typos.Clear();
         ProtectedValues.Clear();
         Issues.Clear();
@@ -728,6 +825,16 @@ public sealed partial class DictionaryViewModel : ObservableObject
             Ensembles.Add(new EnsembleRowViewModel(entry));
         }
 
+        foreach (WorkEntry entry in dictionary.Works ?? [])
+        {
+            Works.Add(new WorkRowViewModel(entry));
+        }
+
+        foreach (AlbumOverrideEntry entry in dictionary.AlbumOverrides ?? [])
+        {
+            AlbumOverrides.Add(new AlbumOverrideRowViewModel(entry));
+        }
+
         foreach (TypoEntry entry in dictionary.Typos ?? [])
         {
             Typos.Add(new TypoRowViewModel(entry));
@@ -737,6 +844,9 @@ public sealed partial class DictionaryViewModel : ObservableObject
         {
             ProtectedValues.Add(new ProtectedValueRowViewModel(value));
         }
+
+        RefreshComposerCanonicals();
+        SummaryText = DictionarySummary.Describe(dictionary);
 
         Attach();
         SetUpViews();
@@ -758,8 +868,53 @@ public sealed partial class DictionaryViewModel : ObservableObject
         AddView(Composers);
         AddView(Persons);
         AddView(Ensembles);
+        AddView(Works);
+        AddView(AlbumOverrides);
         AddView(Typos);
         AddView(ProtectedValues);
+    }
+
+    /// <summary>
+    /// 作品の作曲家に選べる正規形を作り直す（docs/SPEC.md 7.3.1）。
+    ///
+    /// **作品が現に名乗っている作曲家も候補に残す。** 候補から消えると選択欄は「選択なし」に
+    /// 落ち、編集していない行の作曲家まで黙って失われる。正規形と一致しない作曲家は
+    /// <see cref="DictionaryValidator"/> が保存時にエラーとして出す。
+    ///
+    /// 入れ替えではなく差分で直す。作り直すたびに選択が外れると、開いている行の値が変わる。
+    /// </summary>
+    private void RefreshComposerCanonicals()
+    {
+        string[] desired =
+        [
+            .. Composers.Select(row => row.Canonical.Trim())
+                .Concat(Works.Select(row => row.Composer.Trim()))
+                .Where(name => name.Length > 0)
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal),
+        ];
+
+        HashSet<string> keep = new(desired, StringComparer.Ordinal);
+
+        for (int i = ComposerCanonicals.Count - 1; i >= 0; i--)
+        {
+            if (!keep.Contains(ComposerCanonicals[i]))
+            {
+                ComposerCanonicals.RemoveAt(i);
+            }
+        }
+
+        for (int i = 0; i < desired.Length; i++)
+        {
+            if (i >= ComposerCanonicals.Count)
+            {
+                ComposerCanonicals.Add(desired[i]);
+            }
+            else if (!string.Equals(ComposerCanonicals[i], desired[i], StringComparison.Ordinal))
+            {
+                ComposerCanonicals.Insert(i, desired[i]);
+            }
+        }
     }
 
     /// <summary>
@@ -790,6 +945,8 @@ public sealed partial class DictionaryViewModel : ObservableObject
         Composers.CollectionChanged += OnCollectionChanged;
         Persons.CollectionChanged += OnCollectionChanged;
         Ensembles.CollectionChanged += OnCollectionChanged;
+        Works.CollectionChanged += OnCollectionChanged;
+        AlbumOverrides.CollectionChanged += OnCollectionChanged;
         Typos.CollectionChanged += OnCollectionChanged;
         ProtectedValues.CollectionChanged += OnCollectionChanged;
 
@@ -812,6 +969,8 @@ public sealed partial class DictionaryViewModel : ObservableObject
         Composers.CollectionChanged -= OnCollectionChanged;
         Persons.CollectionChanged -= OnCollectionChanged;
         Ensembles.CollectionChanged -= OnCollectionChanged;
+        Works.CollectionChanged -= OnCollectionChanged;
+        AlbumOverrides.CollectionChanged -= OnCollectionChanged;
         Typos.CollectionChanged -= OnCollectionChanged;
         ProtectedValues.CollectionChanged -= OnCollectionChanged;
 
@@ -835,6 +994,8 @@ public sealed partial class DictionaryViewModel : ObservableObject
             .Concat(Persons)
             .Concat(Ensembles)
             .Concat(Ensembles.SelectMany(ensemble => ensemble.Eras))
+            .Concat(Works)
+            .Concat(AlbumOverrides)
             .Concat(Typos)
             .Concat(ProtectedValues);
     }
@@ -870,14 +1031,25 @@ public sealed partial class DictionaryViewModel : ObservableObject
             }
         }
 
+        if (ReferenceEquals(sender, Composers) || ReferenceEquals(sender, Works))
+        {
+            RefreshComposerCanonicals();
+        }
+
         MarkDirty();
     }
 
     /// <summary>
     /// 行の内容が変わったら未保存とする。
+    /// 作曲家の正規形は作品の選択肢にもなるので、変わったら候補を作り直す。
     /// </summary>
     private void OnRowChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (sender is ComposerRowViewModel && e.PropertyName == nameof(ComposerRowViewModel.Canonical))
+        {
+            RefreshComposerCanonicals();
+        }
+
         MarkDirty();
     }
 
@@ -907,6 +1079,8 @@ public sealed partial class DictionaryViewModel : ObservableObject
             Composers = [.. Composers.Select(row => row.ToEntry())],
             Persons = [.. Persons.Select(row => row.ToEntry())],
             Ensembles = [.. Ensembles.Select(row => row.ToEntry())],
+            Works = [.. Works.Select(row => row.ToEntry())],
+            AlbumOverrides = [.. AlbumOverrides.Select(row => row.ToEntry())],
             Typos = [.. Typos.Select(row => row.ToEntry())],
             ProtectedAlbumArtists = [.. ProtectedValues.Select(row => row.Value.Trim()).Where(value => value.Length > 0)],
         };

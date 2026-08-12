@@ -69,6 +69,7 @@ public partial class App : Application
 
         InspectionEngine engine = _services.GetRequiredService<InspectionEngine>();
         AppSettingsStore settingsStore = _services.GetRequiredService<AppSettingsStore>();
+        DictionaryStore dictionaryStore = _services.GetRequiredService<DictionaryStore>();
 
         if (settingsStore.LoadError is not null)
         {
@@ -76,6 +77,14 @@ public partial class App : Application
         }
 
         Log.Information("Music Tag Auditor を起動した 検査ルール={RuleCount} 件", engine.RuleCount);
+
+        // **どの辞書を読んだかを必ず残す。** 辞書は所蔵に依存し、実行環境によっては
+        // 別のファイルを読むこともある。件数が見えないと、検出結果が想定と違うときに
+        // 「ルールの誤り」なのか「別の辞書を読んでいる」のかを切り分けられない。
+        Log.Information(
+            "辞書を読み込んだ path={Path} {Summary}",
+            dictionaryStore.FilePath,
+            DictionarySummary.Describe(dictionaryStore.Dictionary));
 
         _services.GetRequiredService<MainWindow>().Show();
 

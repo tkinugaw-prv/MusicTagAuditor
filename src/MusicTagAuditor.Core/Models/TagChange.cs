@@ -39,6 +39,24 @@ public enum HoldReason
     /// <c>date</c> が埋まった時点で自動的に再判定できる。
     /// </summary>
     EraUnknown,
+
+    /// <summary>
+    /// 作品エントリを同定できない（<c>HOLD_WORK_UNKNOWN</c>。docs/SPEC.md 7.4.4）。
+    /// 未登録・候補が割れた・作曲家が単位内で複数のいずれか。
+    /// 作品エントリを足すか <c>composer</c> を直せば再判定できる。
+    /// </summary>
+    WorkUnknown,
+
+    /// <summary>
+    /// <c>date</c> が未設定、または単位内で値が割れている（<c>HOLD_DATE_UNKNOWN</c>）。
+    /// docs/TAGGING_POLICY.md 3.5 規則2。**最古年・最頻値のような機械的な選び方をしない。**
+    /// </summary>
+    DateUnknown,
+
+    /// <summary>
+    /// <c>artist</c> が単位内で一意に決まらない（<c>HOLD_ARTIST_UNKNOWN</c>）。
+    /// </summary>
+    ArtistUnknown,
 }
 
 /// <summary>

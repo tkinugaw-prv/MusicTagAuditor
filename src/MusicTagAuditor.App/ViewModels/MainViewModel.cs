@@ -61,6 +61,14 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>直近のスキャン結果。バックアップの取得元になる。</summary>
     private ScanResult? _lastScan;
 
+    /// <summary>
+    /// 直近の検査に使った文脈。**アルバム単位の出どころ**（docs/SPEC.md 7.3.2）。
+    ///
+    /// 作品の追加と個別例外は明細 1 行ではなくアルバム単位に紐づくので、
+    /// 明細から単位へ辿り直せるように検査の文脈を持っておく。
+    /// </summary>
+    private InspectionContext? _lastContext;
+
     /// <summary>直近のスキャン結果。ツリーでの絞り込みはこの一覧から行う。</summary>
     private IReadOnlyList<TrackRowViewModel> _allTracks = [];
 
@@ -121,6 +129,8 @@ public sealed partial class MainViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(ApplyCommand))]
     [NotifyCanExecuteChangedFor(nameof(AddUnknownValueToDictionaryCommand))]
     [NotifyCanExecuteChangedFor(nameof(AddSelectedChangeToDictionaryCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AddWorkFromChangeCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AddAlbumOverrideFromChangeCommand))]
     private bool _isScanning;
 
     /// <summary>進捗の現在値。</summary>
@@ -200,6 +210,8 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>検査結果の差分明細で選択中の行。</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(AddSelectedChangeToDictionaryCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AddWorkFromChangeCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AddAlbumOverrideFromChangeCommand))]
     private TagChangeViewModel? _selectedChange;
 
     /// <summary>未知の値の一覧で選択中の行。</summary>
@@ -866,6 +878,7 @@ public sealed partial class MainViewModel : ObservableObject
         CanApplyChanges = false;
         HasInspectionResult = false;
         _lastInspection = null;
+        _lastContext = null;
 
         try
         {
@@ -878,6 +891,8 @@ public sealed partial class MainViewModel : ObservableObject
 
             InspectionContext context = new(_lastScan, _dictionaryStore.Index, options);
             InspectionResult result = _inspectionEngine.Inspect(context);
+
+            _lastContext = context;
 
             foreach (RuleResult rule in result.Results.Where(rule => rule.Changes.Count > 0))
             {
@@ -1155,18 +1170,26 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
-    /// 追加ダイアログを開き、確定したら辞書を保存して再検査する。
+    /// 選択中の保留行から作品を辞書に足す（docs/SPEC.md 7.3.2）。
+    ///
+    /// **これが作品エントリを育てる主経路になる。** 辞書タブで作曲家名を手打ちさせない。
     /// </summary>
-    private void AddToDictionary(UnknownValue unknown)
+    [RelayCommand(CanExecute = nameof(CanAddWorkFromChange))]
+    private void AddWorkFromChange()
     {
+        if (SelectedChange is null || FindUnit(SelectedChange) is not AlbumUnit unit || unit.Composers.Count != 1)
+        {
+            return;
+        }
+
         if (!Dictionary.ConfirmDiscardIfDirty())
         {
             return;
         }
 
-        AddToDictionaryViewModel viewModel = new(_dictionaryStore.Dictionary, _dictionaryStore.Index, unknown);
+        AddWorkViewModel viewModel = new(_dictionaryStore.Dictionary, _dictionaryStore.Index, unit, unit.Composers[0]);
 
-        AddToDictionaryWindow window = new(viewModel)
+        AddWorkWindow window = new(viewModel)
         {
             Owner = Application.Current?.MainWindow,
         };
@@ -1176,9 +1199,112 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
+        SaveDictionary(
+            viewModel.Apply,
+            $"作品「{viewModel.Canonical.Trim()}」を辞書に登録して再検査しました。",
+            () => Log.Information(
+                "作品を辞書に追加した composer={Composer} canonical={Canonical} folder={Folder} disc={Disc}",
+                unit.Composers[0],
+                viewModel.Canonical.Trim(),
+                unit.Folder,
+                unit.Disc));
+    }
+
+    /// <summary>
+    /// 選択中の行が指すアルバム単位に個別例外を足す（docs/SPEC.md 7.3.2 / 7.4.5）。
+    ///
+    /// フォルダと <c>disc</c> は明細から自動で埋める。**手で相対パスを打たせない。**
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanAddAlbumOverrideFromChange))]
+    private void AddAlbumOverrideFromChange()
+    {
+        if (SelectedChange is null || FindUnit(SelectedChange) is not AlbumUnit unit)
+        {
+            return;
+        }
+
+        if (!Dictionary.ConfirmDiscardIfDirty())
+        {
+            return;
+        }
+
+        AlbumOverrideViewModel viewModel = new(_dictionaryStore.Dictionary, unit);
+
+        AlbumOverrideWindow window = new(viewModel)
+        {
+            Owner = Application.Current?.MainWindow,
+        };
+
+        if (window.ShowDialog() != true)
+        {
+            return;
+        }
+
+        AlbumOverrideEntry entry = viewModel.BuildEntry();
+
+        // 対象外にした単位は検査結果から消える（7.4.3 手順1）。消えたことが分かるように書く。
+        string message = entry.Exclude
+            ? $"「{FolderLabel(unit)}」を対象外にしました。この単位は検査結果から消えます。"
+            : $"「{FolderLabel(unit)}」に個別例外を登録して再検査しました。";
+
+        SaveDictionary(
+            viewModel.Apply,
+            message,
+            () => Log.Information(
+                "個別例外を辞書に追加した folder={Folder} disc={Disc} exclude={Exclude} composer={Composer} work={Work}",
+                entry.Folder,
+                entry.Disc,
+                entry.Exclude,
+                entry.Composer,
+                entry.WorkName));
+    }
+
+    /// <summary>
+    /// 明細の行が属するアルバム単位を探す（フォルダ + <c>discnumber</c>。3.5 補足2）。
+    /// </summary>
+    /// <param name="change">明細の行。</param>
+    /// <returns>該当する単位。見つからなければ null。</returns>
+    private AlbumUnit? FindUnit(TagChangeViewModel change)
+    {
+        if (_lastContext is null || _lastScan is null)
+        {
+            return null;
+        }
+
+        TrackTags? track = _lastScan.Tracks.FirstOrDefault(
+            candidate => string.Equals(candidate.RelativePath, change.RelativePath, StringComparison.OrdinalIgnoreCase));
+
+        if (track is null)
+        {
+            return null;
+        }
+
+        string folder = InspectionContext.GetFolder(track.RelativePath);
+        int disc = AlbumUnit.GetDisc(track.DiscNumber);
+
+        return _lastContext.Units.FirstOrDefault(
+            unit => string.Equals(unit.Folder, folder, StringComparison.Ordinal) && unit.Disc == disc);
+    }
+
+    /// <summary>
+    /// 単位を 1 行で表す。ルート直下は空文字になるので、そのままだと何を指すのか分からない。
+    /// </summary>
+    private static string FolderLabel(AlbumUnit unit)
+    {
+        return unit.Folder.Length == 0 ? "(ルート直下)" : unit.Folder;
+    }
+
+    /// <summary>
+    /// 辞書を更新して保存し、再検査する。検証でエラーが出た場合は保存しない。
+    /// </summary>
+    /// <param name="edit">更新後の辞書を作る。</param>
+    /// <param name="message">成功時にステータスへ出す文言。</param>
+    /// <param name="log">成功時に残すログ。</param>
+    private void SaveDictionary(Func<TagDictionary> edit, string message, Action log)
+    {
         try
         {
-            TagDictionary edited = viewModel.Apply();
+            TagDictionary edited = edit();
 
             IReadOnlyList<DictionaryIssue> issues = DictionaryValidator.Validate(edited);
 
@@ -1201,21 +1327,49 @@ public sealed partial class MainViewModel : ObservableObject
             _dictionaryStore.Save(edited);
             Dictionary.ReloadFromStore();
 
-            Log.Information(
-                "辞書に追加した value={Value} category={Category} 件数={Count}",
-                unknown.Value,
-                unknown.Category,
-                unknown.Count);
+            log();
 
             RunInspection();
 
-            StatusText = $"「{unknown.Value}」を辞書に登録して再検査しました。 {InspectionSummary}";
+            StatusText = $"{message} {InspectionSummary}";
         }
         catch (Exception ex)
         {
             StatusText = $"辞書への追加に失敗しました: {ex.Message}";
-            Log.Error(ex, "辞書への追加に失敗した value={Value}", unknown.Value);
+            Log.Error(ex, "辞書への追加に失敗した");
         }
+    }
+
+    /// <summary>
+    /// 追加ダイアログを開き、確定したら辞書を保存して再検査する。
+    /// </summary>
+    private void AddToDictionary(UnknownValue unknown)
+    {
+        if (!Dictionary.ConfirmDiscardIfDirty())
+        {
+            return;
+        }
+
+        AddToDictionaryViewModel viewModel = new(_dictionaryStore.Dictionary, _dictionaryStore.Index, unknown);
+
+        AddToDictionaryWindow window = new(viewModel)
+        {
+            Owner = Application.Current?.MainWindow,
+        };
+
+        if (window.ShowDialog() != true)
+        {
+            return;
+        }
+
+        SaveDictionary(
+            viewModel.Apply,
+            $"「{unknown.Value}」を辞書に登録して再検査しました。",
+            () => Log.Information(
+                "辞書に追加した value={Value} category={Category} 件数={Count}",
+                unknown.Value,
+                unknown.Category,
+                unknown.Count));
     }
 
     /// <summary>
@@ -1301,6 +1455,40 @@ public sealed partial class MainViewModel : ObservableObject
     private bool CanAddSelectedChangeToDictionary()
     {
         return !IsScanning && SelectedChange is not null && !SelectedChange.HasFix;
+    }
+
+    /// <summary>
+    /// 選択中の行から作品を足せるか（docs/SPEC.md 7.3.2）。
+    ///
+    /// **単位内に作曲家が複数ある場合は出さない。** 作品を足しても保留は解けず、
+    /// 主作品を決められるかどうかは機械には分からない（3.5 規則5・規則6）。
+    /// そちらは「このアルバムを対象外にする」で扱う。
+    /// </summary>
+    private bool CanAddWorkFromChange()
+    {
+        return !IsScanning
+            && SelectedChange is { RuleId: AlbumNameRule.RULE_ID } change
+            && change.Change.HoldReason == HoldReason.WorkUnknown
+            && FindUnit(change) is { Composers.Count: 1 };
+    }
+
+    /// <summary>
+    /// 選択中の行から個別例外を足せるか（docs/SPEC.md 7.3.2）。
+    ///
+    /// 対象は R-504 の保留行と R-501 の明細。どちらも「主作品が定まらない」単位を指している。
+    /// </summary>
+    private bool CanAddAlbumOverrideFromChange()
+    {
+        if (IsScanning || SelectedChange is null)
+        {
+            return false;
+        }
+
+        bool fromAlbumName = SelectedChange.RuleId == AlbumNameRule.RULE_ID
+            && SelectedChange.Change.HoldReason != HoldReason.None;
+
+        return (fromAlbumName || SelectedChange.RuleId == AlbumNameCollisionRule.RULE_ID)
+            && FindUnit(SelectedChange) is not null;
     }
 
     /// <summary>CSV を書き出せるか。</summary>
@@ -2339,6 +2527,7 @@ public sealed partial class MainViewModel : ObservableObject
         HasInspectionResult = false;
         SelectedChange = null;
         _lastInspection = null;
+        _lastContext = null;
 
         await RescanLibraryAsync().ConfigureAwait(true);
     }

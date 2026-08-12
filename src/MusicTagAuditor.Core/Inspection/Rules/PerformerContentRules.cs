@@ -140,6 +140,102 @@ public sealed class ComposerInAlbumArtistRule : IInspectionRule
 }
 
 /// <summary>
+/// R-210: ファイル名・<c>title</c>・フォルダ名に <c>composer</c> と違う作曲家名が出てくる
+/// （docs/TAGGING_POLICY.md 6.9 / docs/SPEC.md 6.2）。
+///
+/// <c>composer</c> が「辞書の正規形として正しいが、そのファイルの作曲家ではない」状態は、値が辞書と
+/// 一致してしまうため R-201 でも R-501 でも検出できない。実ライブラリでは演奏会 1 回分のプログラムが
+/// 1 フォルダに入っており、全 7 ファイルが主作品の作曲家で埋められていた。
+///
+/// **修正案を出さない。人間に判断を促すためだけのルールである。** 曲名が別の作曲家の名前を正当に
+/// 含む作品があり（ブラームス『ハイドンの主題による変奏曲』）、その判別は機械ではできない。
+///
+/// **誤検出は辞書が育つほど増える。** 検出できるのは辞書に載っている作曲家名だけで、上のハイドンは
+/// 現時点では辞書に無いため検出されない。所蔵して辞書に足した時点で誤検出に変わる。
+/// </summary>
+public sealed class ComposerMismatchRule : IInspectionRule
+{
+    /// <inheritdoc />
+    public string Id => "R-210";
+
+    /// <inheritdoc />
+    public Severity Severity => Severity.Info;
+
+    /// <inheritdoc />
+    public string Description => "ファイル名・title・フォルダ名に composer と違う作曲家名が出てくる";
+
+    /// <inheritdoc />
+    public IEnumerable<TagChange> Inspect(InspectionContext context)
+    {
+        foreach (TrackTags track in context.Tracks)
+        {
+            ComposerMismatchHit? hit = ComposerMismatch.Find(track, context.Dictionary, context.GetSiblings(track));
+
+            if (hit is null)
+            {
+                continue;
+            }
+
+            yield return new TagChange(
+                track.RelativePath,
+                TagField.Composer,
+                track.GetValues(TagField.Composer),
+                [],
+                Id,
+                BuildRationale(track, hit),
+                Severity.Info);
+        }
+    }
+
+    /// <summary>
+    /// 根拠を組み立てる。手がかりの出所（ファイル名か曲名か）を書き分ける。
+    /// **誤りの証拠ではない**ことを必ず添える。
+    /// </summary>
+    /// <param name="track">対象ファイル。</param>
+    /// <param name="hit">見つかった食い違い。</param>
+    /// <returns>差分プレビューに出す根拠。</returns>
+    private static string BuildRationale(TrackTags track, ComposerMismatchHit hit)
+    {
+        string fileName = Path.GetFileNameWithoutExtension(track.RelativePath);
+
+        // ファイル名と曲名が同じ作曲家を指す場合はまとめる。実ライブラリの該当はこの形が多く、
+        // 分けて書くと同じ名前が根拠列に 2 回並ぶ。根拠は読めることが要件である（docs/SPEC.md 5.3）。
+        bool merged = hit.FromFileName is not null
+            && hit.FromTitle is not null
+            && string.Equals(hit.FromFileName, hit.FromTitle, StringComparison.Ordinal);
+
+        List<string> sources = [];
+
+        if (merged)
+        {
+            sources.Add(string.Equals(fileName, track.Title, StringComparison.Ordinal)
+                ? $"ファイル名・曲名「{fileName}」に「{hit.FromFileName}」"
+                : $"ファイル名「{fileName}」と曲名「{track.Title}」に「{hit.FromFileName}」");
+        }
+        else
+        {
+            if (hit.FromFileName is not null)
+            {
+                sources.Add($"ファイル名「{fileName}」に「{hit.FromFileName}」");
+            }
+
+            if (hit.FromTitle is not null)
+            {
+                sources.Add($"曲名「{track.Title}」に「{hit.FromTitle}」");
+            }
+        }
+
+        if (hit.FromFolder is not null)
+        {
+            sources.Add($"フォルダ「{InspectionContext.GetFolder(track.RelativePath)}」に「{hit.FromFolder}」");
+        }
+
+        return $"composer は「{hit.Tagged}」だが、{string.Join(" / ", sources)}が出てくる。"
+            + "曲名が別の作曲家名を正当に含む作品もあるため、誤りとは限らない。CD 実物の確認が要る";
+    }
+}
+
+/// <summary>
 /// R-205: 値に <c>;</c> が含まれる。
 ///
 /// AIMP は保存時に <c>;</c> を複数値へ分割する（docs/TAGGING_POLICY.md 3.4）。

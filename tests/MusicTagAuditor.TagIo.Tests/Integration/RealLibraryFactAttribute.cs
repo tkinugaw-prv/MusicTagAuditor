@@ -1,3 +1,5 @@
+using MusicTagAuditor.Core.Dictionary;
+
 namespace MusicTagAuditor.TagIo.Tests.Integration;
 
 /// <summary>
@@ -22,6 +24,9 @@ public static class IntegrationConst
         return string.IsNullOrWhiteSpace(fromEnvironment) ? null : fromEnvironment;
     }
 
+    /// <summary>正規化辞書を置くフォルダ名（<c>%APPDATA%</c> 配下）。本体アプリと同じ場所。</summary>
+    public const string DICTIONARY_DIRECTORY_NAME = "MusicTagAuditor";
+
     /// <summary>
     /// 実ライブラリのパスを取得する。<see cref="RealLibraryFactAttribute"/> を付けたテストの
     /// 本体から呼ぶ。属性側でスキップ判定を済ませているため、ここに来る時点でパスは必ず存在する。
@@ -33,6 +38,39 @@ public static class IntegrationConst
         return ResolveLibraryRoot()
             ?? throw new InvalidOperationException(
                 $"{ENV_LIBRARY_ROOT} が未設定である。{nameof(RealLibraryFactAttribute)} を付け忘れていないか確認すること。");
+    }
+
+    /// <summary>
+    /// 実ライブラリと突き合わせるための辞書を読み込む。
+    ///
+    /// **本体アプリと同じ利用者辞書（<c>%APPDATA%\MusicTagAuditor\dictionary.json</c>）を読む。**
+    /// 同梱の既定辞書ではない。作品エントリ（docs/SPEC.md 7.4）は所蔵に依存するため既定辞書に
+    /// 入れておらず、既定辞書で検査すると R-504 が全件保留になって答え合わせにならない。
+    /// </summary>
+    /// <returns>利用者辞書の索引。</returns>
+    public static DictionaryIndex LoadUserDictionary()
+    {
+        return new DictionaryIndex(DictionaryLoader.LoadOrCreate(GetUserDictionaryDirectory()));
+    }
+
+    /// <summary>
+    /// 読んでいる辞書のパスを返す。**テスト出力に必ず出すこと。**
+    /// 実行環境によっては本体と別のファイルを読むことがあり、件数の食い違いの原因になる。
+    /// </summary>
+    /// <returns>辞書ファイルの絶対パス。</returns>
+    public static string GetUserDictionaryPath()
+    {
+        return DictionaryLoader.GetUserDictionaryPath(GetUserDictionaryDirectory());
+    }
+
+    /// <summary>
+    /// 辞書を置くフォルダ。本体アプリと同じ場所。
+    /// </summary>
+    private static string GetUserDictionaryDirectory()
+    {
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            DICTIONARY_DIRECTORY_NAME);
     }
 }
 
