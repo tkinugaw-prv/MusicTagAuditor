@@ -75,6 +75,54 @@ public sealed class DictionaryValidatorTests
     }
 
     /// <summary>
+    /// 作品の問題が、作曲家を添えて名指しされることを確認する。
+    ///
+    /// **「Symphony No. 7」だけでは誰の第 7 番か読めない。** 番号で呼ぶ作品は作曲家をまたいで
+    /// 何件も並ぶため、作品名だけを出されても一覧のどの行を直せばよいのか分からない。
+    /// </summary>
+    [Fact]
+    public void NamesWorkWithItsComposer()
+    {
+        TagDictionary dictionary = new()
+        {
+            Composers = [new ComposerEntry { Canonical = "Dmitri Shostakovich" }],
+            Works =
+            [
+                new WorkEntry
+                {
+                    Composer = "Dmitri Shostakovich",
+                    Canonical = "Symphony No. 7",
+
+                    // 正規化キーは記号と空白を落とすので、正規形と同じキーになる別名。
+                    Aliases = ["Symphony No.7"],
+                },
+            ],
+        };
+
+        IReadOnlyList<DictionaryIssue> issues = DictionaryValidator.Validate(dictionary);
+
+        DictionaryIssue issue = Assert.Single(issues, item => item.Message.Contains("重複", StringComparison.Ordinal));
+
+        Assert.Equal("Dmitri Shostakovich: Symphony No. 7", issue.Target);
+    }
+
+    /// <summary>
+    /// 作曲家が空の作品でも、対象の名指しが壊れないことを確認する。
+    /// </summary>
+    [Fact]
+    public void NamesWorkWithoutComposer()
+    {
+        TagDictionary dictionary = new()
+        {
+            Works = [new WorkEntry { Composer = string.Empty, Canonical = "Symphony No. 7" }],
+        };
+
+        IReadOnlyList<DictionaryIssue> issues = DictionaryValidator.Validate(dictionary);
+
+        Assert.All(issues, issue => Assert.Equal("Symphony No. 7", issue.Target));
+    }
+
+    /// <summary>
     /// 実体 ID の重複をエラーとして検出することを確認する。
     /// **同一性は実体 ID で判断する**ため、ID が重複すると別団体が同一視されうる。
     /// </summary>
