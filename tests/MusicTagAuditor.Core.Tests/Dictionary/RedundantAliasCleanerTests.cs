@@ -182,6 +182,33 @@ public sealed class RedundantAliasCleanerTests
     }
 
     /// <summary>
+    /// 姓の照合に効いている別名は、キーが重なっていても残すことを確認する。
+    ///
+    /// <see cref="DictionaryIndex"/> は作曲家の <c>aliases</c> のうち**空白を含まないものだけ**を
+    /// 姓として索引に足す（R-203 / R-204 の判定に使う）。<c>VonWeber</c> を消して
+    /// <c>Von Weber</c> だけ残すと、正規化キーは同じでも姓としては引けなくなる。
+    /// **引ける範囲を変えないのが掃除の前提**なので、この形だけは残す。
+    /// </summary>
+    [Fact]
+    public void KeepsSpacelessAliasNeededForSurnameMatching()
+    {
+        TagDictionary before = new()
+        {
+            Composers =
+            [
+                new ComposerEntry { Canonical = "Carl Maria von Weber", Aliases = ["Von Weber", "VonWeber"] },
+            ],
+        };
+
+        Assert.True(new DictionaryIndex(before).ContainsComposerName("Overture by VonWeber", out _));
+
+        (TagDictionary after, IReadOnlyList<RemovedAlias> removed) = RedundantAliasCleaner.Clean(before);
+
+        Assert.Empty(removed);
+        Assert.True(new DictionaryIndex(after).ContainsComposerName("Overture by VonWeber", out _));
+    }
+
+    /// <summary>
     /// 掃除した辞書が検証を通ることを確認する。掃除の目的そのもの。
     /// </summary>
     [Fact]

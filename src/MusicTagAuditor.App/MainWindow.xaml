@@ -771,6 +771,9 @@
                     </Style>
                   </Button.Style>
                 </Button>
+                <Button DockPanel.Dock="Left" Content="冗長な別名を掃除" Command="{Binding CleanupRedundantAliasesCommand}"
+                        Margin="0,0,8,0"
+                        ToolTip="正規化キーが重なっていて索引に載っていない別名を削除します。引ける値は変わりません" />
                 <Button DockPanel.Dock="Left" Content="既定辞書として書き出し" Command="{Binding ExportCommand}"
                         Margin="0,0,14,0"
                         ToolTip="リポジトリ同梱の default-dictionary.json へ書き戻します" />
