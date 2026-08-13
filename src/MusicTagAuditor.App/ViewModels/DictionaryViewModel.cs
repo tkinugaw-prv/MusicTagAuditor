@@ -21,6 +21,21 @@ namespace MusicTagAuditor.App.ViewModels;
 /// </summary>
 public sealed partial class DictionaryViewModel : ObservableObject
 {
+    /// <summary>
+    /// 種別タブの並び。**MainWindow.xaml の <c>TabItem</c> の並びと一致させること。**
+    /// 検証結果から該当のタブへ移動するために、種別と位置を突き合わせる。
+    /// </summary>
+    private static readonly string[] CATEGORY_TABS =
+    [
+        DictionaryValidator.CATEGORY_COMPOSER,
+        DictionaryValidator.CATEGORY_PERSON,
+        DictionaryValidator.CATEGORY_ENSEMBLE,
+        DictionaryValidator.CATEGORY_WORK,
+        DictionaryValidator.CATEGORY_OVERRIDE,
+        DictionaryValidator.CATEGORY_TYPO,
+        DictionaryValidator.CATEGORY_PROTECTED,
+    ];
+
     /// <summary>辞書の保持と保存。</summary>
     private readonly DictionaryStore _store;
 
@@ -81,6 +96,18 @@ public sealed partial class DictionaryViewModel : ObservableObject
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(RemoveProtectedValueCommand))]
     private ProtectedValueRowViewModel? _selectedProtectedValue;
+
+    /// <summary>
+    /// 種別タブの選択位置。検証結果からの移動で切り替える。
+    /// </summary>
+    [ObservableProperty]
+    private int _selectedCategoryIndex;
+
+    /// <summary>
+    /// 一覧で選んだ検証結果。選ぶと対象のエントリへ移動する（<see cref="Reveal"/>）。
+    /// </summary>
+    [ObservableProperty]
+    private DictionaryIssue? _selectedIssue;
 
     /// <summary>誤記のテスト欄に入れた文字列（docs/SPEC.md 7.3）。</summary>
     [ObservableProperty]
@@ -667,6 +694,23 @@ public sealed partial class DictionaryViewModel : ObservableObject
                 + $" 警告 {Issues.Count(issue => issue.Severity == DictionaryIssueSeverity.Warning):N0} 件。");
     }
 
+    /// <summary>
+    /// 検証結果の表示を閉じる。
+    ///
+    /// **消えるのは表示だけ。** 検証は保存と「検証だけ実行」のたびにやり直すので、
+    /// 問題が残っていれば同じものがまた出る。エラーがあれば保存も止まったままである。
+    ///
+    /// 警告だけの状態（既定辞書に元からある冗長な別名など）では、直しようがないまま
+    /// 一覧の下に居座り、編集領域の高さを取り続ける。閉じる手段が無いのは邪魔でしかない。
+    /// </summary>
+    [RelayCommand]
+    private void DismissIssues()
+    {
+        Issues.Clear();
+
+        StatusText = "検証結果の表示を閉じました。「検証だけ実行」でいつでも出し直せます。";
+    }
+
     /// <summary>作曲家を削除できるか。</summary>
     private bool CanRemoveComposer()
     {
@@ -739,6 +783,114 @@ public sealed partial class DictionaryViewModel : ObservableObject
         {
             view.Refresh();
         }
+    }
+
+    /// <summary>
+    /// 検証結果を選んだら、その対象のエントリを開く。
+    /// </summary>
+    partial void OnSelectedIssueChanged(DictionaryIssue? value)
+    {
+        if (value is not null)
+        {
+            RevealIssue(value);
+        }
+    }
+
+    /// <summary>
+    /// 検証結果が指しているエントリを開く（docs/SPEC.md 7.3）。
+    ///
+    /// **問題を出すだけでは直せない。** 種別タブを選び直し、一覧を目で辿って対象を探す
+    /// 作業が挟まる。作品のように 84 件並ぶ一覧では、それだけで警告を潰す気が失せる。
+    ///
+    /// 突き合わせは <see cref="IDictionaryRow.SortKey"/>（＝一覧の見出し）と
+    /// <see cref="DictionaryIssue.Target"/> で行う。**検証は一覧の見出しと同じ文字列で
+    /// 対象を名指しする**約束にしてあるので、両者はそのまま突き合う。
+    ///
+    /// **同じ結果に対して何度呼んでもよい。** 既に選ばれている行をもう一度押したときも
+    /// View から呼ばれる（<c>ListBox</c> は選択が変わらないと通知を上げないため）。
+    /// </summary>
+    /// <param name="issue">開きたい検証結果。</param>
+    public void RevealIssue(DictionaryIssue issue)
+    {
+        ArgumentNullException.ThrowIfNull(issue);
+
+        switch (issue.Category)
+        {
+            case DictionaryValidator.CATEGORY_COMPOSER:
+                Reveal(issue, Composers, row => SelectedComposer = row);
+                break;
+
+            case DictionaryValidator.CATEGORY_PERSON:
+                Reveal(issue, Persons, row => SelectedPerson = row);
+                break;
+
+            case DictionaryValidator.CATEGORY_ENSEMBLE:
+                Reveal(issue, Ensembles, row => SelectedEnsemble = row);
+                break;
+
+            case DictionaryValidator.CATEGORY_WORK:
+                Reveal(issue, Works, row => SelectedWork = row);
+                break;
+
+            case DictionaryValidator.CATEGORY_OVERRIDE:
+                Reveal(issue, AlbumOverrides, row => SelectedAlbumOverride = row);
+                break;
+
+            case DictionaryValidator.CATEGORY_TYPO:
+                Reveal(issue, Typos, row => SelectedTypo = row);
+                break;
+
+            case DictionaryValidator.CATEGORY_PROTECTED:
+                Reveal(issue, ProtectedValues, row => SelectedProtectedValue = row);
+                break;
+
+            default:
+                StatusText = $"「{issue.Category}」に対応する一覧がありません。";
+                break;
+        }
+    }
+
+    /// <summary>
+    /// 対象の行を選んで見せる。
+    ///
+    /// 絞り込みは**対象を隠しているときだけ**外す。組み立てた絞り込みを毎回捨てると、
+    /// 警告を 1 件ずつ潰していく作業のほうが壊れる（ファイル一覧の導線と同じ扱い）。
+    /// 黙って外しもしない。何が起きたかはステータスに出す。
+    ///
+    /// 一覧のスクロールは View が行う（<c>ScrollToSelection</c>）。
+    /// </summary>
+    /// <typeparam name="T">編集行の型。</typeparam>
+    /// <param name="issue">開きたい検証結果。</param>
+    /// <param name="rows">対象の一覧。</param>
+    /// <param name="select">選択を入れる操作。</param>
+    private void Reveal<T>(DictionaryIssue issue, IEnumerable<T> rows, Action<T> select)
+        where T : class, IDictionaryRow
+    {
+        T? row = rows.FirstOrDefault(
+            candidate => string.Equals(candidate.SortKey, issue.Target, StringComparison.Ordinal));
+
+        if (row is null)
+        {
+            // 検証のあとに名前を書き換えると起きる。古い名前で探しても見つからない。
+            StatusText = $"{issue.Category}「{issue.Target}」は一覧に見つかりませんでした。"
+                + "「検証だけ実行」でやり直すと、今の内容に対する結果が出ます。";
+
+            return;
+        }
+
+        bool released = !Matches(row.SearchText);
+
+        if (released)
+        {
+            FilterText = string.Empty;
+        }
+
+        SelectedCategoryIndex = Array.IndexOf(CATEGORY_TABS, issue.Category);
+        select(row);
+
+        StatusText = released
+            ? $"{issue.Category}「{row.SortKey}」を開きました（対象を隠していた絞り込みを外しました）。"
+            : $"{issue.Category}「{row.SortKey}」を開きました。";
     }
 
     /// <summary>
@@ -918,12 +1070,29 @@ public sealed partial class DictionaryViewModel : ObservableObject
     }
 
     /// <summary>
-    /// 絞り込みビューを 1 件登録する。
+    /// 絞り込みビューを 1 件登録し、名前の昇順で並べる。
+    ///
+    /// **並べるのは表示だけで、保存する順序は変えない。**<see cref="BuildDictionary"/> は
+    /// コレクションの実体をそのまま書き出す。誤記（<c>typos</c>）は書かれた順に置換を重ねるため、
+    /// 表示の都合で並べ替えたものを保存すると置換の結果が変わりうる。JSON の差分も無用に膨らむ。
+    ///
+    /// 比較は <see cref="NaturalOrder"/> に任せる。<c>SortDescriptions</c> はプロパティの
+    /// 既定の比較しか使えず、**番号を数として見られない**（<c>Symphony No. 10</c> が
+    /// <c>No. 4</c> より前に来る）。作品名は番号で呼ぶものが大半なので、それでは一覧を
+    /// 目で追えない。
+    ///
+    /// 並べ替えは読み込みと行の増減で効く。**編集中に行が動くことはない**（ライブ整列は入れない）。
+    /// 打っている途中で行が跳ねると、どの行を編集していたのか見失う。
     /// </summary>
+    /// <param name="source">対象のコレクション。</param>
     private void AddView(System.Collections.IEnumerable source)
     {
-        ICollectionView view = CollectionViewSource.GetDefaultView(source);
+        // 対象はすべて ObservableCollection なので、既定のビューは必ず ListCollectionView になる。
+        // 取り違えたら並べ替えが黙って効かなくなるだけなので、その場で落として気づけるようにする。
+        ListCollectionView view = (ListCollectionView)CollectionViewSource.GetDefaultView(source);
+
         view.Filter = row => row is IDictionaryRow entry && Matches(entry.SearchText);
+        view.CustomSort = NaturalOrderRowComparer.Instance;
 
         _views.Add(view);
     }

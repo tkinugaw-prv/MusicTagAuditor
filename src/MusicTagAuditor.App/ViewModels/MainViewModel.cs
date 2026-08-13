@@ -1799,6 +1799,22 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
+    /// ファイル一覧で行をまとめて選んだことを画面に伝える。
+    ///
+    /// **何行を巻き込んだのかは一覧を見ても数えられない。** 一括入力は選択行すべてを
+    /// 書き換え、値が空ならタグを消す。押す前に対象の規模が分かるようにしておく。
+    ///
+    /// 選択そのものは View（<c>DataGrid</c>）が持つ。ここは件数を受け取るだけ。
+    /// </summary>
+    /// <param name="count">選ばれている行数。</param>
+    public void NotifyTracksSelected(int count)
+    {
+        StatusText = count == 0
+            ? "選べる行がありません。絞り込みを見直してください。"
+            : string.Create(CultureInfo.CurrentCulture, $"ファイル一覧の {count:N0} 行を選びました。");
+    }
+
+    /// <summary>
     /// 絞り込みが変わったら一覧を絞り直す。
     /// </summary>
     partial void OnTrackFilterTextChanged(string value)

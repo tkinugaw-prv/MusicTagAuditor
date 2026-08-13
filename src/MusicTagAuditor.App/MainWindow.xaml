@@ -1,4 +1,4 @@
-<Window x:Class="MusicTagAuditor.App.MainWindow"
+﻿<Window x:Class="MusicTagAuditor.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:MusicTagAuditor.App.ViewModels"
@@ -532,11 +532,20 @@
                               ctl:Placeholder.Text="選択行に入れる値（空のまま実行するとタグを消します）"
                               Suggestions="{Binding BulkSuggestions}"
                               Text="{Binding BulkValue, UpdateSourceTrigger=PropertyChanged}" />
-              <Button Grid.Row="1" Grid.Column="3" Content="選択行に一括入力"
-                      Command="{Binding BulkInputCommand}"
-                      CommandParameter="{Binding SelectedItems, ElementName=TrackGrid}"
-                      Margin="14,8,0,0"
-                      ToolTip="選択した行すべてに同じ値を入れます。空欄のまま押すとタグを消します" />
+              <!--
+                「全選択」は絞り込みの結果に対して効く（DataGrid.Items はビュー）。
+                Ctrl+A でも同じことはできるが、**一覧にフォーカスが無いと効かない。**
+                絞り込み欄や値の欄で手を止めたまま全体へ一括入力できるように、
+                押せる入口を「選択行に一括入力」の隣に置く。
+              -->
+              <StackPanel Grid.Row="1" Grid.Column="3" Orientation="Horizontal" Margin="14,8,0,0">
+                <Button Content="全選択" Click="OnSelectAllTracks" Margin="0,0,8,0"
+                        ToolTip="いま一覧に出ている行（絞り込みの結果）をすべて選びます" />
+                <Button Content="選択行に一括入力"
+                        Command="{Binding BulkInputCommand}"
+                        CommandParameter="{Binding SelectedItems, ElementName=TrackGrid}"
+                        ToolTip="選択した行すべてに同じ値を入れます。空欄のまま押すとタグを消します" />
+              </StackPanel>
             </Grid>
 
             <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Padding="1">
@@ -798,7 +807,11 @@
                          Text="{Binding SummaryText}" TextWrapping="Wrap" />
             </StackPanel>
 
-            <TabControl Grid.Row="1">
+            <!--
+              種別タブ。**並びを変えたら DictionaryViewModel の CATEGORY_TABS も直すこと。**
+              検証結果から該当タブへ飛ぶために、種別と位置を突き合わせている。
+            -->
+            <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedCategoryIndex}">
 
               <!-- 作曲家 -->
               <TabItem Header="作曲家">
@@ -817,7 +830,8 @@
                               Style="{StaticResource SmallOutlineButtonStyle}" />
                     </StackPanel>
                     <ListBox ItemsSource="{Binding Composers}" SelectedItem="{Binding SelectedComposer}"
-                             DisplayMemberPath="Canonical" />
+                             DisplayMemberPath="Canonical"
+                             ctl:ScrollToSelection.Enabled="True" />
                   </DockPanel>
 
                   <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" />
@@ -899,7 +913,8 @@
                               Style="{StaticResource SmallOutlineButtonStyle}" />
                     </StackPanel>
                     <ListBox ItemsSource="{Binding Persons}" SelectedItem="{Binding SelectedPerson}"
-                             DisplayMemberPath="Canonical" />
+                             DisplayMemberPath="Canonical"
+                             ctl:ScrollToSelection.Enabled="True" />
                   </DockPanel>
 
                   <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" />
@@ -982,7 +997,8 @@
                               Style="{StaticResource SmallOutlineButtonStyle}" />
                     </StackPanel>
                     <ListBox ItemsSource="{Binding Ensembles}" SelectedItem="{Binding SelectedEnsemble}"
-                             DisplayMemberPath="DisplayName" />
+                             DisplayMemberPath="DisplayName"
+                             ctl:ScrollToSelection.Enabled="True" />
                   </DockPanel>
 
                   <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" />
@@ -1093,7 +1109,8 @@
                               Style="{StaticResource SmallOutlineButtonStyle}" />
                     </StackPanel>
                     <ListBox ItemsSource="{Binding Works}" SelectedItem="{Binding SelectedWork}"
-                             DisplayMemberPath="DisplayName" />
+                             DisplayMemberPath="DisplayName"
+                             ctl:ScrollToSelection.Enabled="True" />
                   </DockPanel>
 
                   <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" />
@@ -1190,6 +1207,7 @@
                     <DataGrid ItemsSource="{Binding AlbumOverrides}"
                               SelectedItem="{Binding SelectedAlbumOverride}"
                               SelectionMode="Single"
+                              ctl:ScrollToSelection.Enabled="True"
                               HorizontalScrollBarVisibility="Auto">
                       <DataGrid.Columns>
                         <DataGridTextColumn Header="フォルダ" Binding="{Binding Folder, UpdateSourceTrigger=PropertyChanged}" Width="2*" MinWidth="220"
@@ -1238,7 +1256,8 @@
                   <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Padding="1">
                     <DataGrid ItemsSource="{Binding Typos}"
                               SelectedItem="{Binding SelectedTypo}"
-                              SelectionMode="Single">
+                              SelectionMode="Single"
+                              ctl:ScrollToSelection.Enabled="True">
                       <DataGrid.Columns>
                         <DataGridTextColumn Header="パターン" Binding="{Binding Pattern, UpdateSourceTrigger=PropertyChanged}" Width="240"
                                             ElementStyle="{StaticResource EllipsisTextStyle}"
@@ -1292,6 +1311,7 @@
                            ItemsSource="{Binding ProtectedValues}"
                            SelectedItem="{Binding SelectedProtectedValue}"
                            DisplayMemberPath="Value"
+                           ctl:ScrollToSelection.Enabled="True"
                            HorizontalContentAlignment="Stretch" />
 
                   <StackPanel Grid.Row="2" Margin="0,10,0,0">
@@ -1308,20 +1328,47 @@
             <!-- 検証結果。エラーは保存を止める -->
             <Border Grid.Row="2" Style="{StaticResource NoticePanelBorderStyle}" Margin="0,12,0,0"
                     Visibility="{Binding Issues.Count, Converter={StaticResource CountToVisibility}}">
-              <ItemsControl ItemsSource="{Binding Issues}" MaxHeight="130">
-                <ItemsControl.Template>
-                  <ControlTemplate TargetType="ItemsControl">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="10,8">
-                      <ItemsPresenter />
-                    </ScrollViewer>
-                  </ControlTemplate>
-                </ItemsControl.Template>
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate>
-                    <TextBlock Style="{StaticResource NoticeItemTextStyle}" Text="{Binding Summary}" />
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
+              <DockPanel>
+                <!--
+                  閉じる導線。**消えるのは表示だけ**で、保存と「検証だけ実行」のたびに出し直される。
+                  直しようのない警告（既定辞書に元からある冗長な別名など）が居座ると、
+                  編集領域の高さを取り続ける。
+                -->
+                <Button DockPanel.Dock="Right" Content="閉じる"
+                        Command="{Binding DismissIssuesCommand}"
+                        Style="{StaticResource SmallOutlineButtonStyle}"
+                        VerticalAlignment="Top" Margin="8,8,10,8"
+                        ToolTip="この表示を閉じます。「検証だけ実行」でいつでも出し直せます" />
+                <!--
+                  行を押すと対象のエントリへ飛ぶ。**問題を出すだけでは直せない。**
+                  種別タブを選び直して一覧を目で辿る作業が挟まると、84 件並ぶ作品では
+                  警告を潰す気が失せる。ListBox にしているのは選択の見た目と
+                  キーボード操作をそのまま使うため。
+                -->
+                <ListBox ItemsSource="{Binding Issues}"
+                         SelectedItem="{Binding SelectedIssue}"
+                         MaxHeight="130"
+                         Background="Transparent" BorderThickness="0"
+                         HorizontalContentAlignment="Stretch"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                         ToolTip="行を押すと、その問題の対象エントリを開きます">
+                  <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                      <Setter Property="Padding" Value="7,2" />
+                      <!--
+                        選択済みの行をもう一度押したときは SelectionChanged が上がらない。
+                        「押しても何も起きない」を作らないよう、ここでも同じ移動を行う。
+                      -->
+                      <EventSetter Event="MouseLeftButtonUp" Handler="OnIssueRowClicked" />
+                    </Style>
+                  </ListBox.ItemContainerStyle>
+                  <ListBox.ItemTemplate>
+                    <DataTemplate>
+                      <TextBlock Style="{StaticResource NoticeItemTextStyle}" Text="{Binding Summary}" />
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+              </DockPanel>
             </Border>
           </Grid>
         </TabItem>
