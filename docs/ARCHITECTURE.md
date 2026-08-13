@@ -89,6 +89,7 @@ WPF / MVVM によるデスクトップアプリケーション本体。
 | `MainWindow.xaml(.cs)` | メイン画面 |
 | `AddToDictionaryWindow.xaml(.cs)` | 検査結果・手編集から辞書へ値を追加するダイアログ |
 | `MergeDictionaryWindow.xaml(.cs)` | 既定辞書からの取り込みダイアログ |
+| `CleanupDictionaryWindow.xaml(.cs)` | 索引に載らない別名を取り除く前の確認ダイアログ |
 | `App.xaml(.cs)` | アプリケーションエントリポイント。DI コンテナ・Serilog の初期化 |
 | `AppConst.cs` | アプリ層の定数 |
 

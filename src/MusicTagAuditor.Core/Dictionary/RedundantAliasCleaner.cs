@@ -51,7 +51,13 @@ public static class RedundantAliasCleaner
 
             composers.Add(entry with
             {
-                Aliases = Keep(entry.Aliases, owners, removed, DictionaryValidator.CATEGORY_COMPOSER, entry.Canonical),
+                Aliases = Keep(
+                    entry.Aliases,
+                    owners,
+                    removed,
+                    DictionaryValidator.CATEGORY_COMPOSER,
+                    entry.Canonical,
+                    guardSurname: true),
                 AliasesJa = Keep(entry.AliasesJa, owners, removed, DictionaryValidator.CATEGORY_COMPOSER, entry.Canonical),
             });
         }
@@ -157,12 +163,19 @@ public static class RedundantAliasCleaner
     /// **キーが空になる別名（空文字・記号だけ）は残す。** 索引に載らないのは同じだが、
     /// 衝突しているわけではないので掃除の対象にしない。こちらは検証が別の警告で報せる。
     /// </summary>
+    /// <param name="values">対象の別名。</param>
+    /// <param name="owners">キー → そのキーを既に使っている名前。</param>
+    /// <param name="removed">取り除いたものの記録先。</param>
+    /// <param name="category">種別の表示名。</param>
+    /// <param name="owner">エントリの表示名。</param>
+    /// <param name="guardSurname">姓の索引を痩せさせないようにするか。作曲家の <c>aliases</c> だけ true。</param>
     private static IReadOnlyList<string> Keep(
         IReadOnlyList<string>? values,
         Dictionary<string, string> owners,
         List<RemovedAlias> removed,
         string category,
-        string owner)
+        string owner,
+        bool guardSurname = false)
     {
         List<string> kept = [];
 
@@ -177,17 +190,37 @@ public static class RedundantAliasCleaner
                 continue;
             }
 
-            if (owners.TryGetValue(key, out string? existing))
+            if (!owners.TryGetValue(key, out string? existing))
             {
-                removed.Add(new RemovedAlias(category, owner, value, existing));
+                owners[key] = value;
+                kept.Add(value);
 
                 continue;
             }
 
-            owners[key] = value;
-            kept.Add(value);
+            // **姓の索引を痩せさせない。**<see cref="DictionaryIndex"/> は作曲家の aliases のうち
+            // 空白を含まないものだけを姓として索引に足す（R-203 / R-204 の判定に使う）。
+            // そのため `VonKarajan` を消して `Von Karajan` だけ残すと、正規化キーは同じでも
+            // 姓としては引けなくなる。**引ける範囲を変えないのが掃除の前提**なので、この形だけは残す。
+            // 検証の警告は残るが、挙動を黙って変えるよりは警告が残るほうがよい。
+            if (guardSurname && !HasSpace(value) && HasSpace(existing))
+            {
+                kept.Add(value);
+
+                continue;
+            }
+
+            removed.Add(new RemovedAlias(category, owner, value, existing));
         }
 
         return kept;
+    }
+
+    /// <summary>
+    /// 空白を含むかを判定する。<see cref="DictionaryIndex"/> の姓の判定と同じ条件にそろえる。
+    /// </summary>
+    private static bool HasSpace(string value)
+    {
+        return value.Contains(' ', StringComparison.Ordinal);
     }
 }
