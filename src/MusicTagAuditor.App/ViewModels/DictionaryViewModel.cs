@@ -21,6 +21,21 @@ namespace MusicTagAuditor.App.ViewModels;
 /// </summary>
 public sealed partial class DictionaryViewModel : ObservableObject
 {
+    /// <summary>
+    /// 種別タブの並び。**MainWindow.xaml の <c>TabItem</c> の並びと一致させること。**
+    /// 検証結果から該当のタブへ移動するために、種別と位置を突き合わせる。
+    /// </summary>
+    private static readonly string[] CATEGORY_TABS =
+    [
+        DictionaryValidator.CATEGORY_COMPOSER,
+        DictionaryValidator.CATEGORY_PERSON,
+        DictionaryValidator.CATEGORY_ENSEMBLE,
+        DictionaryValidator.CATEGORY_WORK,
+        DictionaryValidator.CATEGORY_OVERRIDE,
+        DictionaryValidator.CATEGORY_TYPO,
+        DictionaryValidator.CATEGORY_PROTECTED,
+    ];
+
     /// <summary>辞書の保持と保存。</summary>
     private readonly DictionaryStore _store;
 
@@ -81,6 +96,18 @@ public sealed partial class DictionaryViewModel : ObservableObject
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(RemoveProtectedValueCommand))]
     private ProtectedValueRowViewModel? _selectedProtectedValue;
+
+    /// <summary>
+    /// 種別タブの選択位置。検証結果からの移動で切り替える。
+    /// </summary>
+    [ObservableProperty]
+    private int _selectedCategoryIndex;
+
+    /// <summary>
+    /// 一覧で選んだ検証結果。選ぶと対象のエントリへ移動する（<see cref="Reveal"/>）。
+    /// </summary>
+    [ObservableProperty]
+    private DictionaryIssue? _selectedIssue;
 
     /// <summary>誤記のテスト欄に入れた文字列（docs/SPEC.md 7.3）。</summary>
     [ObservableProperty]
@@ -756,6 +783,114 @@ public sealed partial class DictionaryViewModel : ObservableObject
         {
             view.Refresh();
         }
+    }
+
+    /// <summary>
+    /// 検証結果を選んだら、その対象のエントリを開く。
+    /// </summary>
+    partial void OnSelectedIssueChanged(DictionaryIssue? value)
+    {
+        if (value is not null)
+        {
+            RevealIssue(value);
+        }
+    }
+
+    /// <summary>
+    /// 検証結果が指しているエントリを開く（docs/SPEC.md 7.3）。
+    ///
+    /// **問題を出すだけでは直せない。** 種別タブを選び直し、一覧を目で辿って対象を探す
+    /// 作業が挟まる。作品のように 84 件並ぶ一覧では、それだけで警告を潰す気が失せる。
+    ///
+    /// 突き合わせは <see cref="IDictionaryRow.SortKey"/>（＝一覧の見出し）と
+    /// <see cref="DictionaryIssue.Target"/> で行う。**検証は一覧の見出しと同じ文字列で
+    /// 対象を名指しする**約束にしてあるので、両者はそのまま突き合う。
+    ///
+    /// **同じ結果に対して何度呼んでもよい。** 既に選ばれている行をもう一度押したときも
+    /// View から呼ばれる（<c>ListBox</c> は選択が変わらないと通知を上げないため）。
+    /// </summary>
+    /// <param name="issue">開きたい検証結果。</param>
+    public void RevealIssue(DictionaryIssue issue)
+    {
+        ArgumentNullException.ThrowIfNull(issue);
+
+        switch (issue.Category)
+        {
+            case DictionaryValidator.CATEGORY_COMPOSER:
+                Reveal(issue, Composers, row => SelectedComposer = row);
+                break;
+
+            case DictionaryValidator.CATEGORY_PERSON:
+                Reveal(issue, Persons, row => SelectedPerson = row);
+                break;
+
+            case DictionaryValidator.CATEGORY_ENSEMBLE:
+                Reveal(issue, Ensembles, row => SelectedEnsemble = row);
+                break;
+
+            case DictionaryValidator.CATEGORY_WORK:
+                Reveal(issue, Works, row => SelectedWork = row);
+                break;
+
+            case DictionaryValidator.CATEGORY_OVERRIDE:
+                Reveal(issue, AlbumOverrides, row => SelectedAlbumOverride = row);
+                break;
+
+            case DictionaryValidator.CATEGORY_TYPO:
+                Reveal(issue, Typos, row => SelectedTypo = row);
+                break;
+
+            case DictionaryValidator.CATEGORY_PROTECTED:
+                Reveal(issue, ProtectedValues, row => SelectedProtectedValue = row);
+                break;
+
+            default:
+                StatusText = $"「{issue.Category}」に対応する一覧がありません。";
+                break;
+        }
+    }
+
+    /// <summary>
+    /// 対象の行を選んで見せる。
+    ///
+    /// 絞り込みは**対象を隠しているときだけ**外す。組み立てた絞り込みを毎回捨てると、
+    /// 警告を 1 件ずつ潰していく作業のほうが壊れる（ファイル一覧の導線と同じ扱い）。
+    /// 黙って外しもしない。何が起きたかはステータスに出す。
+    ///
+    /// 一覧のスクロールは View が行う（<c>ScrollToSelection</c>）。
+    /// </summary>
+    /// <typeparam name="T">編集行の型。</typeparam>
+    /// <param name="issue">開きたい検証結果。</param>
+    /// <param name="rows">対象の一覧。</param>
+    /// <param name="select">選択を入れる操作。</param>
+    private void Reveal<T>(DictionaryIssue issue, IEnumerable<T> rows, Action<T> select)
+        where T : class, IDictionaryRow
+    {
+        T? row = rows.FirstOrDefault(
+            candidate => string.Equals(candidate.SortKey, issue.Target, StringComparison.Ordinal));
+
+        if (row is null)
+        {
+            // 検証のあとに名前を書き換えると起きる。古い名前で探しても見つからない。
+            StatusText = $"{issue.Category}「{issue.Target}」は一覧に見つかりませんでした。"
+                + "「検証だけ実行」でやり直すと、今の内容に対する結果が出ます。";
+
+            return;
+        }
+
+        bool released = !Matches(row.SearchText);
+
+        if (released)
+        {
+            FilterText = string.Empty;
+        }
+
+        SelectedCategoryIndex = Array.IndexOf(CATEGORY_TABS, issue.Category);
+        select(row);
+
+        StatusText = released
+            ? $"{issue.Category}「{row.SortKey}」を開きました（対象を隠していた絞り込みを外しました）。"
+            : $"{issue.Category}「{row.SortKey}」を開きました。";
     }
 
     /// <summary>

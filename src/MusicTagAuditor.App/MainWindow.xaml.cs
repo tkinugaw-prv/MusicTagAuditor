@@ -1,8 +1,10 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Threading;
 using MusicTagAuditor.App.Interop;
 using MusicTagAuditor.App.ViewModels;
+using MusicTagAuditor.Core.Dictionary;
 
 namespace MusicTagAuditor.App;
 
@@ -103,6 +105,23 @@ public partial class MainWindow : Window
         if (DataContext is MainViewModel viewModel)
         {
             viewModel.NotifyTracksSelected(TrackGrid.SelectedItems.Count);
+        }
+    }
+
+    /// <summary>
+    /// 検証結果の行を押したら、その対象のエントリを開く。
+    ///
+    /// **既に選ばれている行を押したときのための導線。** 選択が変わる場合はビューモデルが
+    /// <c>SelectedIssue</c> の変化で同じ処理を行う。<c>ListBox</c> は選択が変わらないと
+    /// 通知を上げないため、それだけでは「もう一度押しても何も起きない」状態になる。
+    /// 移動は何度行っても同じ結果になるので、両方から呼ばれても差し支えない。
+    /// </summary>
+    private void OnIssueRowClicked(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is ListBoxItem { DataContext: DictionaryIssue issue } item
+            && ItemsControl.ItemsControlFromItemContainer(item)?.DataContext is DictionaryViewModel dictionary)
+        {
+            dictionary.RevealIssue(issue);
         }
     }
 

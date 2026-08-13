@@ -152,6 +152,100 @@ public sealed class DictionaryViewModelTests : IDisposable
     }
 
     /// <summary>
+    /// 検証結果を選ぶと、その対象のエントリが開くことを確認する。
+    ///
+    /// 種別タブの位置と、一覧の選択の両方が変わること。**問題を出すだけでは直せない。**
+    /// </summary>
+    [Fact]
+    public void 検証結果を選ぶと対象のエントリが開く()
+    {
+        DictionaryStore store = new(_root);
+
+        string composer = (store.Dictionary.Composers ?? [])[0].Canonical;
+
+        store.Save(store.Dictionary with
+        {
+            Works =
+            [
+                new WorkEntry { Composer = composer, Canonical = "Symphony No. 1" },
+
+                // 正規化キーが正規形と同じになる別名。同じエントリ内の重複として警告が出る。
+                new WorkEntry { Composer = composer, Canonical = "Symphony No. 7", Aliases = ["Symphony No.7"] },
+            ],
+        });
+
+        DictionaryViewModel viewModel = new(store);
+
+        viewModel.ValidateCommand.Execute(null);
+
+        DictionaryIssue issue = Assert.Single(
+            viewModel.Issues,
+            item => item.Target.EndsWith("Symphony No. 7", StringComparison.Ordinal));
+
+        viewModel.SelectedIssue = issue;
+
+        // 作品タブ（CATEGORY_TABS の 4 番目）へ切り替わり、当該の行が選ばれる。
+        Assert.Equal(3, viewModel.SelectedCategoryIndex);
+        Assert.Equal("Symphony No. 7", viewModel.SelectedWork?.Canonical);
+    }
+
+    /// <summary>
+    /// 対象を隠している絞り込みだけが外れることを確認する。
+    ///
+    /// 組み立てた絞り込みを毎回捨てると、警告を 1 件ずつ潰していく作業のほうが壊れる。
+    /// </summary>
+    [Fact]
+    public void 対象を隠している絞り込みだけ外れる()
+    {
+        DictionaryViewModel viewModel = CreateViewModel();
+
+        ComposerRowViewModel target = viewModel.Composers[0];
+
+        viewModel.ValidateCommand.Execute(null);
+
+        DictionaryIssue issue = new(
+            DictionaryIssueSeverity.Warning,
+            DictionaryValidator.CATEGORY_COMPOSER,
+            target.Canonical,
+            "テスト用の問題。");
+
+        // 対象に当たる絞り込みは残す。
+        viewModel.FilterText = target.Canonical;
+        viewModel.RevealIssue(issue);
+
+        Assert.Equal(target.Canonical, viewModel.FilterText);
+        Assert.Same(target, viewModel.SelectedComposer);
+
+        // 対象を隠す絞り込みは外す。
+        viewModel.FilterText = "この文字列に当たるエントリは無い";
+        viewModel.RevealIssue(issue);
+
+        Assert.Equal(string.Empty, viewModel.FilterText);
+        Assert.Same(target, viewModel.SelectedComposer);
+    }
+
+    /// <summary>
+    /// 対象が見つからないときに、黙って何も起きないのではなく理由が出ることを確認する。
+    /// 検証のあとに名前を書き換えると起きる。
+    /// </summary>
+    [Fact]
+    public void 対象が見つからなければ理由を出す()
+    {
+        DictionaryViewModel viewModel = CreateViewModel();
+
+        DictionaryIssue issue = new(
+            DictionaryIssueSeverity.Warning,
+            DictionaryValidator.CATEGORY_COMPOSER,
+            "辞書に無い名前",
+            "テスト用の問題。");
+
+        viewModel.RevealIssue(issue);
+
+        Assert.Null(viewModel.SelectedComposer);
+        Assert.Contains("見つかりませんでした", viewModel.StatusText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 作業ディレクトリを片付ける。
     /// </summary>
     public void Dispose()
