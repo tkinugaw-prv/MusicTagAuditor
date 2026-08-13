@@ -385,7 +385,7 @@ public static class DictionaryValidator
 
         foreach (WorkEntry work in dictionary.Works ?? [])
         {
-            string label = string.IsNullOrWhiteSpace(work.Canonical) ? "(空欄)" : work.Canonical;
+            string label = DescribeWork(work);
 
             if (string.IsNullOrWhiteSpace(work.Canonical))
             {
@@ -456,6 +456,23 @@ public static class DictionaryValidator
                 aliasOwners[scoped] = work.Canonical;
             }
         }
+    }
+
+    /// <summary>
+    /// 作品を問題の対象として名指しする文字列を作る。
+    ///
+    /// **作曲家を必ず添える。** 作品の自然キーは <c>composer</c> + <c>canonical</c> であり、
+    /// 「Symphony No. 7」だけでは誰の第 7 番なのか読めない。番号で呼ぶ作品は作曲家をまたいで
+    /// 何件も並ぶため、一覧のどの行を直せばよいのかが分からなくなる。
+    ///
+    /// 形は辞書タブの一覧の見出し（<c>作曲家: 作品名</c>）にそろえる。警告の文言をそのまま
+    /// 絞り込み欄に入れれば当該の行に辿り着ける。
+    /// </summary>
+    private static string DescribeWork(WorkEntry work)
+    {
+        string canonical = string.IsNullOrWhiteSpace(work.Canonical) ? "(空欄)" : work.Canonical;
+
+        return string.IsNullOrWhiteSpace(work.Composer) ? canonical : $"{work.Composer}: {canonical}";
     }
 
     /// <summary>
