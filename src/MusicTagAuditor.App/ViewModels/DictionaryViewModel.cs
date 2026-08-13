@@ -882,13 +882,13 @@ public sealed partial class DictionaryViewModel : ObservableObject
             return;
         }
 
-        AddView(Composers, nameof(ComposerRowViewModel.Canonical));
-        AddView(Persons, nameof(PersonRowViewModel.Canonical));
-        AddView(Ensembles, nameof(EnsembleRowViewModel.DisplayName));
-        AddView(Works, nameof(WorkRowViewModel.DisplayName));
-        AddView(AlbumOverrides, nameof(AlbumOverrideRowViewModel.Folder));
-        AddView(Typos, nameof(TypoRowViewModel.Pattern));
-        AddView(ProtectedValues, nameof(ProtectedValueRowViewModel.Value));
+        AddView(Composers);
+        AddView(Persons);
+        AddView(Ensembles);
+        AddView(Works);
+        AddView(AlbumOverrides);
+        AddView(Typos);
+        AddView(ProtectedValues);
     }
 
     /// <summary>
@@ -941,20 +941,23 @@ public sealed partial class DictionaryViewModel : ObservableObject
     /// コレクションの実体をそのまま書き出す。誤記（<c>typos</c>）は書かれた順に置換を重ねるため、
     /// 表示の都合で並べ替えたものを保存すると置換の結果が変わりうる。JSON の差分も無用に膨らむ。
     ///
-    /// 比較は既定の文字列比較（現在のカルチャ）に任せる。序数比較だと <c>Günter</c> のような
-    /// アクセント付きの名前が末尾に飛び、重複を見つけるという目的に合わない。
+    /// 比較は <see cref="NaturalOrder"/> に任せる。<c>SortDescriptions</c> はプロパティの
+    /// 既定の比較しか使えず、**番号を数として見られない**（<c>Symphony No. 10</c> が
+    /// <c>No. 4</c> より前に来る）。作品名は番号で呼ぶものが大半なので、それでは一覧を
+    /// 目で追えない。
     ///
     /// 並べ替えは読み込みと行の増減で効く。**編集中に行が動くことはない**（ライブ整列は入れない）。
     /// 打っている途中で行が跳ねると、どの行を編集していたのか見失う。
     /// </summary>
     /// <param name="source">対象のコレクション。</param>
-    /// <param name="sortPath">並べ替えに使うプロパティ名。</param>
-    private void AddView(System.Collections.IEnumerable source, string sortPath)
+    private void AddView(System.Collections.IEnumerable source)
     {
-        ICollectionView view = CollectionViewSource.GetDefaultView(source);
-        view.Filter = row => row is IDictionaryRow entry && Matches(entry.SearchText);
+        // 対象はすべて ObservableCollection なので、既定のビューは必ず ListCollectionView になる。
+        // 取り違えたら並べ替えが黙って効かなくなるだけなので、その場で落として気づけるようにする。
+        ListCollectionView view = (ListCollectionView)CollectionViewSource.GetDefaultView(source);
 
-        view.SortDescriptions.Add(new SortDescription(sortPath, ListSortDirection.Ascending));
+        view.Filter = row => row is IDictionaryRow entry && Matches(entry.SearchText);
+        view.CustomSort = NaturalOrderRowComparer.Instance;
 
         _views.Add(view);
     }

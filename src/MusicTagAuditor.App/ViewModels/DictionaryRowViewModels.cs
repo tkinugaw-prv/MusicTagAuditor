@@ -50,6 +50,12 @@ public interface IDictionaryRow
 {
     /// <summary>絞り込みの対象になる文字列をまとめたもの。</summary>
     string SearchText { get; }
+
+    /// <summary>
+    /// 一覧の並び順に使う文字列。一覧に出ている見出しと同じものにする。
+    /// 画面に出ていない値で並べると、並び順の理由が読み取れない。
+    /// </summary>
+    string SortKey { get; }
 }
 
 /// <summary>
@@ -84,6 +90,9 @@ public sealed partial class ComposerRowViewModel : ObservableObject, IDictionary
 
     /// <inheritdoc />
     public string SearchText => $"{Canonical}\n{AliasesText}\n{AliasesJaText}";
+
+    /// <inheritdoc />
+    public string SortKey => Canonical;
 
     /// <summary>
     /// 編集内容を辞書のエントリに戻す。
@@ -142,6 +151,9 @@ public sealed partial class PersonRowViewModel : ObservableObject, IDictionaryRo
 
     /// <inheritdoc />
     public string SearchText => $"{Canonical}\n{AliasesText}\n{AliasesJaText}";
+
+    /// <inheritdoc />
+    public string SortKey => Canonical;
 
     /// <summary>役割の表示用文字列。</summary>
     public string RolesText => string.Join(" / ", BuildRoles().Select(role => role switch
@@ -311,6 +323,9 @@ public sealed partial class EnsembleRowViewModel : ObservableObject, IDictionary
         $"{EntityId}\n{Canonical}\n{AliasesText}\n{AliasesJaText}\n"
         + string.Join('\n', Eras.Select(era => era.Canonical));
 
+    /// <inheritdoc />
+    public string SortKey => DisplayName;
+
     /// <summary>
     /// 編集内容を辞書のエントリに戻す。
     /// </summary>
@@ -400,6 +415,9 @@ public sealed partial class WorkRowViewModel : ObservableObject, IDictionaryRow
     /// <inheritdoc />
     public string SearchText => $"{Composer}\n{Canonical}\n{AliasesText}\n{AliasesJaText}";
 
+    /// <inheritdoc />
+    public string SortKey => DisplayName;
+
     /// <summary>一覧に出す名前。作曲家が違えば別の作品なので、作曲家も添える（7.4.1）。</summary>
     public string DisplayName => Composer.Length == 0
         ? Canonical
@@ -478,6 +496,9 @@ public sealed partial class AlbumOverrideRowViewModel : ObservableObject, IDicti
     /// <inheritdoc />
     public string SearchText => $"{Folder}\n{Composer}\n{WorkName}\n{Note}";
 
+    /// <inheritdoc />
+    public string SortKey => Folder;
+
     /// <summary>
     /// 編集内容を辞書のエントリに戻す。ディスク番号として読めない入力は「全ディスク」として扱う。
     /// </summary>
@@ -537,6 +558,9 @@ public sealed partial class TypoRowViewModel : ObservableObject, IDictionaryRow
     /// <inheritdoc />
     public string SearchText => $"{Pattern}\n{Replacement}\n{Note}";
 
+    /// <inheritdoc />
+    public string SortKey => Pattern;
+
     /// <summary>正規表現として妥当か。保存前に画面で分かるようにする（docs/SPEC.md 7.3）。</summary>
     public bool IsValidPattern => DictionaryIndex.IsValidPattern(Pattern);
 
@@ -585,4 +609,7 @@ public sealed partial class ProtectedValueRowViewModel : ObservableObject, IDict
 
     /// <inheritdoc />
     public string SearchText => Value;
+
+    /// <inheritdoc />
+    public string SortKey => Value;
 }

@@ -58,6 +58,37 @@ public sealed class DictionaryViewModelTests : IDisposable
     }
 
     /// <summary>
+    /// 作品の一覧が、番号を数として並べることを確認する。
+    ///
+    /// 文字列比較のままだと <c>No. 10</c> が <c>No. 4</c> より前に来る。
+    /// **作品名は番号で呼ぶものが大半**なので、それでは一覧を目で追えない。
+    /// </summary>
+    [Fact]
+    public void 作品の一覧は番号を数として並べる()
+    {
+        DictionaryStore store = new(_root);
+
+        string composer = (store.Dictionary.Composers ?? [])[0].Canonical;
+
+        store.Save(store.Dictionary with
+        {
+            Works =
+            [
+                new WorkEntry { Composer = composer, Canonical = "Symphony No. 10" },
+                new WorkEntry { Composer = composer, Canonical = "Symphony No. 4" },
+                new WorkEntry { Composer = composer, Canonical = "Symphony No. 15" },
+                new WorkEntry { Composer = composer, Canonical = "Symphony No. 5" },
+            ],
+        });
+
+        DictionaryViewModel viewModel = new(store);
+
+        string[] shown = [.. View(viewModel.Works).Cast<WorkRowViewModel>().Select(row => row.Canonical)];
+
+        Assert.Equal(["Symphony No. 4", "Symphony No. 5", "Symphony No. 10", "Symphony No. 15"], shown);
+    }
+
+    /// <summary>
     /// 表示の並べ替えが、保存に使うコレクションの順序を変えないことを確認する。
     ///
     /// **誤記（<c>typos</c>）は書かれた順に置換を重ねる。** 表示の都合で並べ替えたものを
