@@ -86,6 +86,27 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// ファイル一覧に出ている行をすべて選ぶ。
+    ///
+    /// 選ばれるのは<b>絞り込みで残っている行だけ</b>である（<c>DataGrid.Items</c> はビュー）。
+    /// フォルダをまたいだ修正では、絞り込んだ結果の全体が一括入力の対象になる。
+    ///
+    /// **先に編集中の行を確定させる。** 編集を開いたまま選択を広げると、DataGrid は
+    /// 開いている行から抜けられず選択が途中で止まる（<see cref="OnTrackGridKeyboardFocusWithinChanged"/>）。
+    /// </summary>
+    private void OnSelectAllTracks(object sender, RoutedEventArgs e)
+    {
+        _ = TrackGrid.CommitEdit(DataGridEditingUnit.Row, exitEditingMode: true);
+
+        TrackGrid.SelectAll();
+
+        if (DataContext is MainViewModel viewModel)
+        {
+            viewModel.NotifyTracksSelected(TrackGrid.SelectedItems.Count);
+        }
+    }
+
+    /// <summary>
     /// セルの編集が終わったら、見送っていた絞り込みを掛け直させる。
     /// </summary>
     private void OnTrackCellEditEnding(object sender, DataGridCellEditEndingEventArgs e)

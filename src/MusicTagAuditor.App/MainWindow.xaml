@@ -532,11 +532,20 @@
                               ctl:Placeholder.Text="選択行に入れる値（空のまま実行するとタグを消します）"
                               Suggestions="{Binding BulkSuggestions}"
                               Text="{Binding BulkValue, UpdateSourceTrigger=PropertyChanged}" />
-              <Button Grid.Row="1" Grid.Column="3" Content="選択行に一括入力"
-                      Command="{Binding BulkInputCommand}"
-                      CommandParameter="{Binding SelectedItems, ElementName=TrackGrid}"
-                      Margin="14,8,0,0"
-                      ToolTip="選択した行すべてに同じ値を入れます。空欄のまま押すとタグを消します" />
+              <!--
+                「全選択」は絞り込みの結果に対して効く（DataGrid.Items はビュー）。
+                Ctrl+A でも同じことはできるが、**一覧にフォーカスが無いと効かない。**
+                絞り込み欄や値の欄で手を止めたまま全体へ一括入力できるように、
+                押せる入口を「選択行に一括入力」の隣に置く。
+              -->
+              <StackPanel Grid.Row="1" Grid.Column="3" Orientation="Horizontal" Margin="14,8,0,0">
+                <Button Content="全選択" Click="OnSelectAllTracks" Margin="0,0,8,0"
+                        ToolTip="いま一覧に出ている行（絞り込みの結果）をすべて選びます" />
+                <Button Content="選択行に一括入力"
+                        Command="{Binding BulkInputCommand}"
+                        CommandParameter="{Binding SelectedItems, ElementName=TrackGrid}"
+                        ToolTip="選択した行すべてに同じ値を入れます。空欄のまま押すとタグを消します" />
+              </StackPanel>
             </Grid>
 
             <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Padding="1">
@@ -1308,20 +1317,32 @@
             <!-- 検証結果。エラーは保存を止める -->
             <Border Grid.Row="2" Style="{StaticResource NoticePanelBorderStyle}" Margin="0,12,0,0"
                     Visibility="{Binding Issues.Count, Converter={StaticResource CountToVisibility}}">
-              <ItemsControl ItemsSource="{Binding Issues}" MaxHeight="130">
-                <ItemsControl.Template>
-                  <ControlTemplate TargetType="ItemsControl">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="10,8">
-                      <ItemsPresenter />
-                    </ScrollViewer>
-                  </ControlTemplate>
-                </ItemsControl.Template>
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate>
-                    <TextBlock Style="{StaticResource NoticeItemTextStyle}" Text="{Binding Summary}" />
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
+              <DockPanel>
+                <!--
+                  閉じる導線。**消えるのは表示だけ**で、保存と「検証だけ実行」のたびに出し直される。
+                  直しようのない警告（既定辞書に元からある冗長な別名など）が居座ると、
+                  編集領域の高さを取り続ける。
+                -->
+                <Button DockPanel.Dock="Right" Content="閉じる"
+                        Command="{Binding DismissIssuesCommand}"
+                        Style="{StaticResource SmallOutlineButtonStyle}"
+                        VerticalAlignment="Top" Margin="8,8,10,8"
+                        ToolTip="この表示を閉じます。「検証だけ実行」でいつでも出し直せます" />
+                <ItemsControl ItemsSource="{Binding Issues}" MaxHeight="130">
+                  <ItemsControl.Template>
+                    <ControlTemplate TargetType="ItemsControl">
+                      <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="10,8">
+                        <ItemsPresenter />
+                      </ScrollViewer>
+                    </ControlTemplate>
+                  </ItemsControl.Template>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <TextBlock Style="{StaticResource NoticeItemTextStyle}" Text="{Binding Summary}" />
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </DockPanel>
             </Border>
           </Grid>
         </TabItem>

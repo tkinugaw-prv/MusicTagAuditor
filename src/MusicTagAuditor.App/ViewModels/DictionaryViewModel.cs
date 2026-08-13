@@ -667,6 +667,23 @@ public sealed partial class DictionaryViewModel : ObservableObject
                 + $" 警告 {Issues.Count(issue => issue.Severity == DictionaryIssueSeverity.Warning):N0} 件。");
     }
 
+    /// <summary>
+    /// 検証結果の表示を閉じる。
+    ///
+    /// **消えるのは表示だけ。** 検証は保存と「検証だけ実行」のたびにやり直すので、
+    /// 問題が残っていれば同じものがまた出る。エラーがあれば保存も止まったままである。
+    ///
+    /// 警告だけの状態（既定辞書に元からある冗長な別名など）では、直しようがないまま
+    /// 一覧の下に居座り、編集領域の高さを取り続ける。閉じる手段が無いのは邪魔でしかない。
+    /// </summary>
+    [RelayCommand]
+    private void DismissIssues()
+    {
+        Issues.Clear();
+
+        StatusText = "検証結果の表示を閉じました。「検証だけ実行」でいつでも出し直せます。";
+    }
+
     /// <summary>作曲家を削除できるか。</summary>
     private bool CanRemoveComposer()
     {
@@ -865,13 +882,13 @@ public sealed partial class DictionaryViewModel : ObservableObject
             return;
         }
 
-        AddView(Composers);
-        AddView(Persons);
-        AddView(Ensembles);
-        AddView(Works);
-        AddView(AlbumOverrides);
-        AddView(Typos);
-        AddView(ProtectedValues);
+        AddView(Composers, nameof(ComposerRowViewModel.Canonical));
+        AddView(Persons, nameof(PersonRowViewModel.Canonical));
+        AddView(Ensembles, nameof(EnsembleRowViewModel.DisplayName));
+        AddView(Works, nameof(WorkRowViewModel.DisplayName));
+        AddView(AlbumOverrides, nameof(AlbumOverrideRowViewModel.Folder));
+        AddView(Typos, nameof(TypoRowViewModel.Pattern));
+        AddView(ProtectedValues, nameof(ProtectedValueRowViewModel.Value));
     }
 
     /// <summary>
@@ -918,12 +935,26 @@ public sealed partial class DictionaryViewModel : ObservableObject
     }
 
     /// <summary>
-    /// 絞り込みビューを 1 件登録する。
+    /// 絞り込みビューを 1 件登録し、名前の昇順で並べる。
+    ///
+    /// **並べるのは表示だけで、保存する順序は変えない。**<see cref="BuildDictionary"/> は
+    /// コレクションの実体をそのまま書き出す。誤記（<c>typos</c>）は書かれた順に置換を重ねるため、
+    /// 表示の都合で並べ替えたものを保存すると置換の結果が変わりうる。JSON の差分も無用に膨らむ。
+    ///
+    /// 比較は既定の文字列比較（現在のカルチャ）に任せる。序数比較だと <c>Günter</c> のような
+    /// アクセント付きの名前が末尾に飛び、重複を見つけるという目的に合わない。
+    ///
+    /// 並べ替えは読み込みと行の増減で効く。**編集中に行が動くことはない**（ライブ整列は入れない）。
+    /// 打っている途中で行が跳ねると、どの行を編集していたのか見失う。
     /// </summary>
-    private void AddView(System.Collections.IEnumerable source)
+    /// <param name="source">対象のコレクション。</param>
+    /// <param name="sortPath">並べ替えに使うプロパティ名。</param>
+    private void AddView(System.Collections.IEnumerable source, string sortPath)
     {
         ICollectionView view = CollectionViewSource.GetDefaultView(source);
         view.Filter = row => row is IDictionaryRow entry && Matches(entry.SearchText);
+
+        view.SortDescriptions.Add(new SortDescription(sortPath, ListSortDirection.Ascending));
 
         _views.Add(view);
     }
