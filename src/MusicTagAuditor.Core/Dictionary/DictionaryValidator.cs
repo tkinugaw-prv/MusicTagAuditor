@@ -198,7 +198,12 @@ public static class DictionaryValidator
             ValidateEnsembleCanonical(issues, ensemble, eras, label);
             ValidateEras(issues, eras, label);
 
+            // **時代分割の正規形どうしは畳んでから照合する。** 改名したあと元の名前に戻った団体は、
+            // 同じ正規形が 2 つの区分に現れる（既定辞書の uk-philharmonia は 1964 年までと 1977 年以降が
+            // どちらも Philharmonia Orchestra）。これは重複した別名ではなく、消す先も無い。
+            // 畳まないと「直しようのない警告」が居座り、辞書を掃除しきっても 0 件にならない。
             IEnumerable<string> names = eras.Select(era => era.Canonical)
+                .DistinctBy(NormalizationKey.Create, StringComparer.Ordinal)
                 .Concat(ensemble.Canonical is null ? [] : [ensemble.Canonical])
                 .Concat(ensemble.Aliases ?? [])
                 .Concat(ensemble.AliasesJa ?? []);
@@ -467,9 +472,17 @@ public static class DictionaryValidator
     ///
     /// 形は辞書タブの一覧の見出し（<c>作曲家: 作品名</c>）にそろえる。警告の文言をそのまま
     /// 絞り込み欄に入れれば当該の行に辿り着ける。
+    ///
+    /// **公開しているのは、作品を名指しする形をこの 1 箇所に閉じ込めるため。**
+    /// <see cref="RedundantAliasCleaner"/> も同じ形で対象を示す必要がある。別々に組み立てると、
+    /// 検証と掃除で違う名前が出て、同じ作品の話だと読み取れなくなる。
     /// </summary>
-    private static string DescribeWork(WorkEntry work)
+    /// <param name="work">対象の作品。</param>
+    /// <returns>一覧の見出しと同じ形の名前。</returns>
+    public static string DescribeWork(WorkEntry work)
     {
+        ArgumentNullException.ThrowIfNull(work);
+
         string canonical = string.IsNullOrWhiteSpace(work.Canonical) ? "(空欄)" : work.Canonical;
 
         return string.IsNullOrWhiteSpace(work.Composer) ? canonical : $"{work.Composer}: {canonical}";

@@ -127,8 +127,8 @@ public static class DictionaryEditor
         ComposerEntry target = composers[index];
 
         composers[index] = IsJapanese(alias)
-            ? target with { AliasesJa = Append(target.AliasesJa, alias) }
-            : target with { Aliases = Append(target.Aliases, alias) };
+            ? target with { AliasesJa = Append(target.AliasesJa, alias, [target.Canonical, .. target.Aliases ?? []]) }
+            : target with { Aliases = Append(target.Aliases, alias, [target.Canonical, .. target.AliasesJa ?? []]) };
 
         return dictionary with { Composers = composers };
     }
@@ -149,8 +149,8 @@ public static class DictionaryEditor
         PersonEntry target = persons[index];
 
         persons[index] = IsJapanese(alias)
-            ? target with { AliasesJa = Append(target.AliasesJa, alias) }
-            : target with { Aliases = Append(target.Aliases, alias) };
+            ? target with { AliasesJa = Append(target.AliasesJa, alias, [target.Canonical, .. target.Aliases ?? []]) }
+            : target with { Aliases = Append(target.Aliases, alias, [target.Canonical, .. target.AliasesJa ?? []]) };
 
         return dictionary with { Persons = persons };
     }
@@ -170,9 +170,12 @@ public static class DictionaryEditor
 
         EnsembleEntry target = ensembles[index];
 
+        // 団体は正規形が複数ありうる（時代分割）。そのすべてが別名の先客になる。
+        string[] canonicals = [.. GetEnsembleNames(target)];
+
         ensembles[index] = IsJapanese(alias)
-            ? target with { AliasesJa = Append(target.AliasesJa, alias) }
-            : target with { Aliases = Append(target.Aliases, alias) };
+            ? target with { AliasesJa = Append(target.AliasesJa, alias, [.. canonicals, .. target.Aliases ?? []]) }
+            : target with { Aliases = Append(target.Aliases, alias, [.. canonicals, .. target.AliasesJa ?? []]) };
 
         return dictionary with { Ensembles = ensembles };
     }
@@ -302,8 +305,8 @@ public static class DictionaryEditor
 
             works[index] = target with
             {
-                Aliases = Merge(target.Aliases, latin),
-                AliasesJa = Merge(target.AliasesJa, japanese),
+                Aliases = Merge(target.Aliases, latin, [target.Canonical, .. target.AliasesJa ?? []]),
+                AliasesJa = Merge(target.AliasesJa, japanese, [target.Canonical, .. target.Aliases ?? []]),
             };
 
             return dictionary with { Works = works };
@@ -500,6 +503,9 @@ public static class DictionaryEditor
 
     /// <summary>
     /// 別名をラテン文字と日本語に振り分ける。正規形と同じ値、および重複は落とす。
+    ///
+    /// **重複の判定は正規化キーで行う。** 字面で畳むと <c>Symphony No.7</c> と
+    /// <c>Symphony No. 7</c> が両方残り、索引には片方しか載らないまま警告になる。
     /// </summary>
     private static (string[] Latin, string[] Japanese) SplitByScript(IEnumerable<string>? aliases, string canonical)
     {
@@ -510,29 +516,57 @@ public static class DictionaryEditor
             .. (aliases ?? [])
                 .Select(alias => alias.Trim())
                 .Where(alias => alias.Length > 0 && NormalizationKey.Create(alias) != canonicalKey)
-                .Distinct(StringComparer.Ordinal),
+                .DistinctBy(NormalizationKey.Create, StringComparer.Ordinal),
         ];
 
         return ([.. cleaned.Where(alias => !IsJapanese(alias))], [.. cleaned.Where(IsJapanese)]);
     }
 
     /// <summary>
-    /// 別名の一覧に 1 件足す。既にあれば足さない。
+    /// 別名の一覧に 1 件足す。
     /// </summary>
-    private static IReadOnlyList<string> Append(IReadOnlyList<string>? values, string value)
+    private static IReadOnlyList<string> Append(IReadOnlyList<string>? values, string value, IEnumerable<string> occupied)
     {
-        IReadOnlyList<string> current = values ?? [];
-
-        return current.Contains(value, StringComparer.Ordinal) ? current : [.. current, value];
+        return Merge(values, [value], occupied);
     }
 
     /// <summary>
-    /// 別名の一覧をまとめる。既にあるものは足さない。
+    /// 別名の一覧をまとめる。
+    ///
+    /// **判定は正規化キーで行う。字面の比較では足りない。** 索引は正規化キーで先勝ちに作られるため
+    /// （<see cref="DictionaryIndex"/>）、キーが同じ別名を足しても引けるようにはならず、
+    /// <see cref="DictionaryValidator"/> の警告だけが増える。<c>Symphony No.7</c> を
+    /// <c>Symphony No. 7</c> の隣に置いても意味が無いのはこのため。
     /// </summary>
-    private static IReadOnlyList<string> Merge(IReadOnlyList<string>? values, IEnumerable<string> added)
+    /// <param name="values">足す先の一覧。</param>
+    /// <param name="added">足す候補。</param>
+    /// <param name="occupied">同じエントリが既に使っている名前（正規形と、もう一方の別名の一覧）。</param>
+    /// <returns>足した後の一覧。</returns>
+    private static IReadOnlyList<string> Merge(
+        IReadOnlyList<string>? values,
+        IEnumerable<string> added,
+        IEnumerable<string> occupied)
     {
         IReadOnlyList<string> current = values ?? [];
 
-        return [.. current, .. added.Where(value => !current.Contains(value, StringComparer.Ordinal))];
+        HashSet<string> keys = new(
+            current.Concat(occupied).Select(NormalizationKey.Create).Where(key => key.Length > 0),
+            StringComparer.Ordinal);
+
+        List<string> result = [.. current];
+
+        foreach (string value in added)
+        {
+            string key = NormalizationKey.Create(value);
+
+            // キーが空になる別名（記号だけ）は索引に載らないが、衝突しているわけではない。
+            // ここで弾くと検証の警告と食い違うので通す。
+            if (key.Length == 0 || keys.Add(key))
+            {
+                result.Add(value);
+            }
+        }
+
+        return result;
     }
 }
