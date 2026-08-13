@@ -61,10 +61,29 @@ public static class WorksImport
             return 1;
         }
 
+        // **正規化キーが正規形と同じになる別名を落としてから入れる。**
+        // 雛形のエイリアスはフォルダ名そのままなので、`canonical` に `Symphony No. 7` と書くと
+        // 雛形が集めた `Symphony No.7` が同じキーで残る。索引は先勝ちで後者を捨てるため
+        // 引ける範囲は変わらないが、警告だけが作品の数だけ積み上がる（2026-08-14 に 41 件）。
+        IReadOnlyList<RemovedAlias> dropped;
+        (works, dropped) = RedundantAliasCleaner.CleanWorks(works);
+
         DictionaryStore store = new(dictionaryDirectory);
 
         Console.WriteLine($"辞書: {store.FilePath}");
         Console.WriteLine($"取り込み前: {DictionarySummary.Describe(store.Dictionary)}");
+
+        // 落としたものは黙って捨てず、必ず出す。雛形を書いた本人が「登録したのに一覧に無い」と
+        // 迷わないようにするため。
+        if (dropped.Count > 0)
+        {
+            Console.WriteLine($"冗長な別名を {dropped.Count} 件落としました（書かなくても引けます）:");
+
+            foreach (RemovedAlias removed in dropped)
+            {
+                Console.WriteLine($"  {removed.Summary}");
+            }
+        }
 
         TagDictionary merged = store.Dictionary with
         {

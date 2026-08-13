@@ -11,15 +11,18 @@ namespace MusicTagAuditor.Core.Tests.Dictionary;
 public sealed class DictionaryValidatorTests
 {
     /// <summary>
-    /// 同梱の既定辞書がエラーを持たないことを確認する。
-    /// 既定辞書が検証を通らない状態で配るわけにはいかない。
+    /// 同梱の既定辞書が問題を 1 件も持たないことを確認する。
+    ///
+    /// **警告まで 0 件であることを見る。** 既定辞書は初回起動時にそのまま利用者辞書へコピーされる。
+    /// 冗長な別名が混じっていると、利用者は自分で足した覚えのない警告を最初から抱えることになり、
+    /// 自分が起こした問題との区別が付かなくなる（2026-08-14 に 22 件を削除した）。
     /// </summary>
     [Fact]
-    public void DefaultDictionaryHasNoError()
+    public void DefaultDictionaryHasNoIssue()
     {
         IReadOnlyList<DictionaryIssue> issues = DictionaryValidator.Validate(DictionaryLoader.LoadDefault());
 
-        Assert.DoesNotContain(issues, issue => issue.Severity == DictionaryIssueSeverity.Error);
+        Assert.Empty(issues);
     }
 
     /// <summary>
@@ -234,7 +237,7 @@ public sealed class DictionaryValidatorTests
                     [
                         new EnsembleEra { Until = 1964, Canonical = "Philharmonia Orchestra" },
                         new EnsembleEra { From = 1964, Until = 1977, Canonical = "New Philharmonia Orchestra" },
-                        new EnsembleEra { From = 1977, Canonical = "Philharmonia Orchestra 2" },
+                        new EnsembleEra { From = 1977, Canonical = "Philharmonia Orchestra" },
                     ],
                 },
             ],
@@ -245,6 +248,65 @@ public sealed class DictionaryValidatorTests
         Assert.DoesNotContain(issues, issue =>
             issue.Message.Contains("隙間", StringComparison.Ordinal)
             || issue.Message.Contains("重なって", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// 改名して元の名前に戻った団体を、別名の重複として報せないことを確認する。
+    ///
+    /// 既定辞書の <c>uk-philharmonia</c> は 1964 年までと 1977 年以降がどちらも
+    /// <c>Philharmonia Orchestra</c> である。**これは重複した別名ではなく、消す先も無い。**
+    /// 警告にすると、辞書を掃除しきっても消えない 1 件が残り続ける。
+    /// </summary>
+    [Fact]
+    public void AcceptsRepeatedEraCanonical()
+    {
+        TagDictionary dictionary = new()
+        {
+            Ensembles =
+            [
+                new EnsembleEntry
+                {
+                    EntityId = "uk-philharmonia",
+                    Eras =
+                    [
+                        new EnsembleEra { Until = 1964, Canonical = "Philharmonia Orchestra" },
+                        new EnsembleEra { From = 1964, Until = 1977, Canonical = "New Philharmonia Orchestra" },
+                        new EnsembleEra { From = 1977, Canonical = "Philharmonia Orchestra" },
+                    ],
+                },
+            ],
+        };
+
+        Assert.Empty(DictionaryValidator.Validate(dictionary));
+    }
+
+    /// <summary>
+    /// 時代分割を持つ団体でも、別名どうしの重複は変わらず報せることを確認する。
+    /// 区分の正規形を畳んだせいで、本当に冗長な別名まで見逃さないための歯止め。
+    /// </summary>
+    [Fact]
+    public void StillDetectsRedundantAliasOnEnsembleWithEras()
+    {
+        TagDictionary dictionary = new()
+        {
+            Ensembles =
+            [
+                new EnsembleEntry
+                {
+                    EntityId = "uk-philharmonia",
+                    Eras =
+                    [
+                        new EnsembleEra { Until = 1964, Canonical = "Philharmonia Orchestra" },
+                        new EnsembleEra { From = 1964, Canonical = "New Philharmonia Orchestra" },
+                    ],
+                    Aliases = ["Philharmonia  Orchestra"],
+                },
+            ],
+        };
+
+        Assert.Contains(
+            DictionaryValidator.Validate(dictionary),
+            issue => issue.Message.Contains("同じエントリ内で重複", StringComparison.Ordinal));
     }
 
     /// <summary>
