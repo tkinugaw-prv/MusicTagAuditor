@@ -338,6 +338,40 @@ public sealed class DictionaryValidatorTests
     }
 
     /// <summary>
+    /// 個別例外の年が 4 桁でなければエラーにすることを確認する（docs/TAGGING_POLICY.md 2.4）。
+    ///
+    /// **ここに書いた値はアルバム名にそのまま入る。** ISO 形式や範囲表記を通すと、
+    /// R-104 がタグに対して禁じている形が辞書経由で復活する。
+    /// </summary>
+    [Theory]
+    [InlineData("1993-01-22T08:00:00Z")]
+    [InlineData("1971/1972")]
+    [InlineData("71")]
+    public void DetectsInvalidOverrideDate(string date)
+    {
+        TagDictionary dictionary = new()
+        {
+            AlbumOverrides = [new AlbumOverrideEntry { Folder = "ベートーヴェン", Date = date, Note = "主作品の年" }],
+        };
+
+        Assert.True(DictionaryValidator.HasError(DictionaryValidator.Validate(dictionary)));
+    }
+
+    /// <summary>
+    /// 年だけを指定した個別例外は「何もしない例外」ではないことを確認する（3.5 規則2）。
+    /// </summary>
+    [Fact]
+    public void AcceptsOverrideWithDateOnly()
+    {
+        TagDictionary dictionary = new()
+        {
+            AlbumOverrides = [new AlbumOverrideEntry { Folder = "ベートーヴェン", Date = "1971", Note = "主作品の年" }],
+        };
+
+        Assert.Empty(DictionaryValidator.Validate(dictionary));
+    }
+
+    /// <summary>
     /// 種別をまたいだ同名は警告に留まることを確認する。
     /// 照合の優先順位が変わるだけで、索引そのものは壊れない。
     /// </summary>

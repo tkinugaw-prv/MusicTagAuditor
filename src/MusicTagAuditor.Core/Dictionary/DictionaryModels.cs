@@ -164,6 +164,15 @@ public sealed record AlbumOverrideEntry
     /// <summary>作品名を明示する。版の違い（規則4）・同一演奏の別リリース（規則7）で使う。</summary>
     public string? WorkName { get; init; }
 
+    /// <summary>
+    /// 単位の年を明示する。主作品 + カップリングで録音年が割れている場合に使う（3.5 規則2）。
+    ///
+    /// **主作品と併録曲が別セッションなのは普通のこと**（交響曲 1971 + 序曲 1972）。
+    /// フォルダを分ければ 1 枚のアルバムが割れ（規則3）、年を揃えればタグが実際の録音年と
+    /// 食い違う。どれが主作品かは機械には決められないので、ここに人が書く。
+    /// </summary>
+    public string? Date { get; init; }
+
     /// <summary>アルバム名の対象外にするか。本物のコンピレーション（規則6）で使う。</summary>
     public bool Exclude { get; init; }
 

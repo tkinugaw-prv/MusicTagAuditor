@@ -1228,7 +1228,9 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        AlbumOverrideViewModel viewModel = new(_dictionaryStore.Dictionary, unit);
+        // 保留の種類をダイアログへ渡す。年の割れで開いたときは対象外を選ばせない（7.4.4）。
+        AlbumOverrideViewModel viewModel = new(
+            _dictionaryStore.Dictionary, unit, SelectedChange.Change.HoldReason);
 
         AlbumOverrideWindow window = new(viewModel)
         {
@@ -1251,12 +1253,13 @@ public sealed partial class MainViewModel : ObservableObject
             viewModel.Apply,
             message,
             () => Log.Information(
-                "個別例外を辞書に追加した folder={Folder} disc={Disc} exclude={Exclude} composer={Composer} work={Work}",
+                "個別例外を辞書に追加した folder={Folder} disc={Disc} exclude={Exclude} composer={Composer} work={Work} date={Date}",
                 entry.Folder,
                 entry.Disc,
                 entry.Exclude,
                 entry.Composer,
-                entry.WorkName));
+                entry.WorkName,
+                entry.Date));
     }
 
     /// <summary>
@@ -1475,27 +1478,44 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>
     /// 選択中の行から個別例外を足せるか（docs/SPEC.md 7.3.2）。
     ///
-    /// 対象は R-504 の <see cref="HoldReason.WorkUnknown"/> と R-501 の明細。どちらも
-    /// 「主作品が定まらない」単位を指しており、個別例外がまさにそれを埋める。
+    /// 対象は R-504 の <see cref="HoldReason.WorkUnknown"/>・<see cref="HoldReason.DateUnknown"/> と
+    /// R-501 の明細。作品が定まらない単位には作曲家・作品名を、年が割れている単位には主作品の年を
+    /// 書いて解く（3.5 規則2・規則5・規則6）。
     ///
-    /// **<c>date</c> と <c>artist</c> の保留では出さない**（2026-08-15）。個別例外に書けるのは
-    /// 作曲家と作品名だけで、この 2 つは**書いても解けない**。にもかかわらず対象外にすれば
-    /// 一覧からは消えるので、タグが割れたまま消える経路になっていた。それは規則2 の保留を
-    /// 規則6 で握り潰すのと同じで、直したつもりの単位が残る（SPEC 7.4.4）。
-    /// そちらはファイル一覧タブでタグを直すか、フォルダを分けて解く。
+    /// **<c>artist</c> の保留では出さない。** 個別例外に <c>artist</c> は無いので**書いても
+    /// 解けない**のに、対象外にすれば一覧からは消える。タグが割れたまま検出だけ消えた単位が
+    /// できる（SPEC 7.4.4）。そちらはファイル一覧タブでタグを直すか、フォルダを分けて解く。
+    ///
+    /// 年の保留から開いた場合、ダイアログ側で対象外を選べなくする（<see cref="AlbumOverrideViewModel.CanExclude"/>）。
+    /// ここまで来た単位は作品が決まっている＝主作品が定まっているので、規則6 には当たらない。
     /// </summary>
     private bool CanAddAlbumOverrideFromChange()
     {
-        if (IsScanning || SelectedChange is null)
+        if (IsScanning || SelectedChange is null || FindUnit(SelectedChange) is not AlbumUnit unit)
         {
             return false;
         }
 
-        bool fromAlbumName = SelectedChange.RuleId == AlbumNameRule.RULE_ID
-            && SelectedChange.Change.HoldReason == HoldReason.WorkUnknown;
+        if (SelectedChange.RuleId == AlbumNameCollisionRule.RULE_ID)
+        {
+            return true;
+        }
 
-        return (fromAlbumName || SelectedChange.RuleId == AlbumNameCollisionRule.RULE_ID)
-            && FindUnit(SelectedChange) is not null;
+        if (SelectedChange.RuleId != AlbumNameRule.RULE_ID)
+        {
+            return false;
+        }
+
+        return SelectedChange.Change.HoldReason switch
+        {
+            HoldReason.WorkUnknown => true,
+
+            // 年に書けるのは**単位内にある値のどれを採るか**だけ。未設定の単位には選ぶものが無く、
+            // 開いても何もできない。そちらは CD 実物を確かめてタグに入れる以外に道がない。
+            HoldReason.DateUnknown => unit.Dates.Count > 1,
+
+            _ => false,
+        };
     }
 
     /// <summary>CSV を書き出せるか。</summary>
