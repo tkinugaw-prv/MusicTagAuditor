@@ -1462,7 +1462,7 @@ public sealed partial class MainViewModel : ObservableObject
     ///
     /// **単位内に作曲家が複数ある場合は出さない。** 作品を足しても保留は解けず、
     /// 主作品を決められるかどうかは機械には分からない（3.5 規則5・規則6）。
-    /// そちらは「このアルバムを対象外にする」で扱う。
+    /// そちらは「このアルバムの扱いを決める」で扱う。
     /// </summary>
     private bool CanAddWorkFromChange()
     {
@@ -1475,7 +1475,14 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>
     /// 選択中の行から個別例外を足せるか（docs/SPEC.md 7.3.2）。
     ///
-    /// 対象は R-504 の保留行と R-501 の明細。どちらも「主作品が定まらない」単位を指している。
+    /// 対象は R-504 の <see cref="HoldReason.WorkUnknown"/> と R-501 の明細。どちらも
+    /// 「主作品が定まらない」単位を指しており、個別例外がまさにそれを埋める。
+    ///
+    /// **<c>date</c> と <c>artist</c> の保留では出さない**（2026-08-15）。個別例外に書けるのは
+    /// 作曲家と作品名だけで、この 2 つは**書いても解けない**。にもかかわらず対象外にすれば
+    /// 一覧からは消えるので、タグが割れたまま消える経路になっていた。それは規則2 の保留を
+    /// 規則6 で握り潰すのと同じで、直したつもりの単位が残る（SPEC 7.4.4）。
+    /// そちらはファイル一覧タブでタグを直すか、フォルダを分けて解く。
     /// </summary>
     private bool CanAddAlbumOverrideFromChange()
     {
@@ -1485,7 +1492,7 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         bool fromAlbumName = SelectedChange.RuleId == AlbumNameRule.RULE_ID
-            && SelectedChange.Change.HoldReason != HoldReason.None;
+            && SelectedChange.Change.HoldReason == HoldReason.WorkUnknown;
 
         return (fromAlbumName || SelectedChange.RuleId == AlbumNameCollisionRule.RULE_ID)
             && FindUnit(SelectedChange) is not null;

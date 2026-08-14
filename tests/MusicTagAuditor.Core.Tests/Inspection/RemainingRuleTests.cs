@@ -799,6 +799,33 @@ public sealed class RemainingRuleTests
     }
 
     /// <summary>
+    /// R-504: 個別例外では解けない保留の根拠に、直す手順まで書いてあることを確認する（SPEC 7.4.4）。
+    ///
+    /// **保留の理由だけを書くと、利用者は手近な導線を試すしかない。** <c>date</c> と <c>artist</c> は
+    /// <c>albumOverrides</c> に無いので「このアルバムの扱いを決める」では解けないが、対象外にすれば
+    /// 一覧からは消える。タグが割れたまま消えるのを、根拠の書き方で防いでいる。
+    /// </summary>
+    [Theory]
+    [InlineData(TagField.Date, "1994", "date")]
+    [InlineData(TagField.Artist, "Herbert von Karajan", "artist")]
+    public void SplitValueHoldTellsHowToFix(TagField field, string other, string label)
+    {
+        InspectionResult result = Works(
+            Track("ブルックナー/ブルックナー 8 - Wand/01.flac", [.. BRUCKNER_8]),
+            Track(
+                "ブルックナー/ブルックナー 8 - Wand/02.flac",
+                [.. BRUCKNER_8.Where(tag => tag.Field != field), (field, new[] { other })]));
+
+        Assert.All(
+            ChangesOf(result, "R-504"),
+            change =>
+            {
+                Assert.Contains("フォルダを分ける", change.Rationale, StringComparison.Ordinal);
+                Assert.Contains($"ファイル一覧タブで {label} を揃える", change.Rationale, StringComparison.Ordinal);
+            });
+    }
+
+    /// <summary>
     /// R-504: 単位内に作曲家が複数いたら保留することを確認する（3.5 規則5・規則6 の対象）。
     /// </summary>
     [Fact]

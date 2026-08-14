@@ -17,7 +17,7 @@ namespace MusicTagAuditor.App.Tests.ViewModels;
 ///
 /// **単位内に作曲家が複数ある行で「作品を辞書に追加」を出してはならない。** 作品を足しても保留は
 /// 解けず、主作品を機械では決められない（TAGGING_POLICY 3.5 規則5・規則6）。そこは
-/// 「このアルバムを対象外にする」で扱う。取り違えると、登録しても検出が減らない作業を延々させる。
+/// 「このアルバムの扱いを決める」で扱う。取り違えると、登録しても検出が減らない作業を延々させる。
 /// </summary>
 public sealed class MainViewModelAlbumUnitCommandsTests : IDisposable
 {
@@ -26,6 +26,9 @@ public sealed class MainViewModelAlbumUnitCommandsTests : IDisposable
 
     /// <summary>作曲家が複数いるフォルダ（3.5 規則5・規則6 の対象）。</summary>
     private const string MIXED_COMPOSER_FOLDER = @"その他\名曲集";
+
+    /// <summary>作品は決まるが <c>date</c> が割れているフォルダ（3.5 規則2 の保留）。</summary>
+    private const string SPLIT_DATE_FOLDER = @"ブルックナー\ブルックナー 7 - ヴァント";
 
     /// <summary>テスト用の作業ディレクトリ。ライブラリ・設定・辞書をここに置く。</summary>
     private readonly string _root = Path.Combine(Path.GetTempPath(), "MusicTagAuditor-unit-" + Guid.NewGuid().ToString("N"));
@@ -73,6 +76,29 @@ public sealed class MainViewModelAlbumUnitCommandsTests : IDisposable
     }
 
     /// <summary>
+    /// <c>date</c> が割れている保留行では、個別例外の導線を出さない。
+    ///
+    /// **個別例外に <c>date</c> は書けないので、登録しても保留は解けない。** それでも対象外に
+    /// すれば一覧からは消えるため、押せるままにしておくと「タグは割れたまま検出だけ消えた」
+    /// 単位ができる（docs/SPEC.md 7.4.4）。直すのはファイル一覧タブかフォルダの切り方。
+    /// </summary>
+    [Fact]
+    public async Task 年が決まらない保留行では個別例外の導線を出さない()
+    {
+        AddTrack(Path.Combine(SPLIT_DATE_FOLDER, "01.m4a"), "Anton Bruckner", "Symphony No.7", "1990");
+        AddTrack(Path.Combine(SPLIT_DATE_FOLDER, "02.m4a"), "Anton Bruckner", "Symphony No.7", "1991");
+
+        MainViewModel viewModel = await CreateInspectedViewModelAsync(
+            dictionary => DictionaryEditor.AddWork(dictionary, "Anton Bruckner", "Symphony No. 7", ["Symphony No.7"]));
+
+        TagChangeViewModel change = SelectChange(viewModel, SPLIT_DATE_FOLDER);
+
+        Assert.Equal(HoldReason.DateUnknown, change.Change.HoldReason);
+        Assert.False(viewModel.AddAlbumOverrideFromChangeCommand.CanExecute(null));
+        Assert.False(viewModel.AddWorkFromChangeCommand.CanExecute(null));
+    }
+
+    /// <summary>
     /// アルバム名以外のルールの行では、どちらの導線も出さない。
     /// これらはアルバム単位に紐づく操作であり、1 ファイルの値の話ではない。
     /// </summary>
@@ -111,6 +137,19 @@ public sealed class MainViewModelAlbumUnitCommandsTests : IDisposable
     /// </summary>
     private static void SelectHold(MainViewModel viewModel, string folder)
     {
+        TagChangeViewModel change = SelectChange(viewModel, folder);
+
+        Assert.Equal(HoldReason.WorkUnknown, change.Change.HoldReason);
+    }
+
+    /// <summary>
+    /// 指定フォルダの R-504 の行を選ぶ。保留の種類は問わない。
+    /// </summary>
+    /// <param name="viewModel">検査まで済ませたビューモデル。</param>
+    /// <param name="folder">対象フォルダ。</param>
+    /// <returns>選んだ行。</returns>
+    private static TagChangeViewModel SelectChange(MainViewModel viewModel, string folder)
+    {
         RuleResultViewModel rule = viewModel.RuleResults.First(rule => rule.RuleId == AlbumNameRule.RULE_ID);
 
         viewModel.SelectedRule = rule;
@@ -118,15 +157,19 @@ public sealed class MainViewModelAlbumUnitCommandsTests : IDisposable
         TagChangeViewModel change = rule.Changes.First(
             change => change.RelativePath.StartsWith(folder, StringComparison.Ordinal));
 
-        Assert.Equal(HoldReason.WorkUnknown, change.Change.HoldReason);
-
         viewModel.SelectedChange = change;
+
+        return change;
     }
 
     /// <summary>
-    /// ライブラリに 1 ファイル足す。アルバム名は組み立てられない値にしておく（作品エントリが無い）。
+    /// ライブラリに 1 ファイル足す。既定では作品エントリが無く、アルバム名を組み立てられない値にする。
     /// </summary>
-    private void AddTrack(string relativePath, string composer)
+    /// <param name="relativePath">ライブラリルートからの相対パス。</param>
+    /// <param name="composer">作曲家。</param>
+    /// <param name="album">アルバム名。作品を引かせたい場合だけ変える。</param>
+    /// <param name="date">録音年。単位内で割れさせたい場合だけ変える。</param>
+    private void AddTrack(string relativePath, string composer, string album = "名曲集", string date = "1990")
     {
         string fullPath = Path.Combine(_root, "library", relativePath);
 
@@ -136,22 +179,29 @@ public sealed class MainViewModelAlbumUnitCommandsTests : IDisposable
         _tags[relativePath] = new Dictionary<TagField, string>
         {
             [TagField.Composer] = composer,
-            [TagField.Album] = "名曲集",
+            [TagField.Album] = album,
             [TagField.Artist] = "Georg Solti",
-            [TagField.Date] = "1990",
+            [TagField.Date] = date,
         };
     }
 
     /// <summary>
     /// 検査まで済ませたビューモデルを作る。
     /// </summary>
+    /// <param name="edit">検査の前に辞書へ加える変更。作品を引かせたい場合に渡す。</param>
     /// <returns>検査結果を持つビューモデル。</returns>
-    private async Task<MainViewModel> CreateInspectedViewModelAsync()
+    private async Task<MainViewModel> CreateInspectedViewModelAsync(Func<TagDictionary, TagDictionary>? edit = null)
     {
         string settingsDirectory = Path.Combine(_root, "settings");
         Directory.CreateDirectory(settingsDirectory);
 
         DictionaryStore dictionaryStore = new(settingsDirectory);
+
+        if (edit is not null)
+        {
+            dictionaryStore.Save(edit(dictionaryStore.Dictionary));
+        }
+
         SnapshotService snapshotService = new(() => Path.Combine(_root, "backup"));
         StubTagReader tagReader = new(_tags);
         NullTagWriter tagWriter = new();

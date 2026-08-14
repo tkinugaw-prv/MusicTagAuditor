@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:conv="clr-namespace:MusicTagAuditor.App.Converters"
         xmlns:ctl="clr-namespace:MusicTagAuditor.App.Controls"
-        Title="このアルバムを対象外にする" Height="620" Width="760"
+        Title="このアルバムの扱いを決める" Height="620" Width="760"
         Icon="/Assets/app_icon.ico"
         Background="{StaticResource BgOuterBrush}"
         FontFamily="{StaticResource AppFontFamily}"
