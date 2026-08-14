@@ -469,6 +469,10 @@ public sealed partial class AlbumOverrideRowViewModel : ObservableObject, IDicti
     [ObservableProperty]
     private string _workName;
 
+    /// <summary>単位の年を明示する。主作品 + カップリングで録音年が割れている場合に使う（規則2）。</summary>
+    [ObservableProperty]
+    private string _date;
+
     /// <summary>アルバム名の対象外にするか。本物のコンピレーション（規則6）で使う。</summary>
     [ObservableProperty]
     private bool _exclude;
@@ -489,6 +493,7 @@ public sealed partial class AlbumOverrideRowViewModel : ObservableObject, IDicti
         _discText = entry.Disc?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
         _composer = entry.Composer ?? string.Empty;
         _workName = entry.WorkName ?? string.Empty;
+        _date = entry.Date ?? string.Empty;
         _exclude = entry.Exclude;
         _note = entry.Note ?? string.Empty;
     }
@@ -511,6 +516,7 @@ public sealed partial class AlbumOverrideRowViewModel : ObservableObject, IDicti
             Disc = int.TryParse(DiscText.Trim(), CultureInfo.InvariantCulture, out int disc) ? disc : null,
             Composer = Blank(Composer),
             WorkName = Blank(WorkName),
+            Date = Blank(Date),
             Exclude = Exclude,
             Note = Blank(Note),
         };

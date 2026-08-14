@@ -12,6 +12,7 @@
         ShowInTaskbar="False">
 
   <Window.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
     <conv:InverseBooleanConverter x:Key="InverseBool" />
     <conv:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisibility" />
   </Window.Resources>
@@ -24,6 +25,10 @@
         <TextBlock Text="{Binding Header}" FontWeight="SemiBold" TextWrapping="Wrap" />
         <TextBlock Style="{StaticResource HintTextStyle}" Margin="0,5,0,0"
                    Text="{Binding ComposersText}" TextWrapping="Wrap" />
+        <!-- 年が割れているときだけ出す。一意なら判断材料にならない -->
+        <TextBlock Style="{StaticResource HintTextStyle}" Margin="0,5,0,0"
+                   Text="{Binding DatesText}" TextWrapping="Wrap"
+                   Visibility="{Binding HasSplitDates, Converter={StaticResource BoolToVisibility}}" />
       </StackPanel>
     </Border>
 
@@ -43,11 +48,19 @@
       <StackPanel Margin="0,0,8,0">
 
         <TextBlock Style="{StaticResource SectionLabelStyle}" Text="この単位の扱い" />
+        <!--
+          年の割れで開いたときは対象外を選ばせない（AlbumOverrideViewModel.CanExclude）。
+          そこまで来た単位は作品が決まっている＝主作品が定まっているので規則6 ではなく、
+          選べるままだとタグが割れた単位を検出から消すだけの操作になる。
+        -->
         <RadioButton GroupName="Mode" IsChecked="{Binding Excludes}"
+                     IsEnabled="{Binding CanExclude}"
+                     ToolTipService.ShowOnDisabled="True"
+                     ToolTip="この単位は作品が決まっているので、対象外（規則6）には当たりません"
                      Content="アルバム名の対象外にする（本物のコンピレーション。3.5 規則6）" />
         <RadioButton GroupName="Mode" Margin="0,8,0,10"
                      IsChecked="{Binding Excludes, Converter={StaticResource InverseBool}}"
-                     Content="作曲家・作品名を指定する（版の違い 規則4 / 主作品 + カップリング 規則5 / 同一演奏の別リリース 規則7）" />
+                     Content="作曲家・作品名・年を指定する（版の違い 規則4 / 主作品 + カップリング 規則5・規則2 / 同一演奏の別リリース 規則7）" />
 
         <!-- 上書きの指定。対象外を選んでいる間は出さない -->
         <StackPanel Visibility="{Binding Excludes, Converter={StaticResource InverseBoolToVisibility}}">
@@ -59,6 +72,17 @@
                      Text="作品名（この単位だけの作品名。指定しないなら空のまま）" />
           <TextBox ctl:Placeholder.Text="Symphony No. 5 (Olympia) のように書く"
                    Text="{Binding WorkName, UpdateSourceTrigger=PropertyChanged}" />
+
+          <!--
+            年は単位内にある値からしか選ばせない（IsEditable="False"）。手で打てると、
+            どのファイルにも入っていない年を書けてしまう。ここで選ぶのは「主作品の録音年は
+            どれか」であって年の入力ではない。年が割れていない単位では出す意味がない。
+          -->
+          <StackPanel Visibility="{Binding HasSplitDates, Converter={StaticResource BoolToVisibility}}">
+            <TextBlock Style="{StaticResource SectionLabelStyle}" Margin="0,12,0,4"
+                       Text="年（主作品の録音年。指定しないなら空のまま）" />
+            <ComboBox ItemsSource="{Binding Dates}" SelectedItem="{Binding Date}" IsEditable="False" />
+          </StackPanel>
         </StackPanel>
 
         <TextBlock Style="{StaticResource SectionLabelStyle}" Margin="0,16,0,4" Text="適用する範囲" />

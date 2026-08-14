@@ -72,6 +72,18 @@ public sealed class RemainingRuleTests
                 WorkName = "Symphony No. 5 (Olympia)",
                 Note = "3.5 規則7 同一演奏の別リリース",
             },
+            new AlbumOverrideEntry
+            {
+                Folder = @"ブルックナー\ブルックナー 8 - 主作品とカップリング",
+                Date = "1993",
+                Note = "3.5 規則2・規則5 主作品は交響曲第8番",
+            },
+            new AlbumOverrideEntry
+            {
+                Folder = @"ブルックナー\ブルックナー 8 - 年が直った",
+                Date = "1994",
+                Note = "タグを直したあとに残った古い年の指定",
+            },
         ],
     });
 
@@ -796,6 +808,57 @@ public sealed class RemainingRuleTests
         Assert.All(
             ChangesOf(result, "R-504"),
             change => Assert.Equal(HoldReason.DateUnknown, change.HoldReason));
+    }
+
+    /// <summary>
+    /// R-504: 主作品 + カップリングで年が割れている単位は、個別例外の年で解けることを確認する
+    /// （3.5 規則2・規則5）。
+    ///
+    /// **フォルダを分けるのも date を揃えるのも誤り。** 主作品と併録曲が別セッションなのは
+    /// 普通のことで、分ければ 1 枚のアルバムが割れ（規則3）、揃えればタグが実際の録音年と食い違う。
+    /// </summary>
+    [Fact]
+    public void UsesOverrideDateWhenDateIsSplit()
+    {
+        const string folder = @"ブルックナー\ブルックナー 8 - 主作品とカップリング";
+
+        InspectionResult result = Works(
+            Track(folder + @"\01.flac", [.. BRUCKNER_8]),
+            Track(
+                folder + @"\05.flac",
+                (TagField.Composer, ["Anton Bruckner"]),
+                (TagField.Album, ["Symphony No.8"]),
+                (TagField.Artist, ["Günter Wand"]),
+                (TagField.Date, ["1994"])));
+
+        Assert.All(
+            ChangesOf(result, "R-504"),
+            change =>
+            {
+                Assert.Equal(HoldReason.None, change.HoldReason);
+                Assert.Equal("Anton Bruckner: Symphony No. 8 - 1993/Günter Wand", Assert.Single(change.AfterValues));
+
+                // どの年をなぜ採ったのかが読めないと、この修正案は承認できない（SPEC 5.3）。
+                Assert.Contains("個別例外の指定「1993」を採った", change.Rationale, StringComparison.Ordinal);
+            });
+    }
+
+    /// <summary>
+    /// R-504: タグの年が一意なら、個別例外の年では上書きしないことを確認する。
+    ///
+    /// **一意な値まで上書きできると、辞書に古い年が残っているのにタグは直っている、
+    /// という食い違いが検出されないまま残る。**
+    /// </summary>
+    [Fact]
+    public void PrefersTagDateOverOverrideDate()
+    {
+        // 個別例外は 1994 を指しているが、タグの 1993 は単位内で一意になっている。
+        TagChange change = Assert.Single(ChangesOf(
+            Works(Track(@"ブルックナー\ブルックナー 8 - 年が直った\01.flac", [.. BRUCKNER_8])),
+            "R-504"));
+
+        Assert.Equal("Anton Bruckner: Symphony No. 8 - 1993/Günter Wand", Assert.Single(change.AfterValues));
+        Assert.DoesNotContain("個別例外の指定", change.Rationale, StringComparison.Ordinal);
     }
 
     /// <summary>

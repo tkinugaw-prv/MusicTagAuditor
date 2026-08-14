@@ -79,19 +79,24 @@ public sealed class AlbumNameRule : IInspectionRule
             }
         }
 
-        string? date = Single(unit.Dates);
+        // 個別例外の年は、割れているときだけ効く。**タグが一意ならタグを優先する。**
+        // 一意な値まで上書きできると、辞書に古い年が残っているのにタグは直っている、
+        // という食い違いが検出されないまま残る。
+        string? tagDate = Single(unit.Dates);
+        string? date = tagDate ?? nameOverride?.Date;
 
         if (date is null)
         {
-            // 保留の理由だけでは、次に何をすればいいのかが画面から分からない。**個別例外では解けない
-            // 保留である**ことも伝わらず、「このアルバムの扱いを決める」で対象外にして消す誤操作を招く。
-            // それはタグが割れたまま一覧から消えるだけで、規則2 の保留を規則6 で握り潰すことになる。
+            // 保留の理由だけでは、次に何をすればいいのかが画面から分からない。
+            // **割れ方によって直す先が違う**（フォルダ／タグ／個別例外）ので、そこまで書く。
             return Hold(unit, HoldReason.DateUnknown, unit.Dates.Count == 0
                 ? "date が未設定のため年を決められない。推測で埋めない。"
                     + "CD 実物で録音年を確かめ、ファイル一覧タブで date を入れる（3.5 規則2）"
                 : $"単位内で date が割れている（{string.Join(" / ", unit.Dates)}）。"
                     + "別々の録音が 1 つのフォルダに入っているならフォルダを分ける。"
-                    + "同じ録音なら、この行をダブルクリックしてファイル一覧タブで date を揃える（3.5 規則2）");
+                    + "同じ録音で表記だけが違うなら、この行をダブルクリックしてファイル一覧タブで date を揃える。"
+                    + "主作品 + カップリングで録音年が違うだけなら、"
+                    + "「このアルバムの扱いを決める」で主作品の年を指定する（3.5 規則2・規則5）");
         }
 
         string? artist = Single(unit.Artists);
@@ -109,6 +114,13 @@ public sealed class AlbumNameRule : IInspectionRule
 
         string album = $"{composer}: {work} - {date}/{artist}";
 
+        // タグが割れているのに修正案が出ている単位は、根拠を読まないと理由が分からない。
+        // どの年をなぜ採ったのかを書く（docs/SPEC.md 5.3 の「根拠が読めない自動判定は承認できない」）。
+        string dateSource = tagDate is null
+            ? $"。年は単位内で割れている（{string.Join(" / ", unit.Dates)}）ため、"
+                + $"個別例外の指定「{date}」を採った（{nameOverride?.Note}）"
+            : string.Empty;
+
         return
         [
             .. unit.Tracks
@@ -119,7 +131,7 @@ public sealed class AlbumNameRule : IInspectionRule
                     track.GetValues(TagField.Album),
                     [album],
                     RULE_ID,
-                    $"{workSource}。3.5 の書式で組み立てた",
+                    $"{workSource}{dateSource}。3.5 の書式で組み立てた",
                     Severity.Warning)),
         ];
     }

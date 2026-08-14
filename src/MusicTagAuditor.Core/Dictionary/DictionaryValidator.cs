@@ -1,4 +1,5 @@
-﻿using MusicTagAuditor.Core.Normalization;
+﻿using System.Text.RegularExpressions;
+using MusicTagAuditor.Core.Normalization;
 
 namespace MusicTagAuditor.Core.Dictionary;
 
@@ -60,6 +61,9 @@ public static class DictionaryValidator
 
     /// <summary>個別例外の種別名。</summary>
     public const string CATEGORY_OVERRIDE = "個別例外";
+
+    /// <summary>録音年の形（docs/TAGGING_POLICY.md 2.4）。R-104 が直すのと同じ 4 桁。</summary>
+    private static readonly Regex FOUR_DIGIT_YEAR = new(@"^\d{4}$", RegexOptions.Compiled);
 
     /// <summary>
     /// 辞書全体を検証する。
@@ -507,13 +511,25 @@ public static class DictionaryValidator
 
             if (!entry.Exclude
                 && string.IsNullOrWhiteSpace(entry.WorkName)
-                && string.IsNullOrWhiteSpace(entry.Composer))
+                && string.IsNullOrWhiteSpace(entry.Composer)
+                && string.IsNullOrWhiteSpace(entry.Date))
             {
                 issues.Add(new DictionaryIssue(
                     DictionaryIssueSeverity.Warning,
                     CATEGORY_OVERRIDE,
                     label,
                     "対象外にも作品名の指定にもなっていません。この例外は何もしません。"));
+            }
+
+            // 4 桁でない年はアルバム名にそのまま入ってしまう（3.5 の {date} は録音年 4 桁）。
+            // R-104 が ISO 形式のタグを直すのと同じ形に、辞書の側でも揃える。
+            if (!string.IsNullOrWhiteSpace(entry.Date) && !FOUR_DIGIT_YEAR.IsMatch(entry.Date))
+            {
+                issues.Add(new DictionaryIssue(
+                    DictionaryIssueSeverity.Error,
+                    CATEGORY_OVERRIDE,
+                    label,
+                    $"年（date）「{entry.Date}」が 4 桁ではありません。"));
             }
 
             if (string.IsNullOrWhiteSpace(entry.Note))

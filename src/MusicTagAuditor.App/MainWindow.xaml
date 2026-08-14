@@ -1215,7 +1215,7 @@
                     <Button DockPanel.Dock="Left" Content="削除" Command="{Binding RemoveAlbumOverrideCommand}"
                             Style="{StaticResource SmallOutlineButtonStyle}" Margin="0,0,14,0" />
                     <TextBlock Style="{StaticResource HintTextStyle}" VerticalAlignment="Center" TextWrapping="Wrap"
-                               Text="そのアルバムだけの例外（TAGGING_POLICY 3.5 規則4・規則6・規則7）。追加は検査結果タブの「このアルバムの扱いを決める」から行う。disc が空欄ならそのフォルダの全ディスクに効く。" />
+                               Text="そのアルバムだけの例外（TAGGING_POLICY 3.5 規則2・規則4・規則6・規則7）。追加は検査結果タブの「このアルバムの扱いを決める」から行う。disc が空欄ならそのフォルダの全ディスクに効く。年は単位内で録音年が割れている場合だけ効く。" />
                   </DockPanel>
 
                   <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Padding="1">
@@ -1236,6 +1236,9 @@
                                             EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
                         <DataGridTextColumn Header="作品名" Binding="{Binding WorkName, UpdateSourceTrigger=PropertyChanged}" Width="180"
                                             ElementStyle="{StaticResource EllipsisTextStyle}"
+                                            EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
+                        <DataGridTextColumn Header="年" Binding="{Binding Date, UpdateSourceTrigger=PropertyChanged}" Width="60"
+                                            ElementStyle="{StaticResource NumericCellTextStyle}"
                                             EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
                         <DataGridCheckBoxColumn Header="対象外" Width="60"
                                                 Binding="{Binding Exclude, UpdateSourceTrigger=PropertyChanged}"
