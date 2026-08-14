@@ -62,8 +62,8 @@ public sealed class AlbumNameRule : IInspectionRule
             return Hold(unit, HoldReason.WorkUnknown, unit.Composers.Count == 0
                 ? "composer が未設定のためアルバム名を決められない"
                 : $"単位内に作曲家が {unit.Composers.Count} 人いる（{string.Join(" / ", unit.Composers)}）。"
-                    + "主作品が定まるなら albumOverrides で作曲家を指定する（3.5 規則5）。"
-                    + "定まらないなら対象外にする（規則6）");
+                    + "この行を選んで「このアルバムの扱いを決める」を押し、"
+                    + "主作品が定まるなら作曲家を指定する（3.5 規則5）。定まらないなら対象外にする（規則6）");
         }
 
         string workSource = $"個別例外で作品名を「{nameOverride?.WorkName}」と指定（{nameOverride?.Note}）";
@@ -83,19 +83,28 @@ public sealed class AlbumNameRule : IInspectionRule
 
         if (date is null)
         {
+            // 保留の理由だけでは、次に何をすればいいのかが画面から分からない。**個別例外では解けない
+            // 保留である**ことも伝わらず、「このアルバムの扱いを決める」で対象外にして消す誤操作を招く。
+            // それはタグが割れたまま一覧から消えるだけで、規則2 の保留を規則6 で握り潰すことになる。
             return Hold(unit, HoldReason.DateUnknown, unit.Dates.Count == 0
-                ? "date が未設定のため年を決められない。推測で埋めない（3.5 規則2）"
+                ? "date が未設定のため年を決められない。推測で埋めない。"
+                    + "CD 実物で録音年を確かめ、ファイル一覧タブで date を入れる（3.5 規則2）"
                 : $"単位内で date が割れている（{string.Join(" / ", unit.Dates)}）。"
-                    + "1 つのフォルダに別々の録音が入っていないかを先に疑う（3.5 規則2）");
+                    + "別々の録音が 1 つのフォルダに入っているならフォルダを分ける。"
+                    + "同じ録音なら、この行をダブルクリックしてファイル一覧タブで date を揃える（3.5 規則2）");
         }
 
         string? artist = Single(unit.Artists);
 
         if (artist is null)
         {
+            // date と同じ理由で、直し方まで書く。こちらも個別例外では解けない。
             return Hold(unit, HoldReason.ArtistUnknown, unit.Artists.Count == 0
-                ? "artist が未設定のため演奏者を決められない"
-                : $"単位内で artist が割れている（{string.Join(" / ", unit.Artists)}）");
+                ? "artist が未設定のため演奏者を決められない。"
+                    + "CD 実物で演奏者を確かめ、ファイル一覧タブで artist を入れる"
+                : $"単位内で artist が割れている（{string.Join(" / ", unit.Artists)}）。"
+                    + "別々の演奏が 1 つのフォルダに入っているならフォルダを分ける。"
+                    + "同じ演奏なら、この行をダブルクリックしてファイル一覧タブで artist を揃える");
         }
 
         string album = $"{composer}: {work} - {date}/{artist}";

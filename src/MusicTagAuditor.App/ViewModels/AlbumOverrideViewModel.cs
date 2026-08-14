@@ -7,7 +7,7 @@ using MusicTagAuditor.Core.Inspection;
 namespace MusicTagAuditor.App.ViewModels;
 
 /// <summary>
-/// 「このアルバムを対象外にする」ダイアログのビューモデル（docs/SPEC.md 7.3.2 / 7.4.5）。
+/// 「このアルバムの扱いを決める」ダイアログのビューモデル（docs/SPEC.md 7.3.2 / 7.4.5）。
 ///
 /// **フォルダと <c>disc</c> は明細から自動で埋める。** 手で相対パスを打たせない。打ち間違えても
 /// 例外が黙って効かなくなるだけで、原因が画面から分からない。実際に、手で書いた綴りが実フォルダと

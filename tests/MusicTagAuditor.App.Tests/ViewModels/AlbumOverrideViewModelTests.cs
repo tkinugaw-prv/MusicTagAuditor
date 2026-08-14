@@ -6,7 +6,7 @@ using MusicTagAuditor.Core.Inspection;
 namespace MusicTagAuditor.App.Tests.ViewModels;
 
 /// <summary>
-/// 「このアルバムを対象外にする」ダイアログのテスト（docs/SPEC.md 7.3.2 / 7.4.5）。
+/// 「このアルバムの扱いを決める」ダイアログのテスト（docs/SPEC.md 7.3.2 / 7.4.5）。
 ///
 /// 守りたいのは 3 点。**フォルダと disc を明細から埋める**こと、**理由を空のまま登録させない**こと、
 /// **何も起きない例外を作らせない**こと。理由の書いていない例外は後から消してよいか判断できない。
