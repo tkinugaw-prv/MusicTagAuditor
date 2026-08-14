@@ -446,6 +446,94 @@ public sealed partial class DictionaryViewModel : ObservableObject
     }
 
     /// <summary>
+    /// 索引に載らない別名を取り除く（docs/SPEC.md 7.3）。
+    ///
+    /// 正規化キーが同じ別名は先に書いたほうしか索引に載らない。残りは書いても引かれず、
+    /// 検証の警告として残り続ける。**既定辞書側を直しても利用者辞書には届かない**
+    /// （「既定辞書から取り込む」は追加しか作らない）ため、この辞書自身で完結する導線が要る。
+    ///
+    /// **取り除く前に必ず一覧を見せる。** 消しても引ける範囲は変わらないが、
+    /// 辞書は利用者が育てたものであり、黙って中身を削ってよい理由にはならない。
+    /// </summary>
+    [RelayCommand]
+    private void CleanupRedundantAliases()
+    {
+        if (!ConfirmDiscardIfDirty())
+        {
+            return;
+        }
+
+        IReadOnlyList<RemovedAlias> plan = BuildCleanupPlan();
+
+        if (plan.Count == 0)
+        {
+            StatusText = "索引に載っていない別名はありません。";
+            return;
+        }
+
+        CleanupDictionaryWindow window = new(plan)
+        {
+            Owner = Application.Current?.MainWindow,
+        };
+
+        if (window.ShowDialog() != true)
+        {
+            return;
+        }
+
+        ApplyCleanup();
+    }
+
+    /// <summary>
+    /// 取り除ける別名を洗い出す。**保存済みの内容に対して行う。**
+    /// </summary>
+    /// <returns>取り除ける別名。無ければ空。</returns>
+    public IReadOnlyList<RemovedAlias> BuildCleanupPlan()
+    {
+        return RedundantAliasCleaner.Clean(_store.Dictionary).Removed;
+    }
+
+    /// <summary>
+    /// 掃除を実行して保存する。
+    /// </summary>
+    public void ApplyCleanup()
+    {
+        try
+        {
+            (TagDictionary cleaned, IReadOnlyList<RemovedAlias> removed) = RedundantAliasCleaner.Clean(_store.Dictionary);
+
+            if (removed.Count == 0)
+            {
+                StatusText = "索引に載っていない別名はありません。";
+                return;
+            }
+
+            _store.Save(cleaned);
+            Load();
+
+            // **掃除の後の検証結果を出す。**<see cref="Load"/> は一覧を作り直すときに結果を消す。
+            // 何件消えて何が残ったのかを見せないと、掃除が効いたのかどうかを確かめようがない。
+            RefreshIssues(cleaned);
+
+            StatusText = Issues.Count == 0
+                ? $"索引に載っていない別名を {removed.Count:N0} 件削除しました。検証の問題はすべて解消しました。"
+                : $"索引に載っていない別名を {removed.Count:N0} 件削除しました（残る問題 {Issues.Count:N0} 件）。";
+
+            Log.Information(
+                "冗長な別名を削除した 件数={Count} {Summary}",
+                removed.Count,
+                DictionarySummary.Describe(cleaned));
+
+            Saved?.Invoke(this, EventArgs.Empty);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"掃除に失敗しました: {ex.Message}";
+            Log.Error(ex, "冗長な別名の削除に失敗した");
+        }
+    }
+
+    /// <summary>
     /// 作曲家を追加する。
     /// </summary>
     [RelayCommand]

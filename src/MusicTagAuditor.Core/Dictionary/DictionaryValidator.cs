@@ -1,4 +1,5 @@
-﻿using MusicTagAuditor.Core.Normalization;
+﻿using System.Text.RegularExpressions;
+using MusicTagAuditor.Core.Normalization;
 
 namespace MusicTagAuditor.Core.Dictionary;
 
@@ -60,6 +61,9 @@ public static class DictionaryValidator
 
     /// <summary>個別例外の種別名。</summary>
     public const string CATEGORY_OVERRIDE = "個別例外";
+
+    /// <summary>録音年の形（docs/TAGGING_POLICY.md 2.4）。R-104 が直すのと同じ 4 桁。</summary>
+    private static readonly Regex FOUR_DIGIT_YEAR = new(@"^\d{4}$", RegexOptions.Compiled);
 
     /// <summary>
     /// 辞書全体を検証する。
@@ -198,7 +202,12 @@ public static class DictionaryValidator
             ValidateEnsembleCanonical(issues, ensemble, eras, label);
             ValidateEras(issues, eras, label);
 
+            // **時代分割の正規形どうしは畳んでから照合する。** 改名したあと元の名前に戻った団体は、
+            // 同じ正規形が 2 つの区分に現れる（既定辞書の uk-philharmonia は 1964 年までと 1977 年以降が
+            // どちらも Philharmonia Orchestra）。これは重複した別名ではなく、消す先も無い。
+            // 畳まないと「直しようのない警告」が居座り、辞書を掃除しきっても 0 件にならない。
             IEnumerable<string> names = eras.Select(era => era.Canonical)
+                .DistinctBy(NormalizationKey.Create, StringComparer.Ordinal)
                 .Concat(ensemble.Canonical is null ? [] : [ensemble.Canonical])
                 .Concat(ensemble.Aliases ?? [])
                 .Concat(ensemble.AliasesJa ?? []);
@@ -467,9 +476,17 @@ public static class DictionaryValidator
     ///
     /// 形は辞書タブの一覧の見出し（<c>作曲家: 作品名</c>）にそろえる。警告の文言をそのまま
     /// 絞り込み欄に入れれば当該の行に辿り着ける。
+    ///
+    /// **公開しているのは、作品を名指しする形をこの 1 箇所に閉じ込めるため。**
+    /// <see cref="RedundantAliasCleaner"/> も同じ形で対象を示す必要がある。別々に組み立てると、
+    /// 検証と掃除で違う名前が出て、同じ作品の話だと読み取れなくなる。
     /// </summary>
-    private static string DescribeWork(WorkEntry work)
+    /// <param name="work">対象の作品。</param>
+    /// <returns>一覧の見出しと同じ形の名前。</returns>
+    public static string DescribeWork(WorkEntry work)
     {
+        ArgumentNullException.ThrowIfNull(work);
+
         string canonical = string.IsNullOrWhiteSpace(work.Canonical) ? "(空欄)" : work.Canonical;
 
         return string.IsNullOrWhiteSpace(work.Composer) ? canonical : $"{work.Composer}: {canonical}";
@@ -494,13 +511,25 @@ public static class DictionaryValidator
 
             if (!entry.Exclude
                 && string.IsNullOrWhiteSpace(entry.WorkName)
-                && string.IsNullOrWhiteSpace(entry.Composer))
+                && string.IsNullOrWhiteSpace(entry.Composer)
+                && string.IsNullOrWhiteSpace(entry.Date))
             {
                 issues.Add(new DictionaryIssue(
                     DictionaryIssueSeverity.Warning,
                     CATEGORY_OVERRIDE,
                     label,
                     "対象外にも作品名の指定にもなっていません。この例外は何もしません。"));
+            }
+
+            // 4 桁でない年はアルバム名にそのまま入ってしまう（3.5 の {date} は録音年 4 桁）。
+            // R-104 が ISO 形式のタグを直すのと同じ形に、辞書の側でも揃える。
+            if (!string.IsNullOrWhiteSpace(entry.Date) && !FOUR_DIGIT_YEAR.IsMatch(entry.Date))
+            {
+                issues.Add(new DictionaryIssue(
+                    DictionaryIssueSeverity.Error,
+                    CATEGORY_OVERRIDE,
+                    label,
+                    $"年（date）「{entry.Date}」が 4 桁ではありません。"));
             }
 
             if (string.IsNullOrWhiteSpace(entry.Note))

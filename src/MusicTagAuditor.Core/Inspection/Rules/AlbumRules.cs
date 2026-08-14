@@ -62,8 +62,8 @@ public sealed class AlbumNameRule : IInspectionRule
             return Hold(unit, HoldReason.WorkUnknown, unit.Composers.Count == 0
                 ? "composer が未設定のためアルバム名を決められない"
                 : $"単位内に作曲家が {unit.Composers.Count} 人いる（{string.Join(" / ", unit.Composers)}）。"
-                    + "主作品が定まるなら albumOverrides で作曲家を指定する（3.5 規則5）。"
-                    + "定まらないなら対象外にする（規則6）");
+                    + "この行を選んで「このアルバムの扱いを決める」を押し、"
+                    + "主作品が定まるなら作曲家を指定する（3.5 規則5）。定まらないなら対象外にする（規則6）");
         }
 
         string workSource = $"個別例外で作品名を「{nameOverride?.WorkName}」と指定（{nameOverride?.Note}）";
@@ -79,26 +79,47 @@ public sealed class AlbumNameRule : IInspectionRule
             }
         }
 
-        string? date = Single(unit.Dates);
+        // 個別例外の年は、割れているときだけ効く。**タグが一意ならタグを優先する。**
+        // 一意な値まで上書きできると、辞書に古い年が残っているのにタグは直っている、
+        // という食い違いが検出されないまま残る。
+        string? tagDate = Single(unit.Dates);
+        string? date = tagDate ?? nameOverride?.Date;
 
         if (date is null)
         {
+            // 保留の理由だけでは、次に何をすればいいのかが画面から分からない。
+            // **割れ方によって直す先が違う**（フォルダ／タグ／個別例外）ので、そこまで書く。
             return Hold(unit, HoldReason.DateUnknown, unit.Dates.Count == 0
-                ? "date が未設定のため年を決められない。推測で埋めない（3.5 規則2）"
+                ? "date が未設定のため年を決められない。推測で埋めない。"
+                    + "CD 実物で録音年を確かめ、ファイル一覧タブで date を入れる（3.5 規則2）"
                 : $"単位内で date が割れている（{string.Join(" / ", unit.Dates)}）。"
-                    + "1 つのフォルダに別々の録音が入っていないかを先に疑う（3.5 規則2）");
+                    + "別々の録音が 1 つのフォルダに入っているならフォルダを分ける。"
+                    + "同じ録音で表記だけが違うなら、この行をダブルクリックしてファイル一覧タブで date を揃える。"
+                    + "主作品 + カップリングで録音年が違うだけなら、"
+                    + "「このアルバムの扱いを決める」で主作品の年を指定する（3.5 規則2・規則5）");
         }
 
         string? artist = Single(unit.Artists);
 
         if (artist is null)
         {
+            // date と同じ理由で、直し方まで書く。こちらも個別例外では解けない。
             return Hold(unit, HoldReason.ArtistUnknown, unit.Artists.Count == 0
-                ? "artist が未設定のため演奏者を決められない"
-                : $"単位内で artist が割れている（{string.Join(" / ", unit.Artists)}）");
+                ? "artist が未設定のため演奏者を決められない。"
+                    + "CD 実物で演奏者を確かめ、ファイル一覧タブで artist を入れる"
+                : $"単位内で artist が割れている（{string.Join(" / ", unit.Artists)}）。"
+                    + "別々の演奏が 1 つのフォルダに入っているならフォルダを分ける。"
+                    + "同じ演奏なら、この行をダブルクリックしてファイル一覧タブで artist を揃える");
         }
 
         string album = $"{composer}: {work} - {date}/{artist}";
+
+        // タグが割れているのに修正案が出ている単位は、根拠を読まないと理由が分からない。
+        // どの年をなぜ採ったのかを書く（docs/SPEC.md 5.3 の「根拠が読めない自動判定は承認できない」）。
+        string dateSource = tagDate is null
+            ? $"。年は単位内で割れている（{string.Join(" / ", unit.Dates)}）ため、"
+                + $"個別例外の指定「{date}」を採った（{nameOverride?.Note}）"
+            : string.Empty;
 
         return
         [
@@ -110,7 +131,7 @@ public sealed class AlbumNameRule : IInspectionRule
                     track.GetValues(TagField.Album),
                     [album],
                     RULE_ID,
-                    $"{workSource}。3.5 の書式で組み立てた",
+                    $"{workSource}{dateSource}。3.5 の書式で組み立てた",
                     Severity.Warning)),
         ];
     }

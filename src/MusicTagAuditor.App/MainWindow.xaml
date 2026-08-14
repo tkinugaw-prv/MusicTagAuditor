@@ -345,12 +345,24 @@
                   作品エントリを育てる主経路（docs/SPEC.md 7.3.2）。
                   作曲家もフォルダも明細から決まるので、辞書タブで手打ちさせない。
                 -->
+                <!--
+                  どちらのボタンも押せない行がある。**無効なままでは理由が伝わらない**ので
+                  ToolTipService.ShowOnDisabled で押せない理由まで読めるようにする。
+                -->
                 <Button DockPanel.Dock="Left" Content="作品を辞書に追加"
                         Command="{Binding AddWorkFromChangeCommand}" Margin="0,0,8,0"
+                        ToolTipService.ShowOnDisabled="True"
                         ToolTip="R-504 の保留行（HOLD_WORK_UNKNOWN）から、その単位の作品を辞書に登録します。単位内に作曲家が複数ある行では押せません" />
-                <Button DockPanel.Dock="Left" Content="このアルバムを対象外にする"
+                <!--
+                  ダイアログの中身は「対象外にする」と「作曲家・作品名を指定する」の二択なので、
+                  **ボタン名を片方だけにしない。** 「対象外にする」と名乗っていたため、
+                  R-504 が「主作品が定まるなら作曲家を指定する」と言っていても、
+                  その入口がここだと気付けなかった（docs/SPEC.md 7.3.2）。
+                -->
+                <Button DockPanel.Dock="Left" Content="このアルバムの扱いを決める"
                         Command="{Binding AddAlbumOverrideFromChangeCommand}" Margin="0,0,14,0"
-                        ToolTip="R-504 の保留行と R-501 の明細から、そのアルバム単位の個別例外を登録します" />
+                        ToolTipService.ShowOnDisabled="True"
+                        ToolTip="R-504 の「作品が決まらない」保留行と R-501 の明細から、そのアルバム単位の個別例外を登録します。対象外にするか、作曲家・作品名を指定するかをダイアログで選びます。「年が決まらない」「演奏者が決まらない」保留行では押せません（個別例外に date と artist は書けないため、ファイル一覧タブでタグを直します）" />
                 <TextBlock Style="{StaticResource StatusTextStyle}"
                            Text="{Binding InspectionSummary}" TextWrapping="Wrap" />
               </DockPanel>
@@ -771,6 +783,9 @@
                     </Style>
                   </Button.Style>
                 </Button>
+                <Button DockPanel.Dock="Left" Content="冗長な別名を掃除" Command="{Binding CleanupRedundantAliasesCommand}"
+                        Margin="0,0,8,0"
+                        ToolTip="正規化キーが重なっていて索引に載っていない別名を削除します。引ける値は変わりません" />
                 <Button DockPanel.Dock="Left" Content="既定辞書として書き出し" Command="{Binding ExportCommand}"
                         Margin="0,0,14,0"
                         ToolTip="リポジトリ同梱の default-dictionary.json へ書き戻します" />
@@ -1200,7 +1215,7 @@
                     <Button DockPanel.Dock="Left" Content="削除" Command="{Binding RemoveAlbumOverrideCommand}"
                             Style="{StaticResource SmallOutlineButtonStyle}" Margin="0,0,14,0" />
                     <TextBlock Style="{StaticResource HintTextStyle}" VerticalAlignment="Center" TextWrapping="Wrap"
-                               Text="そのアルバムだけの例外（TAGGING_POLICY 3.5 規則4・規則6・規則7）。追加は検査結果タブの「このアルバムを対象外にする」から行う。disc が空欄ならそのフォルダの全ディスクに効く。" />
+                               Text="そのアルバムだけの例外（TAGGING_POLICY 3.5 規則2・規則4・規則6・規則7）。追加は検査結果タブの「このアルバムの扱いを決める」から行う。disc が空欄ならそのフォルダの全ディスクに効く。年は単位内で録音年が割れている場合だけ効く。" />
                   </DockPanel>
 
                   <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Padding="1">
@@ -1221,6 +1236,9 @@
                                             EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
                         <DataGridTextColumn Header="作品名" Binding="{Binding WorkName, UpdateSourceTrigger=PropertyChanged}" Width="180"
                                             ElementStyle="{StaticResource EllipsisTextStyle}"
+                                            EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
+                        <DataGridTextColumn Header="年" Binding="{Binding Date, UpdateSourceTrigger=PropertyChanged}" Width="60"
+                                            ElementStyle="{StaticResource NumericCellTextStyle}"
                                             EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
                         <DataGridCheckBoxColumn Header="対象外" Width="60"
                                                 Binding="{Binding Exclude, UpdateSourceTrigger=PropertyChanged}"

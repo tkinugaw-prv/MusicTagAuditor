@@ -320,4 +320,63 @@ public sealed class DictionaryEditorTests
         Assert.Contains("Karl Böhm", owner, StringComparison.Ordinal);
         Assert.False(DictionaryEditor.IsAlreadyKnown(index, "Various Artists", out _));
     }
+
+    /// <summary>
+    /// 既にある別名と同じ正規化キーになる別名を足さないことを確認する。
+    ///
+    /// 足しても索引は先勝ちで捨てるため引けるようにはならず、検証の警告だけが増える。
+    /// </summary>
+    [Fact]
+    public void DoesNotAddAliasCollidingWithExistingAlias()
+    {
+        TagDictionary before = new()
+        {
+            Persons = [new PersonEntry { Canonical = "Karl Böhm", Roles = ["Conductor"], Aliases = ["Bohm"] }],
+        };
+
+        TagDictionary after = DictionaryEditor.AddAlias(before, DictionaryCategory.Person, "Karl Böhm", "Böhm");
+
+        Assert.Equal(["Bohm"], after.Persons[0].Aliases);
+        Assert.Empty(DictionaryValidator.Validate(after));
+    }
+
+    /// <summary>
+    /// 正規形と同じ正規化キーになる別名を足さないことを確認する。
+    /// </summary>
+    [Fact]
+    public void DoesNotAddAliasCollidingWithCanonical()
+    {
+        TagDictionary before = new()
+        {
+            Composers = [new ComposerEntry { Canonical = "Antonín Dvořák" }],
+        };
+
+        TagDictionary after = DictionaryEditor.AddAlias(
+            before, DictionaryCategory.Composer, "Antonín Dvořák", "Antonin Dvorak");
+
+        Assert.Empty(after.Composers[0].Aliases);
+    }
+
+    /// <summary>
+    /// 既存の作品に別名を足すとき、正規化キーが同じものを足さないことを確認する。
+    ///
+    /// <c>Symphony No.7</c> と <c>Symphony No. 7</c> は辞書では同じキーになる。
+    /// 作品は番号で呼ぶものが大半で、この形の重複がもっとも溜まりやすい。
+    /// </summary>
+    [Fact]
+    public void DoesNotAddWorkAliasCollidingWithCanonical()
+    {
+        TagDictionary before = DictionaryEditor.AddWork(
+            new TagDictionary { Composers = [new ComposerEntry { Canonical = "Anton Bruckner" }] },
+            "Anton Bruckner",
+            "Symphony No. 7",
+            ["Bruckner 7"]);
+
+        TagDictionary after = DictionaryEditor.AddWork(
+            before, "Anton Bruckner", "Symphony No. 7", ["Symphony No.7", "ブルックナー 7"]);
+
+        Assert.Equal(["Bruckner 7"], after.Works[0].Aliases);
+        Assert.Equal(["ブルックナー 7"], after.Works[0].AliasesJa);
+        Assert.Empty(DictionaryValidator.Validate(after));
+    }
 }

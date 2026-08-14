@@ -2,11 +2,12 @@ using System.IO;
 using MusicTagAuditor.App.ViewModels;
 using MusicTagAuditor.Core.Dictionary;
 using MusicTagAuditor.Core.Inspection;
+using MusicTagAuditor.Core.Models;
 
 namespace MusicTagAuditor.App.Tests.ViewModels;
 
 /// <summary>
-/// 「このアルバムを対象外にする」ダイアログのテスト（docs/SPEC.md 7.3.2 / 7.4.5）。
+/// 「このアルバムの扱いを決める」ダイアログのテスト（docs/SPEC.md 7.3.2 / 7.4.5）。
 ///
 /// 守りたいのは 3 点。**フォルダと disc を明細から埋める**こと、**理由を空のまま登録させない**こと、
 /// **何も起きない例外を作らせない**こと。理由の書いていない例外は後から消してよいか判断できない。
@@ -63,7 +64,7 @@ public sealed class AlbumOverrideViewModelTests
         viewModel.Excludes = false;
 
         Assert.False(viewModel.CanApply(out string reason));
-        Assert.Contains("作曲家か作品名", reason, StringComparison.Ordinal);
+        Assert.Contains("作曲家・作品名・年", reason, StringComparison.Ordinal);
 
         viewModel.WorkName = "Symphony No. 5 (Olympia)";
 
@@ -110,23 +111,58 @@ public sealed class AlbumOverrideViewModelTests
     }
 
     /// <summary>
+    /// 年の保留から開いたときは、対象外を選ばせないことを確認する（docs/SPEC.md 7.4.4）。
+    ///
+    /// **そこまで来た単位は作品が決まっている＝主作品が定まっている**ので、規則6 には当たらない。
+    /// 選べるままだと、タグが割れた単位を検出から消すだけの操作ができてしまう。
+    /// </summary>
+    [Fact]
+    public void HidesExcludeForDateHold()
+    {
+        AlbumOverrideViewModel viewModel = CreateForSplitDate();
+
+        Assert.False(viewModel.CanExclude);
+        Assert.False(viewModel.Excludes);
+        Assert.Contains("対象外（規則6）には当たりません", viewModel.Notice, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 年は単位内にある値からしか選べず、選んだ値が個別例外に入ることを確認する（3.5 規則2）。
+    ///
+    /// **手で打たせない。** どのファイルにも入っていない年を書けると、
+    /// アルバム名だけが実在しない録音年を名乗る。
+    /// </summary>
+    [Fact]
+    public void OffersOnlyDatesFoundInUnit()
+    {
+        AlbumOverrideViewModel viewModel = CreateForSplitDate();
+
+        Assert.True(viewModel.HasSplitDates);
+        Assert.Equal(["1971", "1972"], viewModel.Dates);
+
+        viewModel.Note = "3.5 規則5 主作品は交響曲第6番";
+        viewModel.Date = "1971";
+
+        Assert.True(viewModel.CanApply(out _));
+        Assert.Equal("1971", viewModel.BuildEntry().Date);
+    }
+
+    /// <summary>
+    /// 年が割れていない単位では、年の指定を出さないことを確認する。選ぶものが 1 つしかない。
+    /// </summary>
+    [Fact]
+    public void HidesDateWhenUnitHasSingleDate()
+    {
+        Assert.False(Create().HasSplitDates);
+    }
+
+    /// <summary>
     /// 作曲家が 2 人いる単位を対象にしたダイアログを作る。
     /// </summary>
     /// <param name="overrides">辞書に入れておく個別例外。</param>
     /// <returns>ビューモデル。</returns>
     private static AlbumOverrideViewModel Create(IReadOnlyList<AlbumOverrideEntry>? overrides = null)
     {
-        TagDictionary dictionary = new()
-        {
-            Composers =
-            [
-                new ComposerEntry { Canonical = "Anton Bruckner" },
-                new ComposerEntry { Canonical = "Johannes Brahms" },
-                new ComposerEntry { Canonical = "Franz Schubert" },
-            ],
-            AlbumOverrides = overrides ?? [],
-        };
-
         AlbumUnit unit = new(
             FOLDER,
             2,
@@ -136,6 +172,43 @@ public sealed class AlbumOverrideViewModelTests
             ["1990"],
             ["名曲集"]);
 
-        return new AlbumOverrideViewModel(dictionary, unit);
+        return new AlbumOverrideViewModel(Dictionary(overrides), unit);
+    }
+
+    /// <summary>
+    /// 主作品 + カップリングで年が割れている単位のダイアログを作る（3.5 規則2・規則5）。
+    /// </summary>
+    /// <returns>ビューモデル。</returns>
+    private static AlbumOverrideViewModel CreateForSplitDate()
+    {
+        AlbumUnit unit = new(
+            FOLDER,
+            1,
+            [],
+            ["Ludwig van Beethoven"],
+            ["Karl Böhm"],
+            ["1971", "1972"],
+            ["Symphony No.6"]);
+
+        return new AlbumOverrideViewModel(Dictionary(null), unit, HoldReason.DateUnknown);
+    }
+
+    /// <summary>
+    /// テスト用の辞書を作る。
+    /// </summary>
+    /// <param name="overrides">辞書に入れておく個別例外。</param>
+    /// <returns>辞書。</returns>
+    private static TagDictionary Dictionary(IReadOnlyList<AlbumOverrideEntry>? overrides)
+    {
+        return new TagDictionary
+        {
+            Composers =
+            [
+                new ComposerEntry { Canonical = "Anton Bruckner" },
+                new ComposerEntry { Canonical = "Johannes Brahms" },
+                new ComposerEntry { Canonical = "Franz Schubert" },
+            ],
+            AlbumOverrides = overrides ?? [],
+        };
     }
 }

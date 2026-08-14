@@ -38,7 +38,7 @@ tools/TagIoProbe (net10.0, コンソール) … どこにも依存しない独�
 | `Abstractions/` | `ITagReader` / `ITagWriter`。タグ入出力の抽象インターフェース。`TagIo` プロジェクトが実装する |
 | `Applying/` | 検査結果・手編集の差分をタグへ適用する処理(`ApplyService`)とその入出力モデル |
 | `Backup/` | タグのスナップショット取得(`SnapshotService`)・復元(`RestoreService`)。音声ファイル本体は複製せず、タグのみを JSON化する。保存先は注入された取得関数で解決し(既定はライブラリ直下)、`Settings/` への依存は持たない |
-| `Dictionary/` | 正規化辞書のロード・編集・検証・マージ・保存(`DictionaryLoader` / `DictionaryEditor` / `DictionaryValidator` / `DictionaryMerger` / `DictionaryWriter` など)。辞書に無い値の収集(`UnknownValueCollector`)、手編集の入力候補の組み立てと絞り込み(`DictionarySuggester`)も含む |
+| `Dictionary/` | 正規化辞書のロード・編集・検証・マージ・保存(`DictionaryLoader` / `DictionaryEditor` / `DictionaryValidator` / `DictionaryMerger` / `DictionaryWriter` など)。辞書に無い値の収集(`UnknownValueCollector`)、手編集の入力候補の組み立てと絞り込み(`DictionarySuggester`)、索引に載らない別名の除去(`RedundantAliasCleaner`)も含む |
 | `Editing/` | 手編集セットの保持・検証(`ManualEditSet` / `ManualEditValidator`) |
 | `Export/` | 検査結果差分の CSV 出力(`ChangeCsvExporter`) |
 | `Inspection/` | 検査エンジン本体(`InspectionEngine`)と付随ロジック(`ComposerFinder` / `ConductorFinder` / `MojibakeDetector` / `DiacriticCandidates` など)。ルール本体は `Inspection/Rules/` にまとめている |
@@ -89,6 +89,7 @@ WPF / MVVM によるデスクトップアプリケーション本体。
 | `MainWindow.xaml(.cs)` | メイン画面 |
 | `AddToDictionaryWindow.xaml(.cs)` | 検査結果・手編集から辞書へ値を追加するダイアログ |
 | `MergeDictionaryWindow.xaml(.cs)` | 既定辞書からの取り込みダイアログ |
+| `CleanupDictionaryWindow.xaml(.cs)` | 索引に載らない別名を取り除く前の確認ダイアログ |
 | `App.xaml(.cs)` | アプリケーションエントリポイント。DI コンテナ・Serilog の初期化 |
 | `AppConst.cs` | アプリ層の定数 |
 

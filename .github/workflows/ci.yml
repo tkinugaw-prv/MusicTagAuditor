@@ -7,8 +7,12 @@ name: CI
 on:
   push:
     branches: [main, develop]
+  # PR は base で絞らない。branches は **base ブランチ**に対するフィルタなので、
+  # [main, develop] にすると feature ブランチを base に積んだ PR で CI が動かない。
+  # 動かないだけならまだしも、必須チェックが「未実行」のまま BLOCKED になり、
+  # base を develop に付け替えても edited イベントは既定のトリガーに含まれないため
+  # 走り出さない（PR #68 で実際に詰まった）。
   pull_request:
-    branches: [main, develop]
 
 # 同じブランチへ続けて push したときは古い実行を打ち切る
 concurrency:
