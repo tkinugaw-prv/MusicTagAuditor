@@ -220,6 +220,100 @@ public sealed class TagReaderTests : IDisposable
     }
 
     /// <summary>
+    /// M4A の <c>©cmt</c> が <c>comment</c> として読めることを確認する。
+    /// </summary>
+    [Fact]
+    public void MapsCmtAtomToComment()
+    {
+        string path = WriteM4a(
+        [
+            ("©cmt", MinimalAudioFileBuilder.DATA_TYPE_UTF8, [Utf8("ハース版")]),
+        ]);
+
+        Assert.Equal("ハース版", _reader.Read(path, "test.m4a").Comment);
+    }
+
+    /// <summary>
+    /// **ID3 の <c>COMM</c> を <c>comment</c> として読まないことを確認する。**
+    ///
+    /// iTunes は <c>iTunNORM</c> 等を description 付きの <c>COMM</c> に入れる。論理フィールドに
+    /// 対応づけると、そのバイナリ文字列が画面のコメント欄に出てしまう
+    /// （docs/TAGGING_POLICY.md 4.4）。記録としては <c>RawTags</c> に残る。
+    /// </summary>
+    [Theory]
+    [InlineData("mp3")]
+    [InlineData("aif")]
+    public void DoesNotReadId3CommentField(string extension)
+    {
+        string path = Path.Combine(_workDir, $"test.{extension}");
+        File.WriteAllBytes(
+            path,
+            extension == "mp3" ? MinimalAudioFileBuilder.BuildMp3() : MinimalAudioFileBuilder.BuildAiff());
+
+        using (TagLib.File file = TagLib.File.Create(path))
+        {
+            TagLib.Id3v2.Tag id3 = (TagLib.Id3v2.Tag)file.GetTag(TagLib.TagTypes.Id3v2, create: true);
+            id3.AddFrame(new TagLib.Id3v2.CommentsFrame("iTunNORM", "eng") { Text = " 000001A5 00000174" });
+            file.Save();
+        }
+
+        TrackTags tags = _reader.Read(path, $"test.{extension}");
+
+        Assert.Null(tags.Comment);
+        Assert.Contains("COMM", tags.RawTags.Keys);
+    }
+
+    /// <summary>
+    /// 形式ごとに扱えるフィールドの宣言（<c>TagFieldConst.IsSupported</c>）と、
+    /// 実体の対応表（<c>TagIoConst</c> の 3 辞書）が一致することを確認する。
+    ///
+    /// **両者を同時に見られるのはこのテストだけである。** 依存の向きは TagIo → Core なので、
+    /// Core 側からは対応表を参照できない。宣言だけ直して辞書を直し忘れると、画面は
+    /// 「扱える」と言うのに書き込みが黙って無視される、という食い違いが起きる。
+    /// </summary>
+    [Fact]
+    public void TagIoConstMatchesSupportedFields()
+    {
+        Dictionary<AudioFormat, IReadOnlyDictionary<TagField, string>> tables = new()
+        {
+            [AudioFormat.M4a] = TagIoConst.MP4_ATOM_BY_FIELD,
+            [AudioFormat.Flac] = TagIoConst.VORBIS_FIELD_BY_FIELD,
+            [AudioFormat.Id3] = TagIoConst.ID3_FRAME_BY_FIELD,
+        };
+
+        foreach ((AudioFormat format, IReadOnlyDictionary<TagField, string> table) in tables)
+        {
+            foreach (TagField field in Enum.GetValues<TagField>())
+            {
+                Assert.Equal(TagFieldConst.IsSupported(format, field), table.ContainsKey(field));
+            }
+        }
+    }
+
+    /// <summary>
+    /// 利用者に見せる拡張子の宣言（<c>AudioFormatConst</c>）と、実際に読み込む拡張子の対応表
+    /// （<c>TagIoConst.FORMAT_BY_EXTENSION</c>）が一致することを確認する。
+    ///
+    /// **両者を同時に見られるのはこのテストだけである**（依存の向きは TagIo → Core）。
+    /// 食い違うと、気づきの文面が実際には対象でない拡張子を名指しする。
+    /// </summary>
+    [Fact]
+    public void AudioFormatConstMatchesExtensionTable()
+    {
+        foreach (AudioFormat format in Enum.GetValues<AudioFormat>())
+        {
+            IEnumerable<string> actual = TagIoConst.FORMAT_BY_EXTENSION
+                .Where(pair => pair.Value == format)
+                .Select(pair => pair.Key)
+                .Order(StringComparer.Ordinal);
+
+            IEnumerable<string> declared = AudioFormatConst.Extensions(format).Order(StringComparer.Ordinal);
+
+            Assert.Equal(actual, declared);
+        }
+    }
+
+    /// <summary>
     /// 指定した atom を持つ M4A を一時フォルダに書き出す。
     /// </summary>
     private string WriteM4a(

@@ -1000,6 +1000,31 @@ public sealed class RemainingRuleTests
     }
 
     /// <summary>
+    /// 全フィールドを走査するルールが <c>comment</c> を拾わないことを確認する
+    /// （docs/TAGGING_POLICY.md 2.4「正規形を定めず、検査ルールの対象にしない」）。
+    ///
+    /// <c>comment</c> は自由記述なので、<c>;</c> も重複した語も、文字化けに見えるバイト列さえ
+    /// 正当な内容でありうる。**同じ値を <c>title</c> に入れると検出されることも併せて見る。**
+    /// 片側だけを見ていると、ルール自体が壊れて何も検出しなくなったときにも緑のままになる。
+    /// </summary>
+    [Theory]
+    [InlineData("R-205")]
+    [InlineData("R-206")]
+    [InlineData("R-403")]
+    public void DoesNotInspectFreeTextField(string ruleId)
+    {
+        string value = ruleId switch
+        {
+            "R-205" => "ハース版; ノヴァーク版",
+            "R-206" => "Anton Bruckner; Anton Bruckner",
+            _ => Garble("ハース版"),
+        };
+
+        Assert.Empty(ChangesOf(Inspect(Track("01.flac", (TagField.Comment, [value]))), ruleId));
+        Assert.NotEmpty(ChangesOf(Inspect(Track("01.flac", (TagField.Title, [value]))), ruleId));
+    }
+
+    /// <summary>
     /// 日本語を Shift-JIS として書き、Latin-1 として読み違えた状態を作る。
     /// 実ライブラリの 4 ファイルと同じ壊れ方を再現する。
     /// </summary>

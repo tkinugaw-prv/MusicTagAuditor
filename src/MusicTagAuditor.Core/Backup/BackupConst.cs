@@ -1,4 +1,5 @@
 using System.Globalization;
+using MusicTagAuditor.Core.Models;
 
 namespace MusicTagAuditor.Core.Backup;
 
@@ -9,7 +10,37 @@ namespace MusicTagAuditor.Core.Backup;
 public static class BackupConst
 {
     /// <summary>スナップショット JSON のスキーマ版。</summary>
-    public const int SCHEMA_VERSION = 1;
+    public const int SCHEMA_VERSION = 2;
+
+    /// <summary><c>comment</c> を記録するようになった版。</summary>
+    public const int SCHEMA_VERSION_WITH_COMMENT = 2;
+
+    /// <summary>
+    /// フィールドごとに、それを記録するようになったスキーマ版。ここに無いフィールドは版 1 から記録している。
+    ///
+    /// 版を上げてフィールドを足すときは <see cref="SCHEMA_VERSION"/> を上げ、この表に 1 行足す。
+    /// 復元側のロジックには触らなくてよい。
+    /// </summary>
+    private static readonly IReadOnlyDictionary<TagField, int> FIRST_VERSION_BY_FIELD =
+        new Dictionary<TagField, int>
+        {
+            [TagField.Comment] = SCHEMA_VERSION_WITH_COMMENT,
+        };
+
+    /// <summary>
+    /// そのスキーマ版のスナップショットがフィールドを記録しているかを返す。
+    ///
+    /// 記録していない版では、スナップショットに値が無いことを「空だった」と読んではならない。
+    /// 両者を区別できないまま復元すると、現在入っている値を消してしまう。
+    /// </summary>
+    /// <param name="schemaVersion">スナップショットのスキーマ版。</param>
+    /// <param name="field">対象フィールド。</param>
+    /// <returns>記録している版なら true。</returns>
+    public static bool IsFieldRecorded(int schemaVersion, TagField field)
+    {
+        return !FIRST_VERSION_BY_FIELD.TryGetValue(field, out int firstVersion)
+            || schemaVersion >= firstVersion;
+    }
 
     /// <summary>バックアップフォルダ名の接頭辞。スキャンの除外規則と一致させること。</summary>
     public const string BACKUP_DIRECTORY_PREFIX = "backup_";

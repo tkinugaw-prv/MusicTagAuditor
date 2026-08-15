@@ -258,7 +258,7 @@ public sealed class SemicolonValueRule : IInspectionRule
     {
         foreach (TrackTags track in context.Tracks)
         {
-            foreach (TagField field in Enum.GetValues<TagField>())
+            foreach (TagField field in InspectionConst.INSPECTED_FIELDS)
             {
                 if (context.IsProtected(track, field))
                 {
@@ -306,7 +306,7 @@ public sealed class DuplicateConcatenationRule : IInspectionRule
     {
         foreach (TrackTags track in context.Tracks)
         {
-            foreach (TagField field in Enum.GetValues<TagField>())
+            foreach (TagField field in InspectionConst.INSPECTED_FIELDS)
             {
                 if (context.IsProtected(track, field))
                 {

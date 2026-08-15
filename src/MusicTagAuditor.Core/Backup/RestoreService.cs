@@ -54,6 +54,14 @@ public sealed class RestoreService
 
             foreach (TagField field in Enum.GetValues<TagField>())
             {
+                // 記録していない版のスナップショットでは、値の不在を「空だった」と読めない。
+                // 現在の値と突き合わせると必ず不一致になり、既定でチェック済みの復元項目として
+                // 積まれるため、そのまま適用すると今入っている値を消してしまう。
+                if (!BackupConst.IsFieldRecorded(snapshot.Version, field))
+                {
+                    continue;
+                }
+
                 string[] snapshotValues = snapshotTrack.Fields.TryGetValue(field.ToString(), out string[]? values)
                     ? values
                     : [];

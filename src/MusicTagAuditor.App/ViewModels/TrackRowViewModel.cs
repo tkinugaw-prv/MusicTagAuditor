@@ -115,11 +115,25 @@ public sealed class TrackRowViewModel : ObservableObject
         set => Set(TagField.DiscNumber, value);
     }
 
+    /// <summary>
+    /// 自由記述の注記。版・稿の情報を置く（docs/TAGGING_POLICY.md 2.4）。
+    /// ID3（.mp3 / .aif）では扱わないため常に空で、編集すると気づきが出る（同 4.4）。
+    /// </summary>
+    public string? Comment
+    {
+        get => Get(TagField.Comment);
+        set => Set(TagField.Comment, value);
+    }
+
     /// <summary>この行に保留中の編集があるか。</summary>
     public bool IsEdited => _edits.IsEdited(RelativePath);
 
-    /// <summary>いずれかのフィールドが空欄か。R-401 / R-402 の対象を探すときの絞り込みに使う。</summary>
-    public bool HasEmptyField => ManualEditConst.EDITABLE_FIELDS.Any(tagField => string.IsNullOrEmpty(Get(tagField)));
+    /// <summary>
+    /// いずれかのフィールドが空欄か。R-401 / R-402 の対象を探すときの絞り込みに使う。
+    /// 自由記述のフィールドは見ない（<c>comment</c> は空が正常なので、含めると全行が当たる）。
+    /// </summary>
+    public bool HasEmptyField =>
+        ManualEditConst.EMPTY_CHECK_FIELDS.Any(tagField => string.IsNullOrEmpty(Get(tagField)));
 
     /// <summary>絞り込みの対象になる文字列をまとめたもの。</summary>
     public string SearchText => string.Join(

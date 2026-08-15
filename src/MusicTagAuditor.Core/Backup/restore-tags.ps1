@@ -74,6 +74,7 @@ $MP4_ATOM_BY_FIELD = @{
     Album       = "$([char]0xA9)alb"
     Genre       = "$([char]0xA9)gen"
     Date        = "$([char]0xA9)day"
+    Comment     = "$([char]0xA9)cmt"
 }
 
 $VORBIS_FIELD_BY_FIELD = @{
@@ -87,8 +88,12 @@ $VORBIS_FIELD_BY_FIELD = @{
     Date        = 'DATE'
     TrackNumber = 'TRACKNUMBER'
     DiscNumber  = 'DISCNUMBER'
+    Comment     = 'COMMENT'
 }
 
+# Comment を載せていない。ID3v2 の COMM は iTunes が iTunNORM 等を description 付きで
+# 格納する場所でもあり、論理フィールドとして扱うと巻き添えで消す（docs/TAGGING_POLICY.md 4.4）。
+# 本体の TagIoConst.ID3_FRAME_BY_FIELD と同じ判断。
 $ID3_FRAME_BY_FIELD = @{
     Title       = 'TIT2'
     Artist      = 'TPE1'
@@ -319,6 +324,9 @@ foreach ($track in $snapshot.tracks)
     {
         $differences = @()
 
+        # スナップショットに実在するフィールドだけを回す。これは古いスキーマ版との互換性でもある。
+        # 全フィールドを列挙する形に書き換えてはならない。記録の無いフィールドが「空だった」と
+        # 解釈され、今入っている値を消す（本体側は BackupConst.IsFieldRecorded で同じ事故を防いでいる）。
         foreach ($field in $track.fields.PSObject.Properties)
         {
             $expected = Get-JoinedValue ([string[]]$field.Value)

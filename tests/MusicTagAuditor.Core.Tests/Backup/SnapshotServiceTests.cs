@@ -98,6 +98,10 @@ public sealed class SnapshotServiceTests : IDisposable
         Assert.Equal("M4a", track.Format);
         Assert.Equal(["Anton Bruckner"], track.Fields[nameof(TagField.Composer)]);
         Assert.Equal(["Günter Wand"], track.Fields[nameof(TagField.Conductor)]);
+
+        // comment は版 2 から記録する。ここが欠けると、復元側の版ゲートが
+        // 「記録が無い」と判断して巻き戻しを取りこぼす。
+        Assert.Equal(["ハース版"], track.Fields[nameof(TagField.Comment)]);
     }
 
     /// <summary>
@@ -336,6 +340,7 @@ public sealed class SnapshotServiceTests : IDisposable
                 new(TagField.Composer, ["Anton Bruckner"]),
                 new(TagField.Conductor, ["Günter Wand"]),
                 new(TagField.Genre, ["Classic"]),
+                new(TagField.Comment, ["ハース版"]),
             ]),
             RawTags = new Dictionary<string, string[]>
             {

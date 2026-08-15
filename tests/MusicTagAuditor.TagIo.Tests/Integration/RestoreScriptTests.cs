@@ -181,6 +181,61 @@ public sealed class RestoreScriptTests : IDisposable
     }
 
     /// <summary>
+    /// <c>comment</c> がスクリプト経由でも往復することを確認する（M4A / FLAC）。
+    ///
+    /// 併せて、**ID3 の <c>COMM</c> に触らないこと**を見る。スクリプトの対応表に
+    /// <c>COMM</c> を足すと、iTunes が入れた <c>iTunNORM</c> 等を巻き添えで消す
+    /// （docs/TAGGING_POLICY.md 4.4）。本体と同じ判断をスクリプト側でも固定する。
+    /// </summary>
+    [PowerShellFact]
+    public async Task RestoresCommentWithoutTouchingId3CommentFrames()
+    {
+        CreateFile("01.m4a");
+        CreateFile("02.flac");
+        CreateFile("03.aif");
+
+        foreach (string fileName in new[] { "01.m4a", "02.flac" })
+        {
+            _writer.Write(Path.Combine(_root, fileName), new Dictionary<TagField, IReadOnlyList<string>>
+            {
+                [TagField.Comment] = ["ハース版"],
+            });
+        }
+
+        string aifPath = Path.Combine(_root, "03.aif");
+        using (TagLib.File file = TagLib.File.Create(aifPath))
+        {
+            TagLib.Id3v2.Tag id3 = (TagLib.Id3v2.Tag)file.GetTag(TagLib.TagTypes.Id3v2, create: true);
+            id3.AddFrame(new TagLib.Id3v2.CommentsFrame("iTunNORM", "eng") { Text = " 000001A5 00000174" });
+            file.Save();
+        }
+
+        string backupDirectory = await CreateSnapshotAsync();
+
+        foreach (string fileName in new[] { "01.m4a", "02.flac" })
+        {
+            _writer.Write(Path.Combine(_root, fileName), new Dictionary<TagField, IReadOnlyList<string>>
+            {
+                [TagField.Comment] = ["ノヴァーク版"],
+            });
+        }
+
+        (int exitCode, _) = RunRestoreScript(backupDirectory, dryRun: false);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal("ハース版", _reader.Read(Path.Combine(_root, "01.m4a"), "01.m4a").Comment);
+        Assert.Equal("ハース版", _reader.Read(Path.Combine(_root, "02.flac"), "02.flac").Comment);
+
+        using TagLib.File restored = TagLib.File.Create(aifPath);
+        TagLib.Id3v2.Tag restoredId3 = (TagLib.Id3v2.Tag)restored.GetTag(TagLib.TagTypes.Id3v2);
+
+        TagLib.Id3v2.CommentsFrame frame = Assert.Single(
+            restoredId3.GetFrames().OfType<TagLib.Id3v2.CommentsFrame>());
+
+        Assert.Equal("iTunNORM", frame.Description);
+    }
+
+    /// <summary>
     /// <c>-DryRun</c> では差分を表示するだけで書き込まないことを確認する。
     /// 「何が戻るのかを確認できること」が要件（docs/SPEC.md 8.3）。
     /// </summary>

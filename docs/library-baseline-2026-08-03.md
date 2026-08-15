@@ -448,3 +448,33 @@ dotnet test --filter "FullyQualifiedName~RealLibraryScanTests"
 ```bash
 dotnet run --project tools/AlbumProbe/AlbumProbe.csproj -- "D:\Music\Classic"
 ```
+
+---
+
+## `comment` の実態（2026-08-15 追記）
+
+`comment` をアプリで扱えるようにするか、扱うならどの形式までかを決めるために測った。読み取りのみ。
+
+| 形式 | ファイル数 | `comment` を持つファイル |
+|---|---|---|
+| M4A | 505 | **0** |
+| FLAC | 573 | **0** |
+| ID3（AIFF 11 / MP3 4） | 15 | **0**（下記のとおり利用者の注記としては 0） |
+
+**`comment` はライブラリ全体で 1 件も使われていない。** 版・稿の注記（`TAGGING_POLICY.md` 2.4）はこれから入れ始めるフィールドである。
+
+### ID3v2 の `COMM` は空ではない
+
+AIFF 11 件（`グリーグ` フォルダ）は**全件**が `COMM` フレームを 3 個ずつ持ち、**すべて description 付き**だった。MP3 4 件は `COMM` を持たない。
+
+| description | language | 値 |
+|---|---|---|
+| `iTunPGAP` | eng | `0` |
+| `iTunes_CDDB_IDs` | eng | `11++` |
+| `iTunNORM` | eng | ` 000001A5 00000174 00003186 00002A4A 0003EDE1 000A3552 ...` |
+
+**description が空のフレーム（＝利用者のコメント）は 1 件も無い。**
+
+この実測にもとづき、ID3 では `comment` を扱わないことにした（`TAGGING_POLICY.md` 4.4）。空 description だけを読み書きする特別扱いで事故は避けられるが、得られるのは 15 ファイルで注記を編集できることだけで、その 15 ファイルに注記は無い。一方 `iTunNORM` の消失は不可逆である（スナップショットの `RawTags` は記録用で復元に使わない）。
+
+なお、ファイル数が測定日 2026-08-03 の 1,041 件（M4A 516・FLAC 510）から動いているのは、その後の所蔵の増減による。形式の比率と ID3 が 15 件である点は変わっていない。
