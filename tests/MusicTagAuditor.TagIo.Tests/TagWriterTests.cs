@@ -82,11 +82,14 @@ public sealed class TagWriterTests : IDisposable
             [TagField.Date] = ["1988"],
             [TagField.TrackNumber] = ["3/6"],
             [TagField.DiscNumber] = ["1/1"],
+            [TagField.Comment] = ["Haas edition"],
         };
 
         _writer.Write(path, fields);
 
         TrackTags tags = _reader.Read(path, "test.m4a");
+
+        Assert.Equal("Haas edition", tags.Comment);
 
         Assert.Equal("Symphony No.8 - I. Allegro moderato", tags.Title);
         Assert.Equal("Herbert von Karajan", tags.Artist);
@@ -242,6 +245,134 @@ public sealed class TagWriterTests : IDisposable
     }
 
     /// <summary>
+    /// M4A / FLAC の <c>comment</c> が往復することを確認する（docs/TAGGING_POLICY.md 4.1）。
+    /// </summary>
+    [Theory]
+    [InlineData("m4a")]
+    [InlineData("flac")]
+    public void RoundTripsComment(string extension)
+    {
+        string path = CreateFile(extension);
+
+        _writer.Write(path, new Dictionary<TagField, IReadOnlyList<string>>
+        {
+            [TagField.Comment] = ["ノヴァーク版 1890"],
+        });
+
+        Assert.Equal("ノヴァーク版 1890", _reader.Read(path, $"test.{extension}").Comment);
+    }
+
+    /// <summary>
+    /// M4A の <c>comment</c> が <c>©cmt</c> に書かれることを確認する。
+    /// AIMP のコメント欄はこの atom を読む。
+    /// </summary>
+    [Fact]
+    public void WritesM4aCommentToCmtAtom()
+    {
+        string path = CreateM4a();
+
+        _writer.Write(path, new Dictionary<TagField, IReadOnlyList<string>>
+        {
+            [TagField.Comment] = ["Haas edition"],
+        });
+
+        Mp4Atom comment = Assert.Single(Mp4AtomReader.Read(path), atom => atom.Name == "©cmt");
+        Assert.Equal(["Haas edition"], comment.Values);
+    }
+
+    /// <summary>
+    /// 他のフィールドを書いても既存の <c>comment</c> が残ることを確認する。
+    /// </summary>
+    [Theory]
+    [InlineData("m4a")]
+    [InlineData("flac")]
+    public void PreservesExistingCommentWhenWritingOtherFields(string extension)
+    {
+        string path = CreateFile(extension);
+
+        _writer.Write(path, new Dictionary<TagField, IReadOnlyList<string>>
+        {
+            [TagField.Comment] = ["Haas edition"],
+        });
+
+        _writer.Write(path, new Dictionary<TagField, IReadOnlyList<string>>
+        {
+            [TagField.Composer] = ["Anton Bruckner"],
+        });
+
+        TrackTags tags = _reader.Read(path, $"test.{extension}");
+
+        Assert.Equal("Haas edition", tags.Comment);
+        Assert.Equal("Anton Bruckner", tags.Composer);
+    }
+
+    /// <summary>
+    /// 空の値を渡すと <c>comment</c> が消えることを確認する。
+    /// </summary>
+    [Theory]
+    [InlineData("m4a")]
+    [InlineData("flac")]
+    public void RemovesCommentWhenValuesAreEmpty(string extension)
+    {
+        string path = CreateFile(extension);
+
+        _writer.Write(path, new Dictionary<TagField, IReadOnlyList<string>>
+        {
+            [TagField.Comment] = ["Haas edition"],
+        });
+
+        _writer.Write(path, new Dictionary<TagField, IReadOnlyList<string>>
+        {
+            [TagField.Comment] = [],
+        });
+
+        Assert.Null(_reader.Read(path, $"test.{extension}").Comment);
+    }
+
+    /// <summary>
+    /// **ID3 の <c>COMM</c> フレームに一切触らないことを確認する。**
+    ///
+    /// ID3v2 では iTunes が <c>iTunNORM</c> / <c>iTunSMPB</c> / <c>iTunes_CDDB_IDs</c> を
+    /// description 付きの <c>COMM</c> に格納する。実測（2026-08-15）では対象ライブラリの
+    /// AIFF 11 件すべてがこの形だった。<c>comment</c> を ID3 の論理フィールドとして扱うと、
+    /// 値を空にしたときの <c>RemoveFrames</c> が音量正規化情報ごと消す。
+    /// <c>RawTags</c> は記録用で復元に使わないため、消えたら戻せない。
+    ///
+    /// 本テストは、うっかり <c>ID3_FRAME_BY_FIELD</c> に <c>COMM</c> を足したときに気づくために置く。
+    /// </summary>
+    [Theory]
+    [InlineData("mp3")]
+    [InlineData("aif")]
+    public void DoesNotTouchId3CommentFrames(string extension)
+    {
+        string path = CreateFile(extension);
+        AddId3ApplicationComments(path);
+
+        // 値を入れる場合と消す場合の両方を通す。消す側が RemoveFrames を踏む。
+        _writer.Write(path, new Dictionary<TagField, IReadOnlyList<string>>
+        {
+            [TagField.Comment] = ["Haas edition"],
+            [TagField.Composer] = ["Anton Bruckner"],
+        });
+
+        _writer.Write(path, new Dictionary<TagField, IReadOnlyList<string>>
+        {
+            [TagField.Comment] = [],
+        });
+
+        using TagLib.File file = TagLib.File.Create(path);
+        TagLib.Id3v2.Tag id3 = (TagLib.Id3v2.Tag)file.GetTag(TagLib.TagTypes.Id3v2);
+
+        string[] descriptions =
+        [
+            .. id3.GetFrames().OfType<TagLib.Id3v2.CommentsFrame>().Select(frame => frame.Description),
+        ];
+
+        Assert.Equal(["iTunPGAP", "iTunes_CDDB_IDs", "iTunNORM"], descriptions);
+        Assert.Equal("Anton Bruckner", _reader.Read(path, $"test.{extension}").Composer);
+    }
+
+    /// <summary>
     /// 対応していない拡張子では例外になることを確認する。
     /// </summary>
     [Fact]
@@ -289,5 +420,29 @@ public sealed class TagWriterTests : IDisposable
     private static byte[] Utf8(string value)
     {
         return Encoding.UTF8.GetBytes(value);
+    }
+
+    /// <summary>
+    /// 実ライブラリの AIFF と同じ形で、iTunes の内部データを <c>COMM</c> に仕込む。
+    /// description 付きであることが要点で、値そのものは実測から取っている。
+    /// </summary>
+    private static void AddId3ApplicationComments(string path)
+    {
+        using TagLib.File file = TagLib.File.Create(path);
+        TagLib.Id3v2.Tag id3 = (TagLib.Id3v2.Tag)file.GetTag(TagLib.TagTypes.Id3v2, create: true);
+
+        (string Description, string Text)[] comments =
+        [
+            ("iTunPGAP", "0"),
+            ("iTunes_CDDB_IDs", "11++"),
+            ("iTunNORM", " 000001A5 00000174 00003186 00002A4A 0003EDE1 000A3552"),
+        ];
+
+        foreach ((string description, string text) in comments)
+        {
+            id3.AddFrame(new TagLib.Id3v2.CommentsFrame(description, "eng") { Text = text });
+        }
+
+        file.Save();
     }
 }

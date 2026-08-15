@@ -1,6 +1,8 @@
+using System.ComponentModel;
 using System.Windows;
 using MusicTagAuditor.App.Interop;
 using MusicTagAuditor.App.ViewModels;
+using MusicTagAuditor.Core.Dictionary;
 
 namespace MusicTagAuditor.App;
 
@@ -22,6 +24,35 @@ public partial class AddToDictionaryWindow : Window
 
         _viewModel = viewModel;
         DataContext = viewModel;
+
+        _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+    }
+
+    /// <summary>
+    /// 演奏団体の新規登録欄が現れたら、実体 ID の先頭（国コードを打つ位置）へ
+    /// カーソルを合わせる。自動提案の値をそのまま見落とすのを防ぐため。
+    /// </summary>
+    /// <param name="sender">送信元。</param>
+    /// <param name="e">変更されたプロパティ名。</param>
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is not (nameof(AddToDictionaryViewModel.AddsToExisting)
+            or nameof(AddToDictionaryViewModel.Category)))
+        {
+            return;
+        }
+
+        if (_viewModel.AddsToExisting || _viewModel.Category != DictionaryCategory.Ensemble)
+        {
+            return;
+        }
+
+        // Visibility の切り替えがレイアウトへ反映されてからでないとフォーカスが効かない。
+        Dispatcher.BeginInvoke(() =>
+        {
+            EntityIdTextBox.Focus();
+            EntityIdTextBox.CaretIndex = 0;
+        });
     }
 
     /// <summary>

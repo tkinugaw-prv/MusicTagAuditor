@@ -118,6 +118,9 @@ DataGrid のセル編集で使う場合は `GridEditingSuggestBoxStyle` を当�
 - **M4A はファイル全体を読まない。** タグは `moov` の中にあり、ファイルの大半を占める `mdat`（音声本体）には無い。全体を読むと 1,041 ファイルのスキャンに 34 秒かかり、非機能要件（1,000 ファイル / 10 秒）を満たせない。`moov` だけをシークして読むこと。
 - **`;` を値の区切りに使わない**（`TAGGING_POLICY.md` 3.4）。
 - **既知の制約**: M4A では複数値を書き分けられない。TagLib# の `AppleTag.SetText` は `string[]` を `"; "` で連結して 1 つの data ボックスに書くため、AIMP が分割した状態を復元できない。書き込み後の読み戻し照合で不一致として検出される。FLAC / MP3 / AIFF に制約はない。
+- **ID3v2 の `COMM` を論理フィールドに対応づけない**（`TAGGING_POLICY.md` 4.4）。`TagIoConst.ID3_FRAME_BY_FIELD` に `Comment` を足してはならない。`COMM` は description を持ち、iTunes が `iTunNORM` / `iTunSMPB` / `iTunes_CDDB_IDs` をそこへ入れる。辞書駆動で読むと description を区別せずに平坦化した値を拾い、値が空のときの `RemoveFrames` が音量正規化情報ごと消す（`RawTags` は記録用で復元に使わないため戻せない）。実測 2026-08-15 では対象ライブラリの AIFF 11 件すべてが該当し、利用者のコメントは 0 件だった。`TagWriterTests.DoesNotTouchId3CommentFrames` と `TagReaderTests.DoesNotReadId3CommentField` が固定している。
+- **将来 ID3 の comment に対応する場合でも、次の TagLib# API は使ってはならない。** `Id3v2.Tag.Comment`（getter は最初のフレームへフォールバックして `iTunNORM` を返しうる。setter の空値経路は `RemoveFrames(FrameType.COMM)`）、`CommentsFrame.Get(..., create: true)`（description **と** language の両方で一致判定するため、language が違うと 2 個目の空 description フレームを作る）、`CommentsFrame.GetPreferred`（同じフォールバックを持つ）。`GetFrames<CommentsFrame>()` で自分で列挙し、description が空のものだけを対象にすること。
+- **形式ごとに扱えるフィールドの宣言は `TagFieldConst.IsSupported` にある。** 実体は `TagIoConst` の 3 辞書だが、依存の向きが TagIo → Core なので Core と App からは参照できない。両者の食い違いは `TagReaderTests.TagIoConstMatchesSupportedFields` が検出する。
 
 ---
 
@@ -126,6 +129,8 @@ DataGrid のセル編集で使う場合は `GridEditingSuggestBoxStyle` を当�
 `docs/SPEC.md` 6.1 の 26 ルールをすべて実装している。
 
 重大度は画面上で **`エラー` / `警告` / `要確認`** の文字と色で示す。SPEC が使っている記号（⛔ ⚠ ❓）は**実描画では単色の代替字形に置き換わり、塗りと線の違いしか出ないため意味が読めない**。記号に戻さないこと。
+
+**全フィールドを走査するルールは `InspectionConst.INSPECTED_FIELDS` を回すこと。** `Enum.GetValues<TagField>()` を直接回してはならない。自由記述のフィールド（`comment`）は正規形を定めないため検査できず（`TAGGING_POLICY.md` 2.4）、走査に混ざると誤検出になる。`comment` は句読点として `;` を含みうるので R-205 が顕著。この一覧は `TagFieldConst.FREE_TEXT_FIELDS` を全フィールドから引いて作っており、フィールドを足したときに既定で検査対象へ入る向きにしてある（明示列挙にすると、足し忘れたフィールドが黙って検査対象外になる）。
 
 実装で外せない前提が 5 つある。いずれも `docs/library-baseline-2026-08-03.md` の実測から導かれたもので、守らないと誤検出だらけになる。
 
@@ -273,6 +278,8 @@ Excel が日本語を Shift-JIS と誤認しないよう、BOM 付き UTF-8 で�
 
 全列横断の検索ボックスに加え、「空欄のある行のみ」「編集した行のみ」で絞れる。R-401 / R-402 の対象を探すのに使う。
 
+**「空欄のある行のみ」は `ManualEditConst.EMPTY_CHECK_FIELDS` を見る。`EDITABLE_FIELDS` ではない。** `comment` は必要なファイルにしか入らないので、空であるのが正常である。編集できるフィールドをそのまま空欄検査に使うと、ほぼ全行が該当してこの絞り込みが無意味になる。一方 `SearchText` は `EDITABLE_FIELDS` のままで `comment` を含む。「ハース版」で絞る → 全選択 → 一括入力、という導線が版・稿を扱う主な手順であり、検索から外すと入れた値を後から辿れなくなる。両者は差集合で導いているので、実質のリストは 1 本のまま。
+
 ### 手編集の検査
 
 **止めない。** 出るのはすべて「気づいてほしい点」で、最終的な判断は人間が持つ。手で入れた値をツールが拒むと、原則の例外（配役情報や個別例外）を扱えなくなる。
@@ -284,6 +291,11 @@ Excel が日本語を Shift-JIS と誤認しないよう、BOM 付き UTF-8 で�
 | 配役情報として保護されている `albumartist` を書き換えた（`TAGGING_POLICY.md` 2.3） |
 | `genre` が `Classic` 以外 / `date` が 4 桁でない / トラック・ディスクが `番号/総数` 形式でない |
 | 人名・団体名が日本語表記 / 演奏者欄に作曲家名 / 辞書に無い名前 |
+| その形式で扱えないフィールドを編集した（`TagFieldConst.IsSupported`。ID3 の `comment` が該当） |
+
+**形式の気づきは `ClearsValue` の早期 return より前で出す。** 値を消す編集も同じく書き込まれないため。書き込み層は対応表に無いフィールドを黙って無視するので、ここで知らせないと「編集できるのに適用しても何も起きない」状態になる。**行ごとに編集可否を変える UI は作らない**（対象は実測 15 ファイルで、一覧の編集経路に 2 本目の分岐を持ち込む代償のほうが大きい）。
+
+`comment` には書式・辞書の検査を掛けない（自由記述。`TAGGING_POLICY.md` 2.4）。ただし `;` の気づきは出す。3.4 の「AIMP が `;` で分割する」はフィールドを問わない格納上の挙動で、2.4 の「正規形を定めない」（内容の話）とは層が違う。ここで黙ると、AIMP が保存した瞬間に 2 値へ割れても誰も気づけない。
 
 ### 検査結果との競合
 

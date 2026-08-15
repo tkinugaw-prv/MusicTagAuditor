@@ -36,7 +36,19 @@ public static class ManualEditConst
         TagField.Date,
         TagField.TrackNumber,
         TagField.DiscNumber,
+        TagField.Comment,
     ];
+
+    /// <summary>
+    /// 空欄かどうかを見るフィールド。「空欄のある行のみ」の絞り込みに使う。
+    ///
+    /// 自由記述のフィールドを外しているのは、<c>comment</c> が大半のファイルで空であるのが
+    /// 正常だからである（版・稿の注記を置く欄で、必要なファイルにしか入らない）。
+    /// 含めるとほぼ全行が「空欄あり」になり、R-401 / R-402 の対象を探すという
+    /// この絞り込みの目的が果たせなくなる。
+    /// </summary>
+    public static readonly IReadOnlyList<TagField> EMPTY_CHECK_FIELDS =
+        [.. EDITABLE_FIELDS.Where(field => !TagFieldConst.IsFreeText(field))];
 
     /// <summary>フィールドの日本語表示名。一括入力の選択肢と警告文に使う。</summary>
     public static readonly IReadOnlyDictionary<TagField, string> FIELD_LABELS =
@@ -52,6 +64,7 @@ public static class ManualEditConst
             [TagField.Date] = "年",
             [TagField.TrackNumber] = "トラック",
             [TagField.DiscNumber] = "ディスク",
+            [TagField.Comment] = "コメント",
         };
 
     /// <summary>
