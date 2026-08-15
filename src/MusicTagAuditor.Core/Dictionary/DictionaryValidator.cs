@@ -66,6 +66,14 @@ public static class DictionaryValidator
     private static readonly Regex FOUR_DIGIT_YEAR = new(@"^\d{4}$", RegexOptions.Compiled);
 
     /// <summary>
+    /// 作曲家の正規形不一致で「近い」とみなす編集距離の上限。
+    ///
+    /// これを超える距離の候補は別人である可能性が高く、示すとかえって誤誘導になる。
+    /// 1〜3 文字の打ち間違い・表記揺れ（<c>Sergey</c>/<c>Sergei</c> 等）を拾える値として 3 を選んだ。
+    /// </summary>
+    private const int COMPOSER_MISMATCH_SUGGESTION_DISTANCE = 3;
+
+    /// <summary>
     /// 辞書全体を検証する。
     /// </summary>
     /// <param name="dictionary">検証する辞書。</param>
@@ -383,9 +391,8 @@ public static class DictionaryValidator
     private static void ValidateWorks(TagDictionary dictionary, List<DictionaryIssue> issues)
     {
         // 作曲家の正規形。作品の composer がここに無いと、検査時にキーが一致せず引けない。
-        HashSet<string> composers = new(
-            (dictionary.Composers ?? []).Select(composer => composer.Canonical),
-            StringComparer.Ordinal);
+        string[] composerCanonicals = [.. (dictionary.Composers ?? []).Select(composer => composer.Canonical)];
+        HashSet<string> composers = new(composerCanonicals, StringComparer.Ordinal);
 
         HashSet<string> naturalKeys = new(StringComparer.Ordinal);
 
@@ -416,7 +423,7 @@ public static class DictionaryValidator
                     DictionaryIssueSeverity.Error,
                     CATEGORY_WORK,
                     label,
-                    $"作曲家「{work.Composer}」が作曲家の正規形と一致しません。この作品は引けません。"));
+                    DescribeComposerMismatch(work.Composer, composerCanonicals)));
             }
 
             if (string.IsNullOrWhiteSpace(work.Canonical))
@@ -465,6 +472,110 @@ public static class DictionaryValidator
                 aliasOwners[scoped] = work.Canonical;
             }
         }
+    }
+
+    /// <summary>
+    /// 作曲家が正規形と一致しなかったときのメッセージを組み立てる。
+    ///
+    /// **「一致しない」とだけ言われても、比較対象の正規形が分からないと直しようがない。**
+    /// <c>Sergey Rachmaninov</c> と <c>Sergei Rachmaninov</c> のような 1 文字違いは、
+    /// 両方を並べて見ないと目視では気づけない。編集距離が近い正規形が辞書にあれば、
+    /// それを候補として示し、最初に食い違う文字の位置とコードポイントも添える。
+    /// コードポイントを出すのは、キリル文字ホモグリフのように文字だけでは区別が付かない
+    /// 食い違いを想定してのこと。
+    /// </summary>
+    /// <param name="composer">作品エントリに書かれた作曲家。</param>
+    /// <param name="canonicals">作曲家の正規形の一覧。</param>
+    /// <returns>組み立てたメッセージ。</returns>
+    private static string DescribeComposerMismatch(string composer, IReadOnlyList<string> canonicals)
+    {
+        string? closest = FindClosestComposer(composer, canonicals);
+
+        if (closest is null)
+        {
+            return $"作曲家「{composer}」が作曲家の正規形と一致しません。この作品は引けません。";
+        }
+
+        return $"作曲家「{composer}」が正規形「{closest}」と一致しません{DescribeFirstDifference(composer, closest)}。"
+            + "この作品は引けません。";
+    }
+
+    /// <summary>
+    /// 編集距離がもっとも近い正規形を探す。
+    ///
+    /// <see cref="COMPOSER_MISMATCH_SUGGESTION_DISTANCE"/> を超えて離れている場合は、
+    /// 別人の可能性が高いため候補として示さない（null を返す）。
+    /// </summary>
+    private static string? FindClosestComposer(string composer, IReadOnlyList<string> canonicals)
+    {
+        string? closest = null;
+        int bestDistance = int.MaxValue;
+
+        foreach (string canonical in canonicals)
+        {
+            int distance = LevenshteinDistance(composer, canonical);
+
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                closest = canonical;
+            }
+        }
+
+        return bestDistance <= COMPOSER_MISMATCH_SUGGESTION_DISTANCE ? closest : null;
+    }
+
+    /// <summary>
+    /// 2 つの文字列が最初に食い違う位置を説明する文字列を作る。両者が一致するなら空文字列。
+    /// </summary>
+    private static string DescribeFirstDifference(string actual, string expected)
+    {
+        int length = Math.Min(actual.Length, expected.Length);
+        int index = 0;
+
+        while (index < length && actual[index] == expected[index])
+        {
+            index++;
+        }
+
+        if (index >= actual.Length || index >= expected.Length)
+        {
+            return $"（{index + 1} 文字目以降で文字数が異なる）";
+        }
+
+        char actualChar = actual[index];
+        char expectedChar = expected[index];
+
+        return $"（{index + 1} 文字目: '{actualChar}' (U+{(int)actualChar:X4}) ≠ '{expectedChar}' (U+{(int)expectedChar:X4})）";
+    }
+
+    /// <summary>
+    /// 2 つの文字列のレーベンシュタイン距離（編集距離）を返す。
+    /// </summary>
+    private static int LevenshteinDistance(string a, string b)
+    {
+        int[] previous = new int[b.Length + 1];
+        int[] current = new int[b.Length + 1];
+
+        for (int j = 0; j <= b.Length; j++)
+        {
+            previous[j] = j;
+        }
+
+        for (int i = 1; i <= a.Length; i++)
+        {
+            current[0] = i;
+
+            for (int j = 1; j <= b.Length; j++)
+            {
+                int cost = a[i - 1] == b[j - 1] ? 0 : 1;
+                current[j] = Math.Min(Math.Min(current[j - 1] + 1, previous[j] + 1), previous[j - 1] + cost);
+            }
+
+            (previous, current) = (current, previous);
+        }
+
+        return previous[b.Length];
     }
 
     /// <summary>

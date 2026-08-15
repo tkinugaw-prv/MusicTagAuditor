@@ -126,6 +126,54 @@ public sealed class DictionaryValidatorTests
     }
 
     /// <summary>
+    /// 作曲家が正規形と 1 文字違いのとき、正規形の値と食い違う位置をメッセージに含めることを確認する。
+    ///
+    /// <c>Sergey Rachmaninov</c>（作品側）と <c>Sergei Rachmaninov</c>（正規形）は 6 文字目の
+    /// <c>y</c>/<c>i</c> だけが違う。正規形を併記しないと、この手の 1 文字違いは読み比べないと
+    /// 気づけない。
+    /// </summary>
+    [Fact]
+    public void ExplainsComposerMismatchAgainstClosestCanonical()
+    {
+        TagDictionary dictionary = new()
+        {
+            Composers = [new ComposerEntry { Canonical = "Sergei Rachmaninov" }],
+            Works = [new WorkEntry { Composer = "Sergey Rachmaninov", Canonical = "Piano Concerto No. 2" }],
+        };
+
+        IReadOnlyList<DictionaryIssue> issues = DictionaryValidator.Validate(dictionary);
+
+        DictionaryIssue issue = Assert.Single(issues, item => item.Message.Contains("一致しません", StringComparison.Ordinal));
+
+        Assert.Contains("正規形「Sergei Rachmaninov」", issue.Message, StringComparison.Ordinal);
+        Assert.Contains("6 文字目", issue.Message, StringComparison.Ordinal);
+        Assert.Contains("U+0079", issue.Message, StringComparison.Ordinal);
+        Assert.Contains("U+0069", issue.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 正規形に近い候補が無いとき、誤誘導になる候補は出さないことを確認する。
+    ///
+    /// 未登録の作曲家を新たに書いた場合、辞書の既存の正規形とは編集距離が離れているのが普通。
+    /// そこで無理に「近い」候補を示すと、別人を正規形と誤認させてしまう。
+    /// </summary>
+    [Fact]
+    public void OmitsSuggestionWhenNoCanonicalIsClose()
+    {
+        TagDictionary dictionary = new()
+        {
+            Composers = [new ComposerEntry { Canonical = "Dmitri Shostakovich" }],
+            Works = [new WorkEntry { Composer = "Antonin Dvorak", Canonical = "Symphony No. 9" }],
+        };
+
+        IReadOnlyList<DictionaryIssue> issues = DictionaryValidator.Validate(dictionary);
+
+        DictionaryIssue issue = Assert.Single(issues, item => item.Message.Contains("一致しません", StringComparison.Ordinal));
+
+        Assert.DoesNotContain("正規形「", issue.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 実体 ID の重複をエラーとして検出することを確認する。
     /// **同一性は実体 ID で判断する**ため、ID が重複すると別団体が同一視されうる。
     /// </summary>
