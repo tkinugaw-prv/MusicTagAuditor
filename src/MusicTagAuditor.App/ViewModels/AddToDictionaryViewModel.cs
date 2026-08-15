@@ -72,6 +72,10 @@ public sealed partial class AddToDictionaryViewModel : ObservableObject
         _category = unknown.Category;
         _newCanonical = unknown.Value;
 
+        // コンストラクタではプロパティセッターを経由しないため、OnNewCanonicalChanged が
+        // 呼ばれず実体 ID の提案が空のままになる。ここで明示的に埋める。
+        _newEntityId = DictionaryEditor.SuggestEntityId(_dictionary, _newCanonical);
+
         RefreshCanonicals();
         UpdateNotice();
     }
