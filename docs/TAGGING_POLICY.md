@@ -143,6 +143,15 @@ candidate: `Евгений Александрович Мравинский` / `�
 - 生没年を含めない。`Franz LISZT (1811-1886)` ではなく `Franz Liszt`
 - 「姓, 名」順にしない。`Mozart, Wolfgang Amadeus` ではなく `Wolfgang Amadeus Mozart`
 - 大文字の強調をしない。`LISZT` ではなく `Liszt`
+- **フルネームとはいえ、戸籍上の全ミドルネームを並べる意味ではない。一般に通用している名前を使う。**
+  `Carl Maria Friedrich Ernst von Weber` ではなく `Carl Maria von Weber`
+  `Franz Peter Schubert` ではなく `Franz Schubert`
+- **名誉称号を含めない。** `Народный артист СССР, Евгений Александрович Мравинский`
+  ではなく `Yevgeny Mravinsky`。3.1.2 規則4（ロシア語圏団体の名誉称号を除く）と同じ扱いを人名にも適用する
+
+##### 3.2 補足：通称規則と `Wolfgang Amadeus Mozart` の関係
+
+上の一覧（規則3）自体が `Wolfgang Amadeus Mozart` を正例に挙げているが、これは通称規則（ミドルネームを並べない）の例外ではない。Mozart の洗礼名は `Johannes Chrysostomus Wolfgangus Theophilus Mozart` であり、`Wolfgang Amadeus Mozart` はそこから絞った一般的な通称そのものである。通称規則が禁じているのは戸籍・洗礼名をフルで並べること（`Johannes Chrysostomus Wolfgangus Theophilus Mozart`）であって、`Wolfgang Amadeus Mozart` はどちらの規則の下でも変わらず正である。
 
 ### 3.3 発音区別符号（ウムラウト等）
 
