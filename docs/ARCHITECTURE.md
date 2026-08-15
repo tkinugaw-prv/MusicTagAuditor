@@ -43,7 +43,7 @@ tools/TagIoProbe (net10.0, コンソール) … どこにも依存しない独�
 | `Export/` | 検査結果差分の CSV 出力(`ChangeCsvExporter`) |
 | `Inspection/` | 検査エンジン本体(`InspectionEngine`)と付随ロジック(`ComposerFinder` / `ConductorFinder` / `MojibakeDetector` / `DiacriticCandidates` など)。ルール本体は `Inspection/Rules/` にまとめている |
 | `Inspection/Rules/` | 検査ルール24件の実装。`AlbumRules` / `BasicFieldRules` / `MissingValueRules` / `NormalizationRules` / `PerformerContentRules` / `TitleRules` の6ファイルに分類されている |
-| `Models/` | ドメインモデル(`TrackTags` / `TagField` / `TagChange` / `AudioFormat` / `VerificationMismatch`) |
+| `Models/` | ドメインモデル(`TrackTags` / `TagField` / `TagChange` / `AudioFormat` / `VerificationMismatch`)。`TagFieldConst` はフィールドの性質(自由記述か・どの形式で扱えるか)を持ち、検査・手編集・画面がそこから導出する。`AudioFormatConst` は形式を利用者向けの拡張子表記にする |
 | `Normalization/` | 正規化キーの生成(`NormalizationKey`)。NFKC・小文字化・ひらがな→カタカナ変換などを行う |
 | `Scanning/` | ライブラリのフォルダ・ファイル走査(`LibraryScanner`) |
 | `Settings/` | 利用者が選べる設定の保持と永続化(`AppSettings` / `AppSettingsStore`)。`%APPDATA%\MusicTagAuditor\settings.json` に読み書きする。現在の項目はバックアップ先と前回開いていたライブラリ |

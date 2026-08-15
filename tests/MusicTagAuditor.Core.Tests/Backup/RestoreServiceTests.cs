@@ -80,6 +80,69 @@ public sealed class RestoreServiceTests
     }
 
     /// <summary>
+    /// **版 1 のスナップショットから復元しても <c>comment</c> を消さないことを確認する。**
+    ///
+    /// 版 1 は <c>comment</c> を記録していない。記録が無いことを「空だった」と読むと、
+    /// 現在値との差分が必ず立ち、復元項目は既定でチェック済みなので、そのまま適用すると
+    /// 今入っている注記が消える。**版・稿の情報は他のどこにも無いので戻せない。**
+    /// </summary>
+    [Fact]
+    public void DoesNotPlanCommentRestoreFromSchemaVersion1()
+    {
+        TagSnapshot snapshot = BuildSnapshot(
+            [("01.m4a", TagField.Composer, ["Anton Bruckner"])],
+            version: 1);
+
+        ScanResult current = BuildScan(
+        [
+            ("01.m4a", TagField.Composer, ["Anton Bruckner"]),
+            ("01.m4a", TagField.Comment, ["ハース版"]),
+        ]);
+
+        RestorePlan plan = RestoreService.BuildPlan("backup_1", snapshot, current);
+
+        Assert.Empty(plan.Items);
+    }
+
+    /// <summary>
+    /// 現在の版のスナップショットからは <c>comment</c> を復元することを確認する。
+    /// </summary>
+    [Fact]
+    public void PlansCommentRestoreFromCurrentSchema()
+    {
+        TagSnapshot snapshot = BuildSnapshot([("01.m4a", TagField.Comment, ["ハース版"])]);
+        ScanResult current = BuildScan([("01.m4a", TagField.Comment, ["ノヴァーク版"])]);
+
+        RestorePlan plan = RestoreService.BuildPlan("backup_1", snapshot, current);
+
+        RestoreItem item = Assert.Single(plan.Items);
+        Assert.Equal(TagField.Comment, item.Field);
+        Assert.Equal("ハース版", item.SnapshotText);
+    }
+
+    /// <summary>
+    /// 現在の版では「記録が無い＝空だった」と読んでよいことを確認する。
+    /// 版ゲートが効きすぎて、正しい巻き戻しまで止めていないことを見る。
+    /// </summary>
+    [Fact]
+    public void PlansCommentRemovalWhenCurrentSchemaHadNoValue()
+    {
+        TagSnapshot snapshot = BuildSnapshot([("01.m4a", TagField.Composer, ["Anton Bruckner"])]);
+
+        ScanResult current = BuildScan(
+        [
+            ("01.m4a", TagField.Composer, ["Anton Bruckner"]),
+            ("01.m4a", TagField.Comment, ["あとから入れた値"]),
+        ]);
+
+        RestorePlan plan = RestoreService.BuildPlan("backup_1", snapshot, current);
+
+        RestoreItem item = Assert.Single(plan.Items);
+        Assert.Equal(TagField.Comment, item.Field);
+        Assert.Empty(item.SnapshotValues);
+    }
+
+    /// <summary>
     /// 複数値と、<c>;</c> を含む 1 値を別物として扱うことを確認する。
     /// 表示上は同じ文字列になるため、ここを取り違えると差分が消える。
     /// </summary>
@@ -191,7 +254,9 @@ public sealed class RestoreServiceTests
     /// <summary>
     /// テスト用のスナップショットを組み立てる。
     /// </summary>
-    private static TagSnapshot BuildSnapshot(IEnumerable<(string Path, TagField Field, string[] Values)> entries)
+    private static TagSnapshot BuildSnapshot(
+        IEnumerable<(string Path, TagField Field, string[] Values)> entries,
+        int version = BackupConst.SCHEMA_VERSION)
     {
         List<SnapshotTrack> tracks = [];
 
@@ -204,7 +269,7 @@ public sealed class RestoreServiceTests
         }
 
         return new TagSnapshot(
-            BackupConst.SCHEMA_VERSION,
+            version,
             DateTimeOffset.Now,
             LIBRARY_ROOT,
             tracks.Count,

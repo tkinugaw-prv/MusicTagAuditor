@@ -67,6 +67,9 @@ public static class ManualEditValidator
             CheckProtectedAlbumArtist(warnings, change, track, dictionary);
             CheckMultipleValues(warnings, change, track);
 
+            // 値を消す編集も書き込まれないので、ClearsValue で抜ける前に見る。
+            CheckFieldSupport(warnings, change, track);
+
             if (change.ClearsValue)
             {
                 continue;
@@ -128,6 +131,28 @@ public static class ManualEditValidator
             change.RelativePath,
             change.Field,
             $"複数値（{track.GetValues(change.Field).Count} 値）として格納されています。手編集すると 1 値にまとまります。"));
+    }
+
+    /// <summary>
+    /// その形式でフィールドを扱えるかを確認する（docs/TAGGING_POLICY.md 4.4）。
+    ///
+    /// 書き込み層は対応表に無いフィールドを黙って無視する。編集はできてしまうのに適用しても
+    /// 何も起きないので、書き込む前に理由を知らせる。編集そのものは止めない（本検証の方針）。
+    /// </summary>
+    private static void CheckFieldSupport(List<ManualEditWarning> warnings, TagChange change, TrackTags? track)
+    {
+        if (track is null || TagFieldConst.IsSupported(track.Format, change.Field))
+        {
+            return;
+        }
+
+        // 形式は拡張子で示す。Id3 のような格納形式の名前は実装の語彙で、
+        // 利用者が自分のファイルと結び付けられない。
+        warnings.Add(new ManualEditWarning(
+            change.RelativePath,
+            change.Field,
+            $"{AudioFormatConst.Label(track.Format)} では「{ManualEditConst.Label(change.Field)}」を扱いません。"
+                + "適用しても書き込まれません。"));
     }
 
     /// <summary>

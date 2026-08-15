@@ -63,6 +63,9 @@ public sealed record TrackTags
     /// <summary>ディスク番号。</summary>
     public string? DiscNumber => GetSingle(TagField.DiscNumber);
 
+    /// <summary>自由記述の注記。ID3 では読み書きしないため常に null になる。</summary>
+    public string? Comment => GetSingle(TagField.Comment);
+
     /// <summary>
     /// 指定フィールドに格納されていた値をすべて返す。
     /// </summary>

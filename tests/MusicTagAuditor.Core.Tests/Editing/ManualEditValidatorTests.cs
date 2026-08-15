@@ -162,6 +162,82 @@ public sealed class ManualEditValidatorTests
     }
 
     /// <summary>
+    /// その形式で扱えないフィールドの編集を知らせることを確認する（docs/TAGGING_POLICY.md 4.4）。
+    ///
+    /// ID3 では <c>comment</c> を書き込まない。編集はできてしまうので、適用しても
+    /// 何も起きないことを事前に伝えないと、利用者は理由に辿り着けない。
+    /// </summary>
+    [Fact]
+    public void WarnsWhenFieldIsUnsupportedByFormat()
+    {
+        TrackTags track = Id3Track("01.aif", (TagField.Comment, "x"));
+
+        ManualEditWarning warning = Assert.Single(
+            Validate(track, TagField.Comment, "Haas edition"),
+            warning => warning.Message.Contains("扱いません", StringComparison.Ordinal));
+
+        // 形式は拡張子で示す。利用者は Id3 という語で自分のファイルを見分けられない。
+        Assert.Contains(".aif", warning.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Id3", warning.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 値を消す編集でも、扱えないフィールドなら知らせることを確認する。
+    ///
+    /// **書式の警告と違い、こちらは <c>ClearsValue</c> で抜ける前に見る必要がある。**
+    /// 消す操作も同じく書き込まれないため。
+    /// </summary>
+    [Fact]
+    public void WarnsUnsupportedFieldEvenWhenClearing()
+    {
+        TrackTags track = Id3Track("01.aif", (TagField.Comment, "Haas edition"));
+
+        Assert.Contains(
+            Validate(track, TagField.Comment, string.Empty),
+            warning => warning.Message.Contains("扱いません", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// 扱える形式では警告を出さないことを確認する。
+    /// </summary>
+    [Fact]
+    public void DoesNotWarnAboutSupportedFieldOnFlac()
+    {
+        TrackTags track = Track("01.flac", (TagField.Comment, "x"));
+
+        Assert.Empty(Validate(track, TagField.Comment, "Haas edition"));
+    }
+
+    /// <summary>
+    /// <c>comment</c> でも <c>;</c> を知らせることを確認する。
+    ///
+    /// 2.4 は「正規形を定めない」と言うが、それは内容の話である。3.4 の
+    /// 「AIMP が <c>;</c> で分割する」はフィールドを問わない格納上の挙動で、別の層にある。
+    /// ここで黙ると、AIMP が保存した瞬間に 2 値へ割れても誰も気づけない。
+    /// </summary>
+    [Fact]
+    public void WarnsOnSemicolonInComment()
+    {
+        TrackTags track = Track("01.flac", (TagField.Comment, "x"));
+
+        Assert.Contains(
+            Validate(track, TagField.Comment, "ハース版; 1980 年ライヴ"),
+            warning => warning.Message.Contains("分割", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// <c>comment</c> には書式・辞書の警告を出さないことを確認する。
+    /// 自由記述なので正規形が無い（docs/TAGGING_POLICY.md 2.4）。
+    /// </summary>
+    [Fact]
+    public void DoesNotApplyNameOrFormatChecksToComment()
+    {
+        TrackTags track = Track("01.flac", (TagField.Comment, "x"));
+
+        Assert.Empty(Validate(track, TagField.Comment, "ノヴァーク版 1890"));
+    }
+
+    /// <summary>
     /// 1 件の編集を検査する。
     /// </summary>
     private static IReadOnlyList<ManualEditWarning> Validate(TrackTags track, TagField field, string value)
@@ -187,5 +263,13 @@ public sealed class ManualEditValidatorTests
                     .Select(field => new KeyValuePair<TagField, IReadOnlyList<string>>(field.Field, [field.Value!]))),
             RawTags = new Dictionary<string, string[]>(),
         };
+    }
+
+    /// <summary>
+    /// ID3 形式のテスト用タグを作る。形式によって扱えるフィールドが違うことの検証に使う。
+    /// </summary>
+    private static TrackTags Id3Track(string relativePath, params (TagField Field, string? Value)[] fields)
+    {
+        return Track(relativePath, fields) with { Format = AudioFormat.Id3 };
     }
 }

@@ -577,7 +577,7 @@
                         IsKeyboardFocusWithinChanged="OnTrackGridKeyboardFocusWithinChanged">
                 <DataGrid.Columns>
                   <!--
-                    13 列を 1 画面に収めきることはできないため横スクロールは残す。
+                    14 列を 1 画面に収めきることはできないため横スクロールは残す。
                     幅は star にして、ウィンドウを広げた分が文字列の列に回るようにする。
                     MinWidth は見出しが欠けない下限。star 列の MinWidth 合計が表示幅を超えると
                     固定幅の列まで削られて見出しごと消えるため、固定幅の列にも下限を入れる。
@@ -681,6 +681,15 @@
                                       EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
                   <DataGridTextColumn Header="ディスク" Binding="{Binding DiscNumber}" Width="66" MinWidth="66"
                                       ElementStyle="{StaticResource NumericCellTextStyle}"
+                                      EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
+                  <!--
+                    コメントは末尾に置く。参照頻度が最も低く、既存 13 列の並びを動かさずに済む。
+                    ID3（.mp3 / .aif）では扱わないので常に空になるが、行ごとに編集可否を変える
+                    仕組みは入れない。対象は実測 15 ファイルだけで、編集したときは手編集の
+                    気づきが理由を出す（docs/TAGGING_POLICY.md 4.4）。
+                  -->
+                  <DataGridTextColumn Header="コメント" Binding="{Binding Comment}" Width="1.4*" MinWidth="140"
+                                      ElementStyle="{StaticResource EllipsisTextStyle}"
                                       EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
                 </DataGrid.Columns>
               </DataGrid>

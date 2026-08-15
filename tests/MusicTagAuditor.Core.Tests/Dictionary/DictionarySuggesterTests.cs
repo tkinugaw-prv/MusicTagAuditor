@@ -196,6 +196,7 @@ public sealed class DictionarySuggesterTests
     [InlineData(TagField.Date)]
     [InlineData(TagField.TrackNumber)]
     [InlineData(TagField.DiscNumber)]
+    [InlineData(TagField.Comment)]
     public void HasNoCategoryForFieldsOutsideDictionary(TagField field)
     {
         Assert.Null(DictionarySuggester.CategoryFor(field));

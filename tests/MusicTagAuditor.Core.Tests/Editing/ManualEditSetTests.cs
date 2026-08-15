@@ -112,6 +112,25 @@ public sealed class ManualEditSetTests
     }
 
     /// <summary>
+    /// <c>comment</c> をアルバム単位で一括入力できることを確認する。
+    /// 版・稿の注記は単位内の全ファイルに同じ値が入るため、これが主な入力手段になる。
+    /// </summary>
+    [Fact]
+    public void BulkInputAcceptsComment()
+    {
+        ManualEditSet edits = new();
+
+        TrackTags[] tracks =
+        [
+            Track("ブル8/01.flac", (TagField.Comment, null)),
+            Track("ブル8/02.flac", (TagField.Comment, null)),
+        ];
+
+        Assert.Equal(2, edits.SetMany(tracks, TagField.Comment, "ハース版"));
+        Assert.All(edits.ToChanges(), change => Assert.Equal(["ハース版"], change.AfterValues));
+    }
+
+    /// <summary>
     /// 一括入力で既に同じ値だったファイルが編集にならないことを確認する。
     /// </summary>
     [Fact]
