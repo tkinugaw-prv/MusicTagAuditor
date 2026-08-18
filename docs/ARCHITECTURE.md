@@ -40,7 +40,7 @@ tools/TagIoProbe (net10.0, コンソール) … どこにも依存しない独�
 | `Backup/` | タグのスナップショット取得(`SnapshotService`)・復元(`RestoreService`)。音声ファイル本体は複製せず、タグのみを JSON化する。保存先は注入された取得関数で解決し(既定はライブラリ直下)、`Settings/` への依存は持たない |
 | `Dictionary/` | 正規化辞書のロード・編集・検証・マージ・保存(`DictionaryLoader` / `DictionaryEditor` / `DictionaryValidator` / `DictionaryMerger` / `DictionaryWriter` など)。辞書に無い値の収集(`UnknownValueCollector`)、手編集の入力候補の組み立てと絞り込み(`DictionarySuggester`)、索引に載らない別名の除去(`RedundantAliasCleaner`)も含む |
 | `Editing/` | 手編集セットの保持・検証(`ManualEditSet` / `ManualEditValidator`) |
-| `Export/` | 検査結果差分の CSV 出力(`ChangeCsvExporter`) |
+| `Export/` | 検査結果差分(`ChangeCsvExporter`)とファイル一覧(`TrackCsvExporter`)の CSV 出力。囲みと BOM の判断は `CsvFormat` に集約し、出力が増えても書式が分岐しないようにしている |
 | `Inspection/` | 検査エンジン本体(`InspectionEngine`)と付随ロジック(`ComposerFinder` / `ConductorFinder` / `MojibakeDetector` / `DiacriticCandidates` など)。ルール本体は `Inspection/Rules/` にまとめている |
 | `Inspection/Rules/` | 検査ルール24件の実装。`AlbumRules` / `BasicFieldRules` / `MissingValueRules` / `NormalizationRules` / `PerformerContentRules` / `TitleRules` の6ファイルに分類されている |
 | `Models/` | ドメインモデル(`TrackTags` / `TagField` / `TagChange` / `AudioFormat` / `VerificationMismatch`)。`TagFieldConst` はフィールドの性質(自由記述か・どの形式で扱えるか)を持ち、検査・手編集・画面がそこから導出する。`AudioFormatConst` は形式を利用者向けの拡張子表記にする |

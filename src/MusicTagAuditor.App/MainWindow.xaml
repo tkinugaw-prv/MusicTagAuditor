@@ -701,7 +701,10 @@
                         Command="{Binding ApplyManualEditsCommand}"
                         Style="{StaticResource AccentButtonStyle}" Margin="0,0,8,0" />
                 <Button DockPanel.Dock="Left" Content="編集を破棄"
-                        Command="{Binding DiscardManualEditsCommand}" Margin="0,0,14,0" />
+                        Command="{Binding DiscardManualEditsCommand}" Margin="0,0,8,0" />
+                <Button DockPanel.Dock="Left" Content="CSV出力"
+                        Command="{Binding ExportTrackCsvCommand}" Margin="0,0,14,0"
+                        ToolTip="いま一覧に出ている行を、絞り込みと保留中の編集を反映した値で書き出します" />
                 <TextBlock Style="{StaticResource StatusTextStyle}"
                            Text="{Binding ManualEditSummary}" TextWrapping="Wrap" />
               </DockPanel>

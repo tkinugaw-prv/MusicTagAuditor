@@ -192,6 +192,11 @@ public sealed partial class MainViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(ExportCsvCommand))]
     private bool _hasInspectionResult;
 
+    /// <summary>読み取ったファイルがあるか。ファイル一覧の CSV 出力は検査を待たずに使える。</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ExportTrackCsvCommand))]
+    private bool _hasTracks;
+
     /// <summary>
     /// 差分明細をチェック済みの行だけに絞るか（docs/SPEC.md 5.3）。
     ///
@@ -1433,6 +1438,76 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
+    /// いま一覧に出ている行を返す。**CSV に書き出す範囲そのもの。**
+    ///
+    /// ツリーのフォルダ選択（<see cref="Tracks"/> への詰め替え）と、検索文字列・
+    /// 「空欄のある行のみ」・「編集した行のみ」（<see cref="MatchesTrackFilter"/>）の
+    /// 両方が効いた結果になる。並べ替えも一覧のビューに従う。
+    /// </summary>
+    /// <returns>表示順に並んだ行。</returns>
+    public IReadOnlyList<TrackRowViewModel> VisibleTracks()
+    {
+        // ビューはファイル一覧タブを一度でも組み立てれば必ず在る。無い間は絞り込みも無い。
+        return _trackView is null
+            ? [.. Tracks]
+            : [.. _trackView.Cast<TrackRowViewModel>()];
+    }
+
+    /// <summary>
+    /// ファイル一覧を CSV に書き出す（docs/SPEC.md 5.2）。
+    ///
+    /// **書き出すのは画面に出ている行だけ。** 絞り込みで隠した行まで出ると、
+    /// 表と CSV のどちらが本当か確かめられない（検査結果の CSV 出力と同じ考え方）。
+    /// 値は保留中の手編集を反映したもの＝セルに見えているとおりになる。
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanExportTrackCsv))]
+    private void ExportTrackCsv()
+    {
+        SaveFileDialog dialog = new()
+        {
+            Title = "ファイル一覧を CSV に書き出す",
+            FileName = $"{AppConst.TRACK_CSV_FILE_NAME_PREFIX}{DateTime.Now:yyyyMMddHHmmss}.csv",
+            Filter = "CSV ファイル|*.csv",
+            DefaultExt = ".csv",
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        try
+        {
+            IReadOnlyList<TrackRowViewModel> exported = VisibleTracks();
+
+            TrackCsvExporter.WriteFile(dialog.FileName, exported.Select(row => row.Tags), _manualEdits);
+
+            // 全件数を併記する。件数だけでは、絞り込んだ結果なのか読み取れていないのかが判らない。
+            StatusText = string.Create(
+                CultureInfo.CurrentCulture,
+                $"CSV を書き出しました（{exported.Count:N0} 件 / 全 {_allTracks.Count:N0} 件）: ")
+                + Path.GetFileName(dialog.FileName);
+
+            Log.Information(
+                "ファイル一覧を CSV に書き出した path={Path} 件数={Count} 全件={Total}",
+                dialog.FileName,
+                exported.Count,
+                _allTracks.Count);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"CSV の書き出しに失敗しました: {ex.Message}";
+            Log.Error(ex, "ファイル一覧の CSV 書き出しに失敗した path={Path}", dialog.FileName);
+        }
+    }
+
+    /// <summary>ファイル一覧を書き出せるか。</summary>
+    private bool CanExportTrackCsv()
+    {
+        return HasTracks;
+    }
+
+    /// <summary>
     /// 集計 CSV のパスを組み立てる。明細と並べて置く。
     /// </summary>
     private static string BuildSummaryPath(string detailPath)
@@ -2589,6 +2664,9 @@ public sealed partial class MainViewModel : ObservableObject
 
         Failures.Clear();
         Tracks.Clear();
+
+        // 読み直しに失敗・中止したら一覧は空のまま戻る。書き出せる行が無いので出口も閉じる。
+        HasTracks = false;
         FolderTree.Clear();
         ProgressValue = 0;
         ProgressMaximum = 1;
@@ -2645,6 +2723,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         _lastScan = result;
         _allTracks = [.. result.Tracks.Select(track => new TrackRowViewModel(track, _manualEdits))];
+        HasTracks = _allTracks.Count > 0;
 
         foreach (ScanFailure failure in result.Failures)
         {
