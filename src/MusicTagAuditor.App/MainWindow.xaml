@@ -701,7 +701,10 @@
                         Command="{Binding ApplyManualEditsCommand}"
                         Style="{StaticResource AccentButtonStyle}" Margin="0,0,8,0" />
                 <Button DockPanel.Dock="Left" Content="編集を破棄"
-                        Command="{Binding DiscardManualEditsCommand}" Margin="0,0,14,0" />
+                        Command="{Binding DiscardManualEditsCommand}" Margin="0,0,8,0" />
+                <Button DockPanel.Dock="Left" Content="CSV出力"
+                        Command="{Binding ExportTrackCsvCommand}" Margin="0,0,14,0"
+                        ToolTip="いま一覧に出ている行を、絞り込みと保留中の編集を反映した値で書き出します" />
                 <TextBlock Style="{StaticResource StatusTextStyle}"
                            Text="{Binding ManualEditSummary}" TextWrapping="Wrap" />
               </DockPanel>
@@ -818,8 +821,18 @@
               <DockPanel Margin="0,3,0,0">
                 <TextBlock DockPanel.Dock="Left" Style="{StaticResource HintTextStyle}"
                            Text="辞書ファイル" Margin="0,0,8,0" />
+                <!--
+                  ボタンはここに置く。上のツールバーは DockPanel で折り返さないため、
+                  足すと絞り込みの入力欄が先に潰れる。Dock="Right" なら幅が足りないときに
+                  縮むのはこれまでどおりパスの側になる。
+                -->
+                <Button DockPanel.Dock="Right" Content="エクスプローラーで開く"
+                        Style="{StaticResource SmallOutlineButtonStyle}" Margin="8,0,0,0"
+                        Command="{Binding RevealFileInExplorerCommand}"
+                        ToolTip="辞書ファイルを選択した状態でエクスプローラーを開きます" />
                 <TextBlock Style="{StaticResource HintTextStyle}"
                            Text="{Binding FilePath}" TextTrimming="CharacterEllipsis"
+                           VerticalAlignment="Center"
                            ToolTip="{Binding FilePath}" />
               </DockPanel>
               <!--
