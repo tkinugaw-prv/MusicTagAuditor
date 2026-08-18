@@ -3,7 +3,6 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using System.Text;
 using System.Windows;
 using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -1412,10 +1411,7 @@ public sealed partial class MainViewModel : ObservableObject
                 : string.Empty;
 
             ChangeCsvExporter.WriteFile(dialog.FileName, exported);
-            File.WriteAllText(
-                summaryPath,
-                ChangeCsvExporter.BuildSummary(exported),
-                new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+            ChangeCsvExporter.WriteSummaryFile(summaryPath, exported);
 
             StatusText = string.Create(
                 CultureInfo.CurrentCulture,

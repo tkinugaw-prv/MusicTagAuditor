@@ -46,7 +46,7 @@ public static class ChangeCsvExporter
     {
         StringBuilder builder = new();
 
-        builder.AppendLine(string.Join(',', HEADERS.Select(Escape)));
+        builder.AppendLine(CsvFormat.BuildLine(HEADERS));
 
         foreach (TagChange change in changes)
         {
@@ -65,7 +65,7 @@ public static class ChangeCsvExporter
                 change.Rationale,
             ];
 
-            builder.AppendLine(string.Join(',', cells.Select(Escape)));
+            builder.AppendLine(CsvFormat.BuildLine(cells));
         }
 
         return builder.ToString();
@@ -78,8 +78,17 @@ public static class ChangeCsvExporter
     /// <param name="changes">書き出す差分。</param>
     public static void WriteFile(string path, IEnumerable<TagChange> changes)
     {
-        // BOM 付き UTF-8 で書く。Excel は BOM が無いと日本語を Shift-JIS と誤認する。
-        File.WriteAllText(path, Build(changes), new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+        CsvFormat.WriteFile(path, Build(changes));
+    }
+
+    /// <summary>
+    /// ルール別の集計を CSV ファイルに書き出す。
+    /// </summary>
+    /// <param name="path">書き出し先。</param>
+    /// <param name="changes">対象の差分。</param>
+    public static void WriteSummaryFile(string path, IEnumerable<TagChange> changes)
+    {
+        CsvFormat.WriteFile(path, BuildSummary(changes));
     }
 
     /// <summary>
@@ -92,7 +101,7 @@ public static class ChangeCsvExporter
         TagChange[] all = [.. changes];
 
         StringBuilder builder = new();
-        builder.AppendLine(string.Join(',', new[] { "ルールID", "検出", "適用予定", "保留" }.Select(Escape)));
+        builder.AppendLine(CsvFormat.BuildLine(["ルールID", "検出", "適用予定", "保留"]));
 
         foreach (var group in all.GroupBy(change => change.RuleId).OrderBy(group => group.Key, StringComparer.Ordinal))
         {
@@ -104,18 +113,9 @@ public static class ChangeCsvExporter
                 group.Count(change => change.HoldReason != HoldReason.None).ToString(CultureInfo.InvariantCulture),
             ];
 
-            builder.AppendLine(string.Join(',', cells.Select(Escape)));
+            builder.AppendLine(CsvFormat.BuildLine(cells));
         }
 
         return builder.ToString();
-    }
-
-    /// <summary>
-    /// CSV のセルとしてエスケープする（RFC 4180）。
-    /// パスやアルバム名に読点が含まれるため、囲みは省略しない。
-    /// </summary>
-    private static string Escape(string value)
-    {
-        return '"' + value.Replace("\"", "\"\"", StringComparison.Ordinal) + '"';
     }
 }
