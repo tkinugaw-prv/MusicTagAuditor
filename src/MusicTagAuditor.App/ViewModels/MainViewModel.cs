@@ -106,7 +106,17 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>開いているライブラリのルート。</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(RescanCommand))]
+    [NotifyPropertyChangedFor(nameof(PathSummary))]
     private string? _libraryRoot;
+
+    /// <summary>
+    /// ライブラリ・バックアップ先のパス欄を畳んでいるか（docs/SPEC.md 5.1）。
+    ///
+    /// 開いた後は触らない欄なので、畳んで下の一覧に高さを回せるようにしてある。
+    /// 値は <see cref="AppSettings.PathsCollapsed"/> に残り、次の起動へ引き継がれる。
+    /// </summary>
+    [ObservableProperty]
+    private bool _arePathsCollapsed;
 
     /// <summary>
     /// バックアップの保存先。空欄ならライブラリ直下（従来の動作）。
@@ -294,6 +304,10 @@ public sealed partial class MainViewModel : ObservableObject
 
         _backupRoot = settingsStore.Current.BackupRoot;
 
+        // **プロパティではなくフィールドへ入れる。** プロパティ経由だと構築中に
+        // OnArePathsCollapsedChanged が走り、読んだばかりの値をそのまま書き戻す。
+        _arePathsCollapsed = settingsStore.Current.PathsCollapsed;
+
         Dictionary = dictionaryViewModel;
 
         // 辞書を保存したら検査をやり直す。タグは変わっていないので再スキャンは要らない。
@@ -381,6 +395,16 @@ public sealed partial class MainViewModel : ObservableObject
     public ObservableCollection<string> ApplyIssues { get; } = [];
 
     /// <summary>
+    /// パス欄を畳んでいるときに見出し行へ出す要約。
+    ///
+    /// **畳んでもどのライブラリを見ているかは残す。** 複数のライブラリを行き来する
+    /// ときに、開いている対象が画面から消えると取り違えが起きる。
+    /// バックアップ先は並べない。1 行に 2 つ入れると、切り詰めで先に消えるのが
+    /// 作業対象のフォルダ名になってしまう。
+    /// </summary>
+    public string PathSummary => LibraryRoot ?? "ライブラリ未選択";
+
+    /// <summary>
     /// 指定されたライブラリを開いてスキャンする。
     ///
     /// **ライブラリを開く経路はここに集約する。** フォルダ選択・コマンドライン引数・
@@ -434,6 +458,25 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         await OpenAsync(lastRoot);
+    }
+
+    /// <summary>
+    /// 折り畳みの状態を設定に残す。
+    ///
+    /// **保存に失敗しても操作は止めない。** 覚えられないのは次回に開き直す手間だけで、
+    /// いま畳めなくする理由にはならない（<see cref="RememberLibraryRoot"/> と同じ判断）。
+    /// </summary>
+    /// <param name="value">畳んでいるなら true。</param>
+    partial void OnArePathsCollapsedChanged(bool value)
+    {
+        try
+        {
+            _settingsStore.Save(_settingsStore.Current with { PathsCollapsed = value });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Warning(ex, "パス欄の折り畳みを記憶できなかった path={Path}", _settingsStore.FilePath);
+        }
     }
 
     /// <summary>

@@ -17,6 +17,7 @@
     <conv:CountToVisibilityConverter x:Key="CountToVisibility" />
     <conv:TagFieldLabelConverter x:Key="TagFieldLabel" />
     <conv:RootFolderLabelConverter x:Key="RootFolderLabel" />
+    <conv:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisibility" />
 
     <!-- フォルダツリー。子フォルダを再帰的に展開する。 -->
     <HierarchicalDataTemplate DataType="{x:Type vm:FolderNodeViewModel}"
@@ -174,34 +175,60 @@
             BorderThickness="0,0,0,1"
             Padding="18,14">
       <StackPanel>
-        <!-- ライブラリ行 -->
-        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="ライブラリ" />
-        <DockPanel Margin="0,0,0,13">
-          <Button DockPanel.Dock="Right" Margin="8,0,0,0"
-                  Command="{Binding CancelScanCommand}" Content="中止" />
-          <Button DockPanel.Dock="Right" Margin="8,0,0,0"
-                  Command="{Binding RescanCommand}" Content="再スキャン" />
-          <Button DockPanel.Dock="Right" Margin="10,0,0,0"
-                  Command="{Binding OpenLibraryCommand}" Content="フォルダを開く..." />
-          <TextBox IsReadOnly="True"
-                   ctl:Placeholder.Text="「フォルダを開く...」でライブラリのフォルダを選びます"
-                   Text="{Binding LibraryRoot, Mode=OneWay}" />
-        </DockPanel>
+        <!--
+          パス 2 行は折り畳める（docs/SPEC.md 5.1）。ライブラリを開いた後は触らない欄で、
+          常時 2 行分を占めるとフォルダツリーと差分プレビューがその分だけ狭くなる。
+          **「検査」行は畳まない。** 作業中に何度も押すため、隠すと開き直す手間が勝つ。
+        -->
+        <ToggleButton IsChecked="{Binding ArePathsCollapsed}"
+                      Style="{StaticResource PanelExpanderToggleStyle}"
+                      ToolTip="ライブラリ・バックアップ先の指定を畳む／開く">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Left"
+                       Margin="0"
+                       Style="{StaticResource FieldLabelStyle}"
+                       Text="ライブラリ・バックアップ先" />
+            <!-- 畳んでいる間も、どのライブラリを開いているかは見えるようにする。 -->
+            <TextBlock Margin="10,0,0,0"
+                       Style="{StaticResource HintTextStyle}"
+                       Text="{Binding PathSummary}"
+                       TextTrimming="CharacterEllipsis"
+                       TextWrapping="NoWrap"
+                       Visibility="{Binding ArePathsCollapsed, Converter={StaticResource BoolToVisibility}}" />
+          </DockPanel>
+        </ToggleButton>
 
-        <!-- バックアップ先行。未指定ならライブラリ直下（従来の動作） -->
-        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="バックアップ先" />
-        <DockPanel Margin="0,0,0,13">
-          <Button DockPanel.Dock="Right" Margin="8,0,0,0"
-                  Command="{Binding ResetBackupRootCommand}" Content="既定に戻す" />
-          <Button DockPanel.Dock="Right" Margin="10,0,0,0"
-                  Command="{Binding ChangeBackupRootCommand}" Content="変更..." />
-          <TextBox IsReadOnly="True"
-                   ctl:Placeholder.Text="未指定の場合はライブラリ直下の backup_ フォルダに保存します"
-                   Text="{Binding BackupRoot, Mode=OneWay}" />
-        </DockPanel>
+        <StackPanel Margin="0,10,0,0"
+                    Visibility="{Binding ArePathsCollapsed, Converter={StaticResource InverseBoolToVisibility}}">
+          <!-- ライブラリ行 -->
+          <TextBlock Style="{StaticResource FieldLabelStyle}" Text="ライブラリ" />
+          <DockPanel Margin="0,0,0,13">
+            <Button DockPanel.Dock="Right" Margin="8,0,0,0"
+                    Command="{Binding CancelScanCommand}" Content="中止" />
+            <Button DockPanel.Dock="Right" Margin="8,0,0,0"
+                    Command="{Binding RescanCommand}" Content="再スキャン" />
+            <Button DockPanel.Dock="Right" Margin="10,0,0,0"
+                    Command="{Binding OpenLibraryCommand}" Content="フォルダを開く..." />
+            <TextBox IsReadOnly="True"
+                     ctl:Placeholder.Text="「フォルダを開く...」でライブラリのフォルダを選びます"
+                     Text="{Binding LibraryRoot, Mode=OneWay}" />
+          </DockPanel>
 
-        <!-- 検査行 -->
-        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="検査" />
+          <!-- バックアップ先行。未指定ならライブラリ直下（従来の動作） -->
+          <TextBlock Style="{StaticResource FieldLabelStyle}" Text="バックアップ先" />
+          <DockPanel>
+            <Button DockPanel.Dock="Right" Margin="8,0,0,0"
+                    Command="{Binding ResetBackupRootCommand}" Content="既定に戻す" />
+            <Button DockPanel.Dock="Right" Margin="10,0,0,0"
+                    Command="{Binding ChangeBackupRootCommand}" Content="変更..." />
+            <TextBox IsReadOnly="True"
+                     ctl:Placeholder.Text="未指定の場合はライブラリ直下の backup_ フォルダに保存します"
+                     Text="{Binding BackupRoot, Mode=OneWay}" />
+          </DockPanel>
+        </StackPanel>
+
+        <!-- 検査行。**ここは畳まない。** 作業中に何度も押すため。 -->
+        <TextBlock Margin="0,13,0,6" Style="{StaticResource FieldLabelStyle}" Text="検査" />
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
           <Button Command="{Binding InspectCommand}"
                   Content="検査"
