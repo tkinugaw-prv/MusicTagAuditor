@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Windows;
@@ -1984,50 +1983,24 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         string fullPath = row.Tags.FullPath;
-        string? folder = Path.GetDirectoryName(fullPath);
 
         try
         {
-            if (File.Exists(fullPath))
+            if (ExplorerLauncher.RevealFile(fullPath))
             {
-                StartExplorer($"/select,\"{fullPath}\"");
                 StatusText = $"エクスプローラーで「{row.FileName}」を表示しました。";
                 return;
             }
 
-            if (folder is not null && Directory.Exists(folder))
-            {
-                StartExplorer($"\"{folder}\"");
-                StatusText = $"「{row.FileName}」が見つからないため、フォルダだけを開きました。";
-                return;
-            }
-
-            StatusText = $"「{row.RelativePath}」が見つかりません。再スキャンしてください。";
+            StatusText = Directory.Exists(Path.GetDirectoryName(fullPath))
+                ? $"「{row.FileName}」が見つからないため、フォルダだけを開きました。"
+                : $"「{row.RelativePath}」が見つかりません。再スキャンしてください。";
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
         {
             Log.Error(ex, "エクスプローラーを開けなかった path={Path}", fullPath);
             StatusText = $"エクスプローラーを開けませんでした: {ex.Message}";
         }
-    }
-
-    /// <summary>
-    /// エクスプローラーを起動する。
-    ///
-    /// **引数は文字列で渡すこと。** <c>ArgumentList</c> を使うと <c>/select,&lt;パス&gt;</c> 全体が
-    /// 1 個の引数として引用され、エクスプローラー側が解釈できずマイドキュメントが開く。
-    /// Windows のパスに <c>"</c> は入らないため、この引用で閉じられる。
-    /// 終了コードは見ない。エクスプローラーは正常時も 1 を返す。
-    /// </summary>
-    /// <param name="arguments">エクスプローラーに渡す引数。</param>
-    private static void StartExplorer(string arguments)
-    {
-        using Process? process = Process.Start(new ProcessStartInfo
-        {
-            FileName = "explorer.exe",
-            Arguments = arguments,
-            UseShellExecute = false,
-        });
     }
 
     /// <summary>

@@ -306,6 +306,29 @@ public sealed partial class DictionaryViewModel : ObservableObject
     }
 
     /// <summary>
+    /// 辞書ファイルをエクスプローラーで表示する。
+    ///
+    /// 画面にはパスが出ているが、開くには目で読んで打ち直すしかなかった。
+    /// ファイル一覧タブの「エクスプローラーで表示」と同じ導線を、辞書パスの隣にも置く。
+    /// **アプリから辞書ファイルを操作するわけではない。**
+    /// </summary>
+    [RelayCommand]
+    private void RevealFileInExplorer()
+    {
+        try
+        {
+            StatusText = ExplorerLauncher.RevealFile(FilePath)
+                ? "エクスプローラーで辞書ファイルを表示しました。"
+                : "辞書ファイルがまだ無いため、フォルダだけを開きました。";
+        }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
+        {
+            StatusText = $"エクスプローラーを開けませんでした: {ex.Message}";
+            Log.Error(ex, "エクスプローラーを開けなかった path={Path}", FilePath);
+        }
+    }
+
+    /// <summary>
     /// 現在の辞書を既定辞書として書き出す。
     ///
     /// 利用者辞書は <c>%APPDATA%</c> にあり、リポジトリ同梱の既定辞書とは別物である。

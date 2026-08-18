@@ -92,6 +92,7 @@ WPF / MVVM によるデスクトップアプリケーション本体。
 | `CleanupDictionaryWindow.xaml(.cs)` | 索引に載らない別名を取り除く前の確認ダイアログ |
 | `App.xaml(.cs)` | アプリケーションエントリポイント。DI コンテナ・Serilog の初期化 |
 | `AppConst.cs` | アプリ層の定数 |
+| `ExplorerLauncher.cs` | エクスプローラーでファイルを選択して開く。ファイル一覧タブの行と辞書タブの辞書ファイルで共用する |
 
 画面配色・アイコン・プレースホルダの仕様は [docs/DEVELOPMENT.md](DEVELOPMENT.md)「画面」節を参照。
 
