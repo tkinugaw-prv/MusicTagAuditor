@@ -306,9 +306,9 @@
               <!-- 24 ルールを一望できる高さを既定で確保し、スプリッタで下段と融通する -->
               <RowDefinition Height="*" MinHeight="140" />
               <RowDefinition Height="10" />
-              <RowDefinition Height="Auto" />
-              <RowDefinition Height="Auto" />
-              <RowDefinition Height="*" MinHeight="140" />
+              <!-- ボタン領域・適用エラー・下段グリッドをまとめた器。MinHeight は
+                   アクションバーを引いても下段に数行が残る高さ -->
+              <RowDefinition Height="*" MinHeight="200" />
             </Grid.RowDefinitions>
 
             <!-- 上段: ルール別の集計 -->
@@ -355,118 +355,136 @@
               </DockPanel>
             </Border>
 
-            <GridSplitter Grid.Row="1" Height="10" HorizontalAlignment="Stretch" VerticalAlignment="Center" />
+            <!--
+              対象を明示する。既定の BasedOnAlignment は VerticalAlignment から
+              暗黙に解決されるため、配置を触っただけで相手の行が変わってしまう。
+            -->
+            <GridSplitter Grid.Row="1" Height="10" HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                          ResizeDirection="Rows" ResizeBehavior="PreviousAndNext" />
 
-            <Border Grid.Row="2" Style="{StaticResource ActionBarBorderStyle}" Margin="0,0,0,12">
-              <DockPanel>
-                <Button DockPanel.Dock="Left" Content="チェックした項目を適用"
-                        Command="{Binding ApplyCommand}"
-                        Style="{StaticResource AccentButtonStyle}" Margin="0,0,8,0" />
-                <Button DockPanel.Dock="Left" Content="CSV出力"
-                        Command="{Binding ExportCsvCommand}" Margin="0,0,8,0"
-                        ToolTip="明細と集計の 2 ファイルを書き出します" />
-                <Button DockPanel.Dock="Left" Content="選択行を辞書に追加"
-                        Command="{Binding AddSelectedChangeToDictionaryCommand}" Margin="0,0,8,0"
-                        ToolTip="修正案を出せなかった行を辞書に登録して再検査します" />
-                <!--
-                  作品エントリを育てる主経路（docs/SPEC.md 7.3.2）。
-                  作曲家もフォルダも明細から決まるので、辞書タブで手打ちさせない。
-                -->
-                <!--
-                  どちらのボタンも押せない行がある。**無効なままでは理由が伝わらない**ので
-                  ToolTipService.ShowOnDisabled で押せない理由まで読めるようにする。
-                -->
-                <Button DockPanel.Dock="Left" Content="作品を辞書に追加"
-                        Command="{Binding AddWorkFromChangeCommand}" Margin="0,0,8,0"
-                        ToolTipService.ShowOnDisabled="True"
-                        ToolTip="R-504 の保留行（HOLD_WORK_UNKNOWN）から、その単位の作品を辞書に登録します。単位内に作曲家が複数ある行では押せません" />
-                <!--
-                  ダイアログの中身は「対象外にする」と「作曲家・作品名を指定する」の二択なので、
-                  **ボタン名を片方だけにしない。** 「対象外にする」と名乗っていたため、
-                  R-504 が「主作品が定まるなら作曲家を指定する」と言っていても、
-                  その入口がここだと気付けなかった（docs/SPEC.md 7.3.2）。
-                -->
-                <Button DockPanel.Dock="Left" Content="このアルバムの扱いを決める"
-                        Command="{Binding AddAlbumOverrideFromChangeCommand}" Margin="0,0,14,0"
-                        ToolTipService.ShowOnDisabled="True"
-                        ToolTip="R-504 の「作品が決まらない」保留行と R-501 の明細から、そのアルバム単位の個別例外を登録します。対象外にするか、作曲家・作品名を指定するかをダイアログで選びます。「年が決まらない」「演奏者が決まらない」保留行では押せません（個別例外に date と artist は書けないため、ファイル一覧タブでタグを直します）" />
-                <TextBlock Style="{StaticResource StatusTextStyle}"
-                           Text="{Binding InspectionSummary}" TextWrapping="Wrap" />
-              </DockPanel>
-            </Border>
+            <!--
+              ボタン領域と下段グリッドは 1 つの器にまとめる。スプリッタは隣接行しか
+              動かせないので、器にしないとドラッグの相手が Auto のボタン領域になり、
+              グリッドではなくボタンの高さが伸びる。
+            -->
+            <Grid Grid.Row="2">
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+              </Grid.RowDefinitions>
 
-            <!-- 適用で問題が起きた項目。不一致が 1 件でもあれば必ず見せる（docs/SPEC.md 9章） -->
-            <Border Grid.Row="3" Style="{StaticResource DangerPanelBorderStyle}" Margin="0,0,0,12"
-                    Visibility="{Binding ApplyIssues.Count, Converter={StaticResource CountToVisibility}}">
-              <ItemsControl ItemsSource="{Binding ApplyIssues}" MaxHeight="120">
-                <ItemsControl.Template>
-                  <ControlTemplate TargetType="ItemsControl">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="10,8">
-                      <ItemsPresenter />
-                    </ScrollViewer>
-                  </ControlTemplate>
-                </ItemsControl.Template>
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate>
-                    <TextBlock Style="{StaticResource DangerItemTextStyle}" Text="{Binding}" />
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-            </Border>
-
-            <!-- 下段: 差分プレビュー。根拠列を必ず持つ（docs/SPEC.md 5.3） -->
-            <Border Grid.Row="4" Style="{StaticResource CardBorderStyle}" Padding="1">
-              <DockPanel>
-                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="8,6,8,4">
-                  <Button Content="全選択" Command="{Binding SelectAllChangesCommand}" Margin="0,0,8,0" />
-                  <Button Content="全選択解除" Command="{Binding DeselectAllChangesCommand}" Margin="0,0,8,0" />
-                  <Button Content="選択反転" Command="{Binding InvertChangesCommand}" />
+              <Border Grid.Row="0" Style="{StaticResource ActionBarBorderStyle}" Margin="0,0,0,12">
+                <DockPanel>
+                  <Button DockPanel.Dock="Left" Content="チェックした項目を適用"
+                          Command="{Binding ApplyCommand}"
+                          Style="{StaticResource AccentButtonStyle}" Margin="0,0,8,0" />
+                  <Button DockPanel.Dock="Left" Content="CSV出力"
+                          Command="{Binding ExportCsvCommand}" Margin="0,0,8,0"
+                          ToolTip="明細と集計の 2 ファイルを書き出します" />
+                  <Button DockPanel.Dock="Left" Content="選択行を辞書に追加"
+                          Command="{Binding AddSelectedChangeToDictionaryCommand}" Margin="0,0,8,0"
+                          ToolTip="修正案を出せなかった行を辞書に登録して再検査します" />
                   <!--
-                    表示だけの絞り込み。件数・適用対象・CSV 出力は動かさない（docs/SPEC.md 5.3）。
-                    隠すのは適用されない行だけなので、「選択 N 件」と画面の行数が一致する。
+                    作品エントリを育てる主経路（docs/SPEC.md 7.3.2）。
+                    作曲家もフォルダも明細から決まるので、辞書タブで手打ちさせない。
                   -->
-                  <CheckBox Content="チェック済みのみ" VerticalAlignment="Center" Margin="14,0,0,0"
-                            IsChecked="{Binding ShowOnlySelectedChanges}"
-                            ToolTip="適用チェックを付けた行だけを表示します。件数・適用対象・CSV 出力は変わりません" />
-                </StackPanel>
-                <DataGrid x:Name="InspectionChangeGrid"
-                          ItemsSource="{Binding InspectionChanges}"
-                          SelectedItem="{Binding SelectedChange}"
-                          RowStyle="{StaticResource ChangeRowStyle}"
-                          CanUserSortColumns="True"
-                          EnableRowVirtualization="True"
-                          HorizontalScrollBarVisibility="Auto"
-                          CellEditEnding="OnInspectionCellEditEnding"
-                          RowEditEnding="OnInspectionRowEditEnding"
-                          IsKeyboardFocusWithinChanged="OnInspectionGridKeyboardFocusWithinChanged">
-                <DataGrid.Columns>
-                  <DataGridCheckBoxColumn Header="適用" Width="50"
-                                          Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}"
-                                          ElementStyle="{StaticResource ChangeApplyCheckBoxStyle}"
-                                          EditingElementStyle="{StaticResource ChangeApplyCheckBoxStyle}" />
-                  <DataGridTextColumn Header="区分" Binding="{Binding Classification}" IsReadOnly="True" Width="68"
-                                      ElementStyle="{StaticResource CenterCellTextStyle}" />
                   <!--
-                    根拠以外は実幅で固定し、余りは根拠列だけが star で吸う。
-                    全列を star にすると根拠の実効幅が 255px ほどしか取れず、
-                    自動判定の理由が読めないまま承認することになる（docs/SPEC.md 5.3）。
-                    根拠を実幅で固定するとウィンドウを広げても伸びないので star + MinWidth。
-                    ファイル一覧タブの手編集差分も同じ幅体系に揃えること。
+                    どちらのボタンも押せない行がある。**無効なままでは理由が伝わらない**ので
+                    ToolTipService.ShowOnDisabled で押せない理由まで読めるようにする。
                   -->
-                  <DataGridTextColumn Header="パス" Binding="{Binding RelativePath}" IsReadOnly="True" Width="300"
-                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
-                  <DataGridTextColumn Header="タグ" Binding="{Binding Field}" IsReadOnly="True" Width="90"
-                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
-                  <DataGridTextColumn Header="変更前" Binding="{Binding BeforeText}" IsReadOnly="True" Width="190"
-                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
-                  <DataGridTextColumn Header="変更後" Binding="{Binding AfterText}" IsReadOnly="True" Width="190"
-                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
-                  <DataGridTextColumn Header="根拠" Binding="{Binding Rationale}" IsReadOnly="True" Width="*" MinWidth="460"
-                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
-                </DataGrid.Columns>
-                </DataGrid>
-              </DockPanel>
-            </Border>
+                  <Button DockPanel.Dock="Left" Content="作品を辞書に追加"
+                          Command="{Binding AddWorkFromChangeCommand}" Margin="0,0,8,0"
+                          ToolTipService.ShowOnDisabled="True"
+                          ToolTip="R-504 の保留行（HOLD_WORK_UNKNOWN）から、その単位の作品を辞書に登録します。単位内に作曲家が複数ある行では押せません" />
+                  <!--
+                    ダイアログの中身は「対象外にする」と「作曲家・作品名を指定する」の二択なので、
+                    **ボタン名を片方だけにしない。** 「対象外にする」と名乗っていたため、
+                    R-504 が「主作品が定まるなら作曲家を指定する」と言っていても、
+                    その入口がここだと気付けなかった（docs/SPEC.md 7.3.2）。
+                  -->
+                  <Button DockPanel.Dock="Left" Content="このアルバムの扱いを決める"
+                          Command="{Binding AddAlbumOverrideFromChangeCommand}" Margin="0,0,14,0"
+                          ToolTipService.ShowOnDisabled="True"
+                          ToolTip="R-504 の「作品が決まらない」保留行と R-501 の明細から、そのアルバム単位の個別例外を登録します。対象外にするか、作曲家・作品名を指定するかをダイアログで選びます。「年が決まらない」「演奏者が決まらない」保留行では押せません（個別例外に date と artist は書けないため、ファイル一覧タブでタグを直します）" />
+                  <TextBlock Style="{StaticResource StatusTextStyle}"
+                             Text="{Binding InspectionSummary}" TextWrapping="Wrap" />
+                </DockPanel>
+              </Border>
+
+              <!-- 適用で問題が起きた項目。不一致が 1 件でもあれば必ず見せる（docs/SPEC.md 9章） -->
+              <Border Grid.Row="1" Style="{StaticResource DangerPanelBorderStyle}" Margin="0,0,0,12"
+                      Visibility="{Binding ApplyIssues.Count, Converter={StaticResource CountToVisibility}}">
+                <ItemsControl ItemsSource="{Binding ApplyIssues}" MaxHeight="120">
+                  <ItemsControl.Template>
+                    <ControlTemplate TargetType="ItemsControl">
+                      <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="10,8">
+                        <ItemsPresenter />
+                      </ScrollViewer>
+                    </ControlTemplate>
+                  </ItemsControl.Template>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <TextBlock Style="{StaticResource DangerItemTextStyle}" Text="{Binding}" />
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </Border>
+
+              <!-- 下段: 差分プレビュー。根拠列を必ず持つ（docs/SPEC.md 5.3） -->
+              <Border Grid.Row="2" Style="{StaticResource CardBorderStyle}" Padding="1">
+                <DockPanel>
+                  <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="8,6,8,4">
+                    <Button Content="全選択" Command="{Binding SelectAllChangesCommand}" Margin="0,0,8,0" />
+                    <Button Content="全選択解除" Command="{Binding DeselectAllChangesCommand}" Margin="0,0,8,0" />
+                    <Button Content="選択反転" Command="{Binding InvertChangesCommand}" />
+                    <!--
+                      表示だけの絞り込み。件数・適用対象・CSV 出力は動かさない（docs/SPEC.md 5.3）。
+                      隠すのは適用されない行だけなので、「選択 N 件」と画面の行数が一致する。
+                    -->
+                    <CheckBox Content="チェック済みのみ" VerticalAlignment="Center" Margin="14,0,0,0"
+                              IsChecked="{Binding ShowOnlySelectedChanges}"
+                              ToolTip="適用チェックを付けた行だけを表示します。件数・適用対象・CSV 出力は変わりません" />
+                  </StackPanel>
+                  <DataGrid x:Name="InspectionChangeGrid"
+                            ItemsSource="{Binding InspectionChanges}"
+                            SelectedItem="{Binding SelectedChange}"
+                            RowStyle="{StaticResource ChangeRowStyle}"
+                            CanUserSortColumns="True"
+                            EnableRowVirtualization="True"
+                            HorizontalScrollBarVisibility="Auto"
+                            CellEditEnding="OnInspectionCellEditEnding"
+                            RowEditEnding="OnInspectionRowEditEnding"
+                            IsKeyboardFocusWithinChanged="OnInspectionGridKeyboardFocusWithinChanged">
+                  <DataGrid.Columns>
+                    <DataGridCheckBoxColumn Header="適用" Width="50"
+                                            Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}"
+                                            ElementStyle="{StaticResource ChangeApplyCheckBoxStyle}"
+                                            EditingElementStyle="{StaticResource ChangeApplyCheckBoxStyle}" />
+                    <DataGridTextColumn Header="区分" Binding="{Binding Classification}" IsReadOnly="True" Width="68"
+                                        ElementStyle="{StaticResource CenterCellTextStyle}" />
+                    <!--
+                      根拠以外は実幅で固定し、余りは根拠列だけが star で吸う。
+                      全列を star にすると根拠の実効幅が 255px ほどしか取れず、
+                      自動判定の理由が読めないまま承認することになる（docs/SPEC.md 5.3）。
+                      根拠を実幅で固定するとウィンドウを広げても伸びないので star + MinWidth。
+                      ファイル一覧タブの手編集差分も同じ幅体系に揃えること。
+                    -->
+                    <DataGridTextColumn Header="パス" Binding="{Binding RelativePath}" IsReadOnly="True" Width="300"
+                                        ElementStyle="{StaticResource EllipsisTextStyle}" />
+                    <DataGridTextColumn Header="タグ" Binding="{Binding Field}" IsReadOnly="True" Width="90"
+                                        ElementStyle="{StaticResource EllipsisTextStyle}" />
+                    <DataGridTextColumn Header="変更前" Binding="{Binding BeforeText}" IsReadOnly="True" Width="190"
+                                        ElementStyle="{StaticResource EllipsisTextStyle}" />
+                    <DataGridTextColumn Header="変更後" Binding="{Binding AfterText}" IsReadOnly="True" Width="190"
+                                        ElementStyle="{StaticResource EllipsisTextStyle}" />
+                    <DataGridTextColumn Header="根拠" Binding="{Binding Rationale}" IsReadOnly="True" Width="*" MinWidth="460"
+                                        ElementStyle="{StaticResource EllipsisTextStyle}" />
+                  </DataGrid.Columns>
+                  </DataGrid>
+                </DockPanel>
+              </Border>
+            </Grid>
           </Grid>
         </TabItem>
 

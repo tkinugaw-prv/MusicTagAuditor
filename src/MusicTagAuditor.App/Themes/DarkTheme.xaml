@@ -663,6 +663,15 @@
                                    Fill="{StaticResource BorderStrongBrush}" />
                     </Border>
                     <ControlTemplate.Triggers>
+                        <!--
+                            グリップの既定は列スプリッタ用の縦線。行スプリッタは帯の高さが
+                            10px しかないため、縦線のままでは上下が切れて短い棒に見え、
+                            掴めるものだと気付けない。
+                        -->
+                        <Trigger Property="ResizeDirection" Value="Rows">
+                            <Setter TargetName="Grip" Property="Width" Value="28" />
+                            <Setter TargetName="Grip" Property="Height" Value="1" />
+                        </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Grip" Property="Fill" Value="{StaticResource AccentBrush}" />
                         </Trigger>
