@@ -49,7 +49,7 @@ public sealed class ManualEditSet
 
         if (unchanged)
         {
-            Remove(track.RelativePath, field);
+            _ = Remove(track.RelativePath, field);
             return false;
         }
 
@@ -137,10 +137,32 @@ public sealed class ManualEditSet
     }
 
     /// <summary>
+    /// 編集を 1 件取り消す。
+    ///
+    /// **間違えて入れた 1 項目だけを捨てるための入口。** これが無いと、誤入力を消す手段が
+    /// 全件破棄か、元の値を思い出して打ち直すかしか無くなる（後者は元の値を覚えていないと使えない）。
+    /// </summary>
+    /// <param name="relativePath">対象ファイル。</param>
+    /// <param name="field">対象フィールド。</param>
+    /// <returns>取り消したなら true。元から編集が無ければ false。</returns>
+    public bool Remove(string relativePath, TagField field)
+    {
+        if (!_edits.Remove(Key(relativePath, field)))
+        {
+            return false;
+        }
+
+        Changed?.Invoke(this, EventArgs.Empty);
+
+        return true;
+    }
+
+    /// <summary>
     /// 指定ファイルの編集をすべて取り消す。
     /// </summary>
     /// <param name="relativePath">対象ファイル。</param>
-    public void Reset(string relativePath)
+    /// <returns>取り消した件数。</returns>
+    public int Reset(string relativePath)
     {
         (string RelativePath, TagField Field)[] keys =
         [
@@ -149,13 +171,15 @@ public sealed class ManualEditSet
 
         foreach ((string _, TagField field) in keys)
         {
-            _edits.Remove(Key(relativePath, field));
+            _ = _edits.Remove(Key(relativePath, field));
         }
 
         if (keys.Length > 0)
         {
             Changed?.Invoke(this, EventArgs.Empty);
         }
+
+        return keys.Length;
     }
 
     /// <summary>
@@ -185,17 +209,6 @@ public sealed class ManualEditSet
                 .ThenBy(edit => edit.Field)
                 .Select(edit => edit.ToChange()),
         ];
-    }
-
-    /// <summary>
-    /// 編集を 1 件取り消す。
-    /// </summary>
-    private void Remove(string relativePath, TagField field)
-    {
-        if (_edits.Remove(Key(relativePath, field)))
-        {
-            Changed?.Invoke(this, EventArgs.Empty);
-        }
     }
 
     /// <summary>

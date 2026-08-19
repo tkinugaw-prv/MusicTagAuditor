@@ -194,11 +194,50 @@ public sealed class ManualEditSetTests
         edits.Set(first, TagField.Album, "y");
         edits.Set(second, TagField.Artist, "z");
 
-        edits.Reset("01.flac");
+        // 取り消した件数は画面の案内に出すので、数え違えないことまで見る。
+        Assert.Equal(2, edits.Reset("01.flac"));
 
         Assert.Equal(1, edits.Count);
         Assert.False(edits.IsEdited("01.flac"));
         Assert.True(edits.IsEdited("02.flac"));
+    }
+
+    /// <summary>
+    /// 1 項目だけ取り消せることを確認する。
+    ///
+    /// 間違えて直した 1 セルを捨てるときに、同じ行の他の編集まで巻き込んではいけない。
+    /// 巻き込むと、残したかった編集を打ち直す羽目になる。
+    /// </summary>
+    [Fact]
+    public void RemovesSingleEdit()
+    {
+        ManualEditSet edits = new();
+        TrackTags track = Track("01.flac", (TagField.Artist, "a"), (TagField.Album, "b"));
+
+        edits.Set(track, TagField.Artist, "x");
+        edits.Set(track, TagField.Album, "y");
+
+        Assert.True(edits.Remove("01.flac", TagField.Artist));
+
+        Assert.Equal(1, edits.Count);
+        Assert.False(edits.IsEdited("01.flac", TagField.Artist));
+        Assert.True(edits.IsEdited("01.flac", TagField.Album));
+    }
+
+    /// <summary>
+    /// 編集の無い組み合わせを取り消しても何も起きないことを確認する。
+    /// ここで通知が飛ぶと、変わっていない一覧を作り直すことになる。
+    /// </summary>
+    [Fact]
+    public void RemoveDoesNothingWhenNotEdited()
+    {
+        ManualEditSet edits = new();
+        int raised = 0;
+
+        edits.Changed += (_, _) => raised++;
+
+        Assert.False(edits.Remove("01.flac", TagField.Artist));
+        Assert.Equal(0, raised);
     }
 
     /// <summary>

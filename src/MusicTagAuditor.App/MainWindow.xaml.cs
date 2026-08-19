@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
+using MusicTagAuditor.App.Controls;
 using MusicTagAuditor.App.Interop;
 using MusicTagAuditor.App.ViewModels;
 using MusicTagAuditor.Core.Dictionary;
@@ -126,10 +127,20 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// セルの編集が終わったら、見送っていた絞り込みを掛け直させる。
+    /// セルの編集が終わったら、入力をその場で書き戻し、見送っていた絞り込みを掛け直させる。
+    ///
+    /// **ここで書き戻さないと、同じ行の中で移動しただけでは保留に入らない。**
+    /// 理由は <see cref="CellEditCommit"/> に書いた。
+    ///
+    /// 取り消し（Esc）では書き戻さない。捨てるつもりの入力を保留に入れては意味が反転する。
     /// </summary>
     private void OnTrackCellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
     {
+        if (e.EditAction == DataGridEditAction.Commit)
+        {
+            CellEditCommit.Flush(e.EditingElement);
+        }
+
         ScheduleTrackEditFinished();
     }
 

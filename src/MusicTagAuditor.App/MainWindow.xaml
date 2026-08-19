@@ -93,7 +93,27 @@
       <MenuItem Header="エクスプローラーで表示"
                 Command="{Binding PlacementTarget.Tag.RevealInExplorerCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                 CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+      <!-- 間違えて直したときの戻り道。編集の無い行では押せない（CanResetTrackEdits） -->
+      <MenuItem Header="この行の編集を取り消す"
+                Command="{Binding PlacementTarget.Tag.ResetTrackEditsCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
     </ContextMenu>
+
+    <!--
+      保留中の編集（ファイル一覧タブの下段）の行に出す右クリックメニュー。
+      コマンドの中継は TrackRowContextMenu と同じ理由・同じ作り。
+    -->
+    <ContextMenu x:Key="ManualEditRowContextMenu">
+      <MenuItem Header="この編集を取り消す"
+                Command="{Binding PlacementTarget.Tag.DiscardManualEditCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+    </ContextMenu>
+
+    <!-- 保留中の編集の行。1 項目だけ取り消す導線をここに持たせる（全件破棄はボタン側） -->
+    <Style x:Key="ManualEditRowStyle" TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+      <Setter Property="ContextMenu" Value="{StaticResource ManualEditRowContextMenu}" />
+      <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=DataGrid}}" />
+    </Style>
 
     <!-- ファイル一覧の行。複数値・保留中の編集を色で区別する。 -->
     <Style x:Key="TrackRowStyle" TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
@@ -781,6 +801,7 @@
             <Border Grid.Row="4" Style="{StaticResource CardBorderStyle}" Padding="1"
                     Visibility="{Binding ManualEditChanges.Count, Converter={StaticResource CountToVisibility}}">
               <DataGrid ItemsSource="{Binding ManualEditChanges}"
+                        RowStyle="{StaticResource ManualEditRowStyle}"
                         CanUserSortColumns="True"
                         HorizontalScrollBarVisibility="Auto"
                         MinHeight="100" MaxHeight="260">
