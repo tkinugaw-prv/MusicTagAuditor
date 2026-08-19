@@ -1759,6 +1759,80 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
+    /// 保留中の手編集を 1 件だけ取り消す（下段の一覧の右クリック）。
+    ///
+    /// **間違えて 1 セル直してしまったときの戻り道。** これが無いと、誤入力を消す手段は
+    /// 全件破棄か、元の値を思い出して打ち直すかしか無い。
+    ///
+    /// **確認は出さない。** 取り消すのは右クリックした行そのもので、対象が画面に見えている。
+    /// 全件破棄と違い、取り違えても失うのは 1 項目だけで、打ち直せば戻せる。
+    /// </summary>
+    /// <param name="change">取り消す差分。null なら何もしない。</param>
+    [RelayCommand]
+    private void DiscardManualEdit(TagChange? change)
+    {
+        if (change is null || !_manualEdits.Remove(change.RelativePath, change.Field))
+        {
+            return;
+        }
+
+        // 消えたのは 1 行 1 フィールドだけなので、一覧も該当行だけ出し直す。
+        FindTrackRow(change.RelativePath)?.NotifyEditsChanged();
+
+        StatusText = $"「{Path.GetFileName(change.RelativePath)}」の{ManualEditConst.Label(change.Field)}の編集を取り消しました。";
+    }
+
+    /// <summary>
+    /// ある行の保留中の手編集をまとめて取り消す（ファイル一覧の右クリック）。
+    ///
+    /// 1 行を直しているうちに何項目も入ってしまうことがあり、下段から 1 件ずつ消すのは手間が勝つ。
+    /// 確認を出さない理由は <see cref="DiscardManualEdit"/> と同じ。
+    /// </summary>
+    /// <param name="row">対象の行。null なら何もしない。</param>
+    [RelayCommand(CanExecute = nameof(CanResetTrackEdits))]
+    private void ResetTrackEdits(TrackRowViewModel? row)
+    {
+        if (row is null)
+        {
+            return;
+        }
+
+        int removed = _manualEdits.Reset(row.RelativePath);
+
+        if (removed == 0)
+        {
+            return;
+        }
+
+        row.NotifyEditsChanged();
+
+        StatusText = string.Create(
+            CultureInfo.CurrentCulture,
+            $"「{row.FileName}」の編集 {removed:N0} 項目を取り消しました。");
+    }
+
+    /// <summary>
+    /// その行の編集を取り消せるか。編集が無い行では押せないようにする。
+    /// </summary>
+    /// <param name="row">対象の行。</param>
+    /// <returns>取り消せるなら true。</returns>
+    private static bool CanResetTrackEdits(TrackRowViewModel? row)
+    {
+        return row is { IsEdited: true };
+    }
+
+    /// <summary>
+    /// 相対パスからファイル一覧の行を探す。
+    /// </summary>
+    /// <param name="relativePath">対象ファイル。</param>
+    /// <returns>見つかった行。無ければ null。</returns>
+    private TrackRowViewModel? FindTrackRow(string relativePath)
+    {
+        return _allTracks
+            .FirstOrDefault(track => track.RelativePath.Equals(relativePath, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// 保留中の手編集を書き込む。
     ///
     /// 検査結果の適用とまったく同じ経路を通す。書き込み経路を 2 本持つと、
@@ -1901,6 +1975,11 @@ public sealed partial class MainViewModel : ObservableObject
 
         HasManualEdits = changes.Count > 0;
 
+        // 行の取り消しの可否は行ごとに変わる。**ここで知らせないと押せないままになる。**
+        // CommunityToolkit の RelayCommand は CommandManager の再問い合わせに乗らないため、
+        // 同じ行を右クリックし直しても CanExecute は評価し直されない。
+        ResetTrackEditsCommand.NotifyCanExecuteChanged();
+
         ManualEditSummary = changes.Count == 0
             ? "セルを直すと、ここに保留中の編集が集まります。"
             : string.Create(
@@ -1990,8 +2069,7 @@ public sealed partial class MainViewModel : ObservableObject
     /// <param name="relativePath">見せたいファイルの相対パス。</param>
     public void RevealTrack(string relativePath)
     {
-        TrackRowViewModel? row = _allTracks
-            .FirstOrDefault(track => track.RelativePath.Equals(relativePath, StringComparison.OrdinalIgnoreCase));
+        TrackRowViewModel? row = FindTrackRow(relativePath);
 
         if (row is null)
         {
