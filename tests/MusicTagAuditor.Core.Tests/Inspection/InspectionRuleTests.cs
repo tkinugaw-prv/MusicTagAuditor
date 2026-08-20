@@ -66,14 +66,63 @@ public sealed class InspectionRuleTests
 
     /// <summary>
     /// 団体名の読点を「姓, 名」順として拾わないことを確認する。
+    ///
+    /// <c>albumartist</c> ではなく <c>artist</c> で確かめる。albumartist はフィールドごと
+    /// 判定対象外なので、そちらでは辞書照合が効いているかどうかが分からない。
     /// </summary>
     [Fact]
     public void DoesNotFlagEnsembleCommaAsSurnameFirst()
     {
         InspectionResult result = Inspect(
-            Track("01.flac", (TagField.AlbumArtist, ["Kirov Orchestra, Mariinsky Theatre"])));
+            Track("01.flac", (TagField.Artist, ["Kirov Orchestra, Mariinsky Theatre"])));
 
         Assert.Empty(ChangesOf(result, "R-207"));
+    }
+
+    /// <summary>
+    /// 辞書に無い団体を含む連結値でも「姓, 名」順として拾わないことを確認する。
+    ///
+    /// <c>albumartist</c> は団体名を入れるフィールド（2.3）で、読点は複数団体の列挙である。
+    /// 値全体で辞書を引く実装では、連結した形が別名登録されていない限り引けず誤検出になっていた。
+    /// </summary>
+    [Fact]
+    public void DoesNotFlagMultipleEnsemblesInAlbumArtist()
+    {
+        InspectionResult result = Inspect(
+            Track("ショスタコーヴィチ 7/01.flac",
+                (TagField.AlbumArtist, ["Mariinsky Theatre Orchestra, Rotterdam Philharmonic Orchestra"])));
+
+        Assert.Empty(ChangesOf(result, "R-207"));
+    }
+
+    /// <summary>
+    /// <c>artist</c> の連結値も、読点で割って 1 つでも団体として引ければ拾わないことを確認する。
+    /// <c>Rotterdam Philharmonic Orchestra</c> は辞書に無い。
+    /// </summary>
+    [Fact]
+    public void DoesNotFlagMultipleEnsemblesInArtist()
+    {
+        InspectionResult result = Inspect(
+            Track("ショスタコーヴィチ 7/01.flac",
+                (TagField.Artist, ["Mariinsky Theatre Orchestra, Rotterdam Philharmonic Orchestra"])));
+
+        Assert.Empty(ChangesOf(result, "R-207"));
+    }
+
+    /// <summary>
+    /// 辞書に無い人名の「姓, 名」順は**検出する**ことを確認する。
+    ///
+    /// 除外を広げすぎてルールが黙って死んでも、負例だけでは気づけない（3.2）。
+    /// </summary>
+    [Fact]
+    public void FlagsSurnameFirstPersonName()
+    {
+        InspectionResult result = Inspect(
+            Track("リスト 交響詩/01.flac", (TagField.Composer, ["Liszt, Franz"])));
+
+        TagChange change = Assert.Single(ChangesOf(result, "R-207"));
+
+        Assert.Contains("「姓, 名」順", change.Rationale, StringComparison.Ordinal);
     }
 
     /// <summary>
