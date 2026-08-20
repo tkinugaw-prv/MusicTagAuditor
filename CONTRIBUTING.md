@@ -29,6 +29,7 @@ dotnet test
 | コーディング規約（命名・ヘッダコメント・環境変数の扱い） | [docs/llm_guideline.md](docs/llm_guideline.md) |
 | 実装上の前提（画面・検査ルール・辞書・バックアップ） | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) |
 | タグ付けの原則（実装の唯一の基準） | [docs/TAGGING_POLICY.md](docs/TAGGING_POLICY.md) |
+| アプリを起動しての動作確認 | [docs/manual_verification.md](docs/manual_verification.md) |
 
 要点だけ挙げると:
 
@@ -36,6 +37,7 @@ dotnet test
 - **ビルドは警告 0 件でなければ通らない。** `TreatWarningsAsErrors=true` と `GenerateDocumentationFile=true` を設定しているため、public メンバーに XML ドキュメントコメントが無いと CS1591 で失敗する
 - **検査ルールの変更は [docs/TAGGING_POLICY.md](docs/TAGGING_POLICY.md) を根拠にする。** 原則に無い挙動を実装しない。原則自体を変えるなら、まずそちらの改訂を提案してほしい
 - **`reports/` をコミットしない。** TRX にはローカルのユーザー名・マシン名、Cobertura にはソースの絶対パスが入る（`.gitignore` 済み）
+- **UI の確認に実ライブラリを使わない。** 実ライブラリから数フォルダをコピーしたテスト用ライブラリを開くこと。押し間違い 1 回で所蔵のタグが書き換わる（[docs/manual_verification.md](docs/manual_verification.md)）
 - ドキュメント・コメント・コミットメッセージは日本語で書く
 
 ## Issue
