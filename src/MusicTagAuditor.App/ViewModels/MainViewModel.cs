@@ -917,6 +917,13 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
+        // **Clear より先に控える。** RuleResults を空にすると上段 DataGrid の SelectedItem が
+        // null になり、双方向バインド経由で SelectedRule まで消える。控える対象が残らなくなる。
+        string? previousRuleId = SelectedRule?.RuleId;
+        TagChangeKey? previousChangeKey = SelectedChange is null
+            ? null
+            : TagChangeKey.From(SelectedChange.Change);
+
         ClearRuleResults();
         InspectionChanges.Clear();
         UnknownValues.Clear();
@@ -950,7 +957,11 @@ public sealed partial class MainViewModel : ObservableObject
             _lastInspection = result;
 
             // 表示用のルール行と選択中ルールはここで決まる。絞り込みが無効なら全件が入る。
-            ApplyInspectionScope();
+            // **ルール行は毎回作り直すので、参照では前の選択を追えない。** ID で引き直した実体を
+            // 渡せば、ApplyInspectionScope 側の参照一致がそのまま成立する。
+            ApplyInspectionScope(FindRule(previousRuleId));
+
+            RestoreSelectedChange(previousChangeKey);
 
             LoadUnknownValues(result);
 
@@ -989,6 +1000,39 @@ public sealed partial class MainViewModel : ObservableObject
 
         _allRuleResults.Clear();
         RuleResults.Clear();
+    }
+
+    /// <summary>
+    /// ルール ID から、作り直したあとのルール行を引く。
+    ///
+    /// 再検査は <see cref="RuleResultViewModel"/> を毎回新しく作るため、参照を持ち越しても
+    /// 一致しない。**キーで引き直す**（<c>DictionaryViewModel.Reveal</c> と同じ作法）。
+    /// </summary>
+    /// <param name="ruleId">探すルール ID。控えていなければ null。</param>
+    /// <returns>見つかったルール行。無ければ null。</returns>
+    private RuleResultViewModel? FindRule(string? ruleId)
+    {
+        return ruleId is null
+            ? null
+            : _allRuleResults.FirstOrDefault(rule => string.Equals(rule.RuleId, ruleId, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// 再検査の前に選んでいた明細を選び直す。
+    ///
+    /// **見つからなければ選択なしのままにする。** 対象外にしたアルバムの明細は一覧から消えるのが
+    /// 正しい挙動で、消えた行の代わりに別の行を選ぶと、直したつもりのない行を直すことになる。
+    /// </summary>
+    /// <param name="key">再検査の前に選んでいた明細のキー。無ければ null。</param>
+    private void RestoreSelectedChange(TagChangeKey? key)
+    {
+        if (key is null || SelectedChange is not null)
+        {
+            return;
+        }
+
+        SelectedChange = InspectionChanges
+            .FirstOrDefault(change => TagChangeKey.From(change.Change) == key.Value);
     }
 
     /// <summary>

@@ -62,6 +62,22 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// 選ばれているルール行を画面内へ送る。
+    ///
+    /// **再検査をまたいで選択を復元したときに要る。** <c>DataGrid</c> はコードから
+    /// <c>SelectedItem</c> を差し替えてもスクロールしないため、復元した行が画面外にあると
+    /// 選択が戻ったことが見えず、先頭へ落ちたのと区別がつかない。
+    /// 利用者が自分でクリックした場合は既に見えているので、何も起きない。
+    /// </summary>
+    private void OnRuleResultSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (RuleResultGrid.SelectedItem is not null)
+        {
+            RuleResultGrid.ScrollIntoView(RuleResultGrid.SelectedItem);
+        }
+    }
+
+    /// <summary>
     /// ファイル一覧タブへ切り替えて、指定された行を選択・スクロール表示する。
     ///
     /// **一連の操作は入力イベントを抜けてから行う。** ここへ来るのはダブルクリックの

@@ -43,6 +43,14 @@ public sealed class MainViewModelAlbumUnitCommandsTests : IDisposable
     private readonly Dictionary<string, Dictionary<TagField, string>> _tags = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// ビューモデルに渡した辞書ストア。<see cref="CreateInspectedViewModelAsync"/> が入れる。
+    ///
+    /// 検査のあとで辞書を変えたいテストが使う。**同じ実体を共有する**ので、ここで保存すれば
+    /// 次の検査から新しい索引が効く。
+    /// </summary>
+    private DictionaryStore? _dictionaryStore;
+
+    /// <summary>
     /// ライブラリを用意する。
     /// </summary>
     public MainViewModelAlbumUnitCommandsTests()
@@ -165,6 +173,69 @@ public sealed class MainViewModelAlbumUnitCommandsTests : IDisposable
     }
 
     /// <summary>
+    /// 再検査をまたいでも、選んでいたルールと明細が選ばれたままであることを確認する。
+    ///
+    /// 「このアルバムの扱いを決める」は辞書を保存したあと再検査する。ルール行は毎回作り直されるため、
+    /// 参照で選択を追うと必ず先頭へ落ちていた。**どこまで見たかを毎回探し直すことになる。**
+    /// 明細は先頭ではなく 2 件目を選んでおく。ルールだけ合わせて先頭の明細を選ぶ実装では通らない。
+    /// </summary>
+    [Fact]
+    public async Task 再検査しても選んでいたルールと明細が残る()
+    {
+        MainViewModel viewModel = await CreateInspectedViewModelAsync();
+
+        RuleResultViewModel rule = viewModel.RuleResults.First(rule => rule.RuleId == AlbumNameRule.RULE_ID);
+
+        viewModel.SelectedRule = rule;
+
+        // 先頭の行を選んでいては、先頭へ落ちたのか残ったのかを区別できない。
+        Assert.NotSame(viewModel.RuleResults[0], rule);
+
+        TagChangeViewModel change = viewModel.InspectionChanges[1];
+
+        viewModel.SelectedChange = change;
+
+        viewModel.InspectCommand.Execute(null);
+
+        Assert.Equal(rule.RuleId, viewModel.SelectedRule?.RuleId);
+        Assert.Equal(change.RelativePath, viewModel.SelectedChange?.RelativePath);
+        Assert.Equal(change.Change.Field, viewModel.SelectedChange?.Change.Field);
+    }
+
+    /// <summary>
+    /// 対象外にして明細が消えたら、上段の選択は残したまま下段は選択なしに戻ることを確認する。
+    ///
+    /// **消えた行の代わりに別の行を選んではならない。** 選択が黙って隣へずれると、直したつもりの
+    /// 無い行を直すことになる。一方で上段まで先頭へ落とすと、対象外にするたびに作業位置を失う。
+    /// </summary>
+    [Fact]
+    public async Task 対象外にして明細が消えても上段の選択は残る()
+    {
+        MainViewModel viewModel = await CreateInspectedViewModelAsync();
+
+        RuleResultViewModel rule = viewModel.RuleResults.First(rule => rule.RuleId == AlbumNameRule.RULE_ID);
+
+        viewModel.SelectedRule = rule;
+
+        TagChangeViewModel change = viewModel.InspectionChanges.First(
+            row => row.RelativePath.StartsWith(MIXED_COMPOSER_FOLDER, StringComparison.Ordinal));
+
+        viewModel.SelectedChange = change;
+
+        // 「このアルバムの扱いを決める → 対象外にする」が辞書へ入れるものと同じ内容。
+        // ストアは MainViewModel と同じ実体なので、保存すれば次の検査から新しい索引が効く。
+        _dictionaryStore!.Save(DictionaryEditor.AddAlbumOverride(
+            _dictionaryStore.Dictionary,
+            new AlbumOverrideEntry { Folder = MIXED_COMPOSER_FOLDER, Exclude = true, Note = "テスト" }));
+
+        viewModel.InspectCommand.Execute(null);
+
+        Assert.Equal(rule.RuleId, viewModel.SelectedRule?.RuleId);
+        Assert.DoesNotContain(viewModel.InspectionChanges, row => row.RelativePath == change.RelativePath);
+        Assert.Null(viewModel.SelectedChange);
+    }
+
+    /// <summary>
     /// 作業ディレクトリを片付ける。
     /// </summary>
     public void Dispose()
@@ -260,6 +331,8 @@ public sealed class MainViewModelAlbumUnitCommandsTests : IDisposable
         Directory.CreateDirectory(settingsDirectory);
 
         DictionaryStore dictionaryStore = new(settingsDirectory);
+
+        _dictionaryStore = dictionaryStore;
 
         if (edit is not null)
         {

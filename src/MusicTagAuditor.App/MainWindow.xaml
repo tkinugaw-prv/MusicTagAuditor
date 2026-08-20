@@ -346,8 +346,10 @@
                             IsChecked="{Binding LimitInspectionToSelectedFolder}"
                             ToolTip="左のツリーで選んだフォルダ配下の検出だけを表示します。一括選択・適用・CSV出力も同じ範囲に限定されます" />
                 </StackPanel>
-                <DataGrid ItemsSource="{Binding RuleResults}"
+                <!-- 再検査で選択を復元したとき、行が画面外だと選択が戻ったことが見えない -->
+                <DataGrid x:Name="RuleResultGrid" ItemsSource="{Binding RuleResults}"
                           SelectedItem="{Binding SelectedRule}"
+                          SelectionChanged="OnRuleResultSelectionChanged"
                           SelectionMode="Single">
                 <DataGrid.Columns>
                   <DataGridCheckBoxColumn Header="適用" Width="50"
