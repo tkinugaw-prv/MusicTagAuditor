@@ -367,7 +367,8 @@ public sealed class DuplicateConcatenationRule : IInspectionRule
 ///
 /// 辞書で正規形に解決できる値は R-201 / R-202 / R-204 が扱う。ここは**解決できなかった残り**を報告する。
 /// 頭字語（<c>USSR</c> 等）と団体名の読点は誤検出になるため除外する
-/// （docs/library-baseline-2026-08-03.md）。
+/// （docs/library-baseline-2026-08-03.md の実装要件3・4）。読点の扱いは
+/// <see cref="JudgesSurnameOrder"/> を参照。
 /// </summary>
 public sealed class PersonNameFormatRule : IInspectionRule
 {
@@ -405,10 +406,7 @@ public sealed class PersonNameFormatRule : IInspectionRule
 
                 foreach (string value in track.GetValues(field))
                 {
-                    // 団体名は「姓, 名」順の判定対象にしない。読点は列挙であって語順ではない。
-                    bool isEnsemble = context.Dictionary.TryResolveEnsemble(value, out _);
-
-                    string[] problems = [.. FindProblems(value, isEnsemble)];
+                    string[] problems = [.. FindProblems(value, JudgesSurnameOrder(context, field, value))];
 
                     if (problems.Length == 0)
                     {
@@ -418,7 +416,7 @@ public sealed class PersonNameFormatRule : IInspectionRule
                     // 辞書で解決できるものは他のルールが正規形を提案する。
                     if (context.Dictionary.TryResolveComposer(value, out _)
                         || context.Dictionary.TryResolvePerson(value, out _)
-                        || isEnsemble)
+                        || context.Dictionary.TryResolveEnsemble(value, out _))
                     {
                         continue;
                     }
@@ -437,16 +435,49 @@ public sealed class PersonNameFormatRule : IInspectionRule
     }
 
     /// <summary>
+    /// この値に「姓, 名」順の判定を当ててよいかを決める。
+    ///
+    /// 語順の規則は docs/TAGGING_POLICY.md 3.2「**人名**の書式」に置かれており、団体名（3.1.2）には
+    /// 語順・読点の規定が無い。団体名の読点は列挙であって語順ではない
+    /// （docs/library-baseline-2026-08-03.md の実装要件4）。
+    /// </summary>
+    private static bool JudgesSurnameOrder(InspectionContext context, TagField field, string value)
+    {
+        // albumartist は団体名を入れるフィールド（docs/TAGGING_POLICY.md 2.3）。読点は複数団体の
+        // 列挙であり、語順ではない。作曲家名が入っている誤りは R-204 が扱う（2.3 の表）。
+        if (field == TagField.AlbumArtist)
+        {
+            return false;
+        }
+
+        // artist にも団体名は入る（2.2）。**値全体で辞書を引くだけでは足りない。**
+        // TryResolveEnsemble は正規化キーの完全一致なので、`A, B` と連結した形がまるごと別名として
+        // 登録されていない限り引けず、団体を並べただけの値が「姓, 名」順に化ける。読点で割って、
+        // 1 つでも団体として引ければ列挙とみなす。
+        foreach (string segment in value.Split(
+            ',',
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (context.Dictionary.TryResolveEnsemble(segment, out _))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// 書式上の問題を列挙する。
     /// </summary>
-    private static IEnumerable<string> FindProblems(string value, bool isEnsemble)
+    private static IEnumerable<string> FindProblems(string value, bool judgesSurnameOrder)
     {
         if (LIFE_SPAN.IsMatch(value))
         {
             yield return "生没年を含む";
         }
 
-        if (!isEnsemble && SURNAME_FIRST.IsMatch(value))
+        if (judgesSurnameOrder && SURNAME_FIRST.IsMatch(value))
         {
             yield return "「姓, 名」順";
         }
