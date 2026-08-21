@@ -97,7 +97,7 @@
                  Text="{Binding Note, UpdateSourceTrigger=PropertyChanged}" />
 
         <TextBlock Style="{StaticResource HintTextStyle}" Margin="0,12,0,0" TextWrapping="Wrap"
-                   Text="登録して再検査すると、この単位は R-504 の一覧から消えます（対象外にした場合）。フォルダは検査結果から埋めているので、手で打ち直す必要はありません。" />
+                   Text="登録して再検査すると、この単位は一覧から消えます。対象外にすると R-504 と R-501 から、作曲家を指定すると R-501 から消えます（作品名・年だけの指定では消えません）。フォルダは検査結果から埋めているので、手で打ち直す必要はありません。" />
 
       </StackPanel>
     </ScrollViewer>

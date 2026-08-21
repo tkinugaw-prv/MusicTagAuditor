@@ -264,6 +264,11 @@ public sealed class AlbumNameRule : IInspectionRule
 /// （docs/TAGGING_POLICY.md 3.5）。それでも修正案を出せないのは、<c>{作品名}</c> の唯一の供給元である
 /// 正規化辞書の作品エントリが未整備だからである（docs/SPEC.md 13章 D6）。<c>{作品名}</c> は作品そのものの
 /// 名前であり、<c>title</c>（楽章名）からも <c>album</c>（汎用名）からも一意には取れない。
+///
+/// **これは 3.5 規則5・規則6 の対象を人が仕分けるための一覧である**（docs/SPEC.md 6.2）。
+/// したがって**仕分けが済んだ単位は明細から外す**。個別例外で対象外（規則6）にするか作曲家を
+/// 指定（規則5）した単位は、人が「主作品が定まるか」に答え終えている。出し続けると、決めたのに
+/// 消えない行が溜まり、まだ決めていない単位がその中に埋もれる。
 /// </summary>
 public sealed class AlbumNameCollisionRule : IInspectionRule
 {
@@ -308,6 +313,14 @@ public sealed class AlbumNameCollisionRule : IInspectionRule
 
             foreach (TrackTags track in album)
             {
+                // **人数を数え終えてから落とす。** 混在そのものは事実として残っているので、
+                // 同じ album 名を別フォルダと共有していて片方だけ決めた場合、残った側には
+                // 正しい人数を見せる。集計から外すと、決めた覚えのない側の根拠まで変わる。
+                if (IsDecided(track, context))
+                {
+                    continue;
+                }
+
                 yield return new TagChange(
                     track.RelativePath,
                     TagField.Album,
@@ -319,6 +332,30 @@ public sealed class AlbumNameCollisionRule : IInspectionRule
                     Severity.Warning);
             }
         }
+    }
+
+    /// <summary>
+    /// この単位の扱いが個別例外で決まっているかを判定する（docs/SPEC.md 7.4.5）。
+    ///
+    /// **対象外（3.5 規則6）と作曲家の指定（規則5）だけを「決まった」とする。** 本ルールが
+    /// 問うているのは「主作品が定まるか」であり、この 2 つがその答えそのものになる。
+    /// **作品名だけ・年だけの例外では外さない。** 版の違い（規則4）や同一演奏の別リリース
+    /// （規則7）・年の指定（規則2）は作曲家の混在に答えておらず、作曲家が複数ある単位では
+    /// R-504 も <see cref="HoldReason.WorkUnknown"/> の保留のままになる。
+    ///
+    /// <see cref="InspectionContext.Units"/> は使わない。単位は「要求されるまで作らない」ため
+    /// （R-504 以外は使わない）で、ここでは衝突しているアルバムの分しか判定しない。
+    /// </summary>
+    /// <param name="track">対象ファイル。</param>
+    /// <param name="context">ライブラリ全体の文脈。</param>
+    /// <returns>扱いが決まっていれば true。</returns>
+    private static bool IsDecided(TrackTags track, InspectionContext context)
+    {
+        string folder = InspectionContext.GetFolder(track.RelativePath);
+        int disc = AlbumUnit.GetDisc(track.DiscNumber);
+
+        return context.Dictionary.TryResolveAlbumOverride(folder, disc, out AlbumOverrideEntry entry)
+            && (entry.Exclude || !string.IsNullOrWhiteSpace(entry.Composer));
     }
 }
 
