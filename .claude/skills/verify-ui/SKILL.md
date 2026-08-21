@@ -77,7 +77,8 @@ pwsh -NoProfile -File .claude/skills/verify-ui/verify-ui.ps1 -Steps click:検査
 - 撮った PNG は Read ツールで開いて目視する。**画像でしか分からないのは配色・字詰め・
   レイアウト**で、値そのものは `rows:` のほうが確実
 - **ダイアログの文言は出力にそのまま出る。** `[Text]` / `[RadioButton]` / `[Button]` の行が
-  それ。TextBlock は Name として読めるので、注意書きを変えたときの確認は画像より確実
+  それ。自前のダイアログもネイティブの MessageBox も同じ形で出るので、
+  注意書きを変えたときの確認は画像より確実
 - **`ダイアログが開いた:` が出たら、そこから先はメインウィンドウを撮っていない。** 続けて
   操作するには `dialog:` を使う
 
@@ -112,10 +113,11 @@ pwsh -NoProfile -File .claude/skills/verify-ui/verify-ui.ps1 -Steps click:検査
   上に挙げた 5 つ以外（辞書タブ・バックアップ・復元・失敗一覧・ダイアログの表）はまだ読めない。
   必要になったら `AutomationProperties.Name` を足す
   （[docs/DEVELOPMENT.md](../../../docs/DEVELOPMENT.md)「一覧の行には名前を振る」）
-- **ネイティブの MessageBox は `dialog:` で閉じられない。** 2026-08-22 に「選択行に一括入力」
-  （空欄で実行 → 確認ダイアログ）で当たった。ダイアログとしては見つかり撮影もできるが、
-  ボタンが 1 つも列挙されず「候補: 」が空のまま落ちる。**閉じられないので手順ごと諦める。**
-  `Window` を継承した自前のダイアログ（辞書の追加・アルバムの扱い）は今までどおり押せる
+- **ネイティブの MessageBox も `dialog:` で押せるが、押し方が違う。** UI Automation からは
+  ボタンが 1 つも見えない（`Pane` になる）ので、ウィンドウクラスが `#32770` のときだけ
+  Win32 の子ウィンドウ列挙 + `BM_CLICK` に切り替えている。**ボタン名は見えているまま書く。**
+  「はい(&Y)」のようなアクセラレータ付きでも `dialog:はい` で押せる
+  （背景は [docs/manual_verification.md](../../../docs/manual_verification.md)）
 - **`rows:` は画面に出ている行しか並べない。** DataGrid が仮想化しているため、スクロールの外は
   列挙されない。「列挙 N 行」が画面の件数表示と食い違うのはこれが理由で、異常ではない
 - **`-TestLibrary` をリポジトリ内にしない。** 音源がコミット候補に入る。コピー元と同じか
