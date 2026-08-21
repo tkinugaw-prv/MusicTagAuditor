@@ -1334,10 +1334,19 @@ public sealed partial class MainViewModel : ObservableObject
 
         AlbumOverrideEntry entry = viewModel.BuildEntry();
 
-        // 対象外にした単位は検査結果から消える（7.4.3 手順1）。消えたことが分かるように書く。
-        string message = entry.Exclude
-            ? $"「{FolderLabel(unit)}」を対象外にしました。この単位は検査結果から消えます。"
-            : $"「{FolderLabel(unit)}」に個別例外を登録して再検査しました。";
+        // 扱いを決めた単位は検査結果から消える（7.4.3 手順1）。消えたことが分かるように書く。
+        //
+        // **作曲家を指定した場合も R-501 からは消える**（3.5 規則5 の仕分けが済んだため）。
+        // 対象外と一括りに「登録しました」とだけ書くと、行が減った理由が画面から読めない。
+        string message = entry switch
+        {
+            { Exclude: true } => $"「{FolderLabel(unit)}」を対象外にしました。この単位は検査結果から消えます。",
+
+            { Composer: not null } => $"「{FolderLabel(unit)}」の主作品の作曲家を「{entry.Composer}」に"
+                + "指定しました。この単位は R-501 の一覧から消えます。",
+
+            _ => $"「{FolderLabel(unit)}」に個別例外を登録して再検査しました。",
+        };
 
         SaveDictionary(
             viewModel.Apply,
