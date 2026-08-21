@@ -33,6 +33,18 @@ param(
     # 選ぶタブの表示名。Click をすべて終えたあとに指定順で選ぶ。
     [string[]]$Tab,
 
+    # 手順を並べて実行する。Click / Tab では届かない導線（明細の行を選ぶ・ダイアログを押す）用。
+    #
+    #   click:検査        メインウィンドウのボタンを押す
+    #   rule:1            ルール一覧の n 行目を選ぶ（1 始まり）
+    #   change:1          明細の n 行目を選ぶ（1 始まり）
+    #   dialog:キャンセル  開いているダイアログのボタンを押す
+    #   tab:ファイル一覧   タブを選ぶ
+    #   shot:任意の名前    その時点を撮る
+    #
+    # Click / Tab を併用した場合は、Steps → Click → Tab の順に実行する。
+    [string[]]$Steps,
+
     # 画面の PNG を書き出す先。
     [string]$OutDir = (Join-Path $env:TEMP 'MusicTagAuditor-verify'),
 
@@ -51,11 +63,34 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Drawing
 Add-Type @'
 using System;
+using System.Text;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 public static class NativeWindow {
+  delegate bool EnumProc(IntPtr hwnd, IntPtr lparam);
   [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr hwnd, IntPtr hdc, uint flags);
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hwnd, out Rect rect);
+  [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc callback, IntPtr lparam);
+  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+  [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hwnd);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowTextW(IntPtr hwnd, StringBuilder text, int max);
   public struct Rect { public int Left, Top, Right, Bottom; }
+
+  /// <summary>プロセスの可視トップレベルウィンドウを (HWND, タイトル) で返す。</summary>
+  public static List<KeyValuePair<IntPtr, string>> VisibleWindows(uint processId) {
+    var list = new List<KeyValuePair<IntPtr, string>>();
+    EnumWindows((hwnd, lparam) => {
+      uint pid;
+      GetWindowThreadProcessId(hwnd, out pid);
+      if (pid == processId && IsWindowVisible(hwnd)) {
+        var text = new StringBuilder(512);
+        GetWindowTextW(hwnd, text, 512);
+        if (text.Length > 0) { list.Add(new KeyValuePair<IntPtr, string>(hwnd, text.ToString())); }
+      }
+      return true;
+    }, IntPtr.Zero);
+    return list;
+  }
 }
 '@
 
@@ -122,6 +157,106 @@ function Find-Element {
         if (-not [string]::IsNullOrWhiteSpace($element.Current.Name)) { $candidates += $element.Current.Name }
     }
     throw ("{0} '{1}' が見つからない。候補: {2}" -f $ControlType.ProgrammaticName, $Name, ($candidates -join ' / '))
+}
+
+<#
+.SYNOPSIS
+    引数をカンマで割る。
+.DESCRIPTION
+    **pwsh -File で起動すると配列が束縛されない。** `-Click A,B` も `-Click 'A','B'` も
+    1 個の文字列として渡ってくるため、スクリプト側で割る。ここを用意する前は、
+    表に出た症状が「ボタン 'A,B' が見つからない」で、原因が引数の渡し方だと分からなかった。
+
+    **手順・ボタン名にカンマは使えない。** この app の表示名には無いので割り切る。
+#>
+function Split-Argument {
+    param([string[]]$Values)
+
+    $result = @()
+
+    foreach ($value in $Values) {
+        foreach ($part in ($value -split ',')) {
+            if (-not [string]::IsNullOrWhiteSpace($part)) { $result += $part.Trim() }
+        }
+    }
+
+    return $result
+}
+
+<#
+.SYNOPSIS
+    開いているダイアログを探す。
+.DESCRIPTION
+    **UIA のデスクトップ列挙（RootElement.FindAll(Children)）には出てこない。**
+    所有ウィンドウのため子として並ばず、探しても見つからないので「開いていない」と
+    読み違える。実際に 2026-08-22 にこれで 5 回遠回りした。EnumWindows で HWND を
+    取り、FromHandle で掴む。
+#>
+function Find-Dialog {
+    param($Process, [int]$TimeoutSeconds = 10)
+
+    for ($waited = 0; $waited -lt $TimeoutSeconds; $waited++) {
+        foreach ($window in [NativeWindow]::VisibleWindows([uint32]$Process.Id)) {
+            if ($window.Key -ne $Process.MainWindowHandle) { return $window }
+        }
+        Start-Sleep -Seconds 1
+    }
+
+    return $null
+}
+
+<#
+.SYNOPSIS
+    ウィンドウに出ている文字を並べる。
+.DESCRIPTION
+    **注意書きや選択肢は PNG を目で読むより確実に取れる。** DataGrid の行と違い、
+    TextBlock は Name として読める。文言を変えたときの確認はここを見る。
+#>
+function Read-Texts {
+    param($Root)
+
+    $types = @(
+        [System.Windows.Automation.ControlType]::Text,
+        [System.Windows.Automation.ControlType]::RadioButton,
+        [System.Windows.Automation.ControlType]::CheckBox,
+        [System.Windows.Automation.ControlType]::Button)
+
+    foreach ($type in $types) {
+        $label = $type.ProgrammaticName.Split('.')[-1]
+        $condition = New-Object System.Windows.Automation.PropertyCondition($UIA::ControlTypeProperty, $type)
+        foreach ($element in $Root.FindAll($TREE_SCOPE, $condition)) {
+            if (-not [string]::IsNullOrWhiteSpace($element.Current.Name)) {
+                "    [{0}] {1}" -f $label, $element.Current.Name
+            }
+        }
+    }
+}
+
+<#
+.SYNOPSIS
+    DataGrid の n 行目を選ぶ（1 始まり）。
+.DESCRIPTION
+    **行の中身は UIA から読めない**（AutomationProperties.Name 未設定のため型名が返る）
+    ので、行は番号でしか指せない。選んだ結果は PNG で確かめる。
+    仮想化のため、画面に出ている行しか列挙されない点にも注意する。
+#>
+function Select-GridRow {
+    param($Root, [string]$AutomationId, [int]$Index)
+
+    $condition = New-Object System.Windows.Automation.PropertyCondition($UIA::AutomationIdProperty, $AutomationId)
+    $grid = $Root.FindFirst($TREE_SCOPE, $condition)
+    if ($null -eq $grid) { throw "DataGrid '$AutomationId' が見つからない" }
+
+    $rowCondition = New-Object System.Windows.Automation.PropertyCondition(
+        $UIA::ControlTypeProperty, [System.Windows.Automation.ControlType]::DataItem)
+    $rows = $grid.FindAll([System.Windows.Automation.TreeScope]::Children, $rowCondition)
+
+    if ($Index -lt 1 -or $Index -gt $rows.Count) {
+        throw "'$AutomationId' の $Index 行目は無い（列挙できたのは $($rows.Count) 行）"
+    }
+
+    $rows.Item($Index - 1).GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+    return $rows.Count
 }
 
 <#
@@ -206,22 +341,84 @@ try {
     $root = $UIA::FromHandle($process.MainWindowHandle)
     "撮影: $(Save-WindowImage -Handle $process.MainWindowHandle -Label 'startup')"
 
-    foreach ($name in $Click) {
-        $button = Find-Element -Root $root -ControlType ([System.Windows.Automation.ControlType]::Button) -Name $name
-        if (-not $button.Current.IsEnabled) { throw "ボタン '$name' が無効になっている" }
-        $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
-        Start-Sleep -Seconds $ActionWaitSeconds
-        "押した: $name"
-        "撮影: $(Save-WindowImage -Handle $process.MainWindowHandle -Label "click-$name")"
+    # Click / Tab は Steps の糖衣。既存の呼び方をそのまま通しつつ、順序も前と同じにする。
+    $plan = @()
+    $plan += Split-Argument -Values $Steps
+    foreach ($name in (Split-Argument -Values $Click)) { $plan += "click:$name" }
+    foreach ($name in (Split-Argument -Values $Tab)) { $plan += "tab:$name" }
+
+    foreach ($step in $plan) {
+        if ([string]::IsNullOrWhiteSpace($step)) { continue }
+
+        $verb, $argument = $step -split ':', 2
+        $verb = $verb.Trim()
+
+        switch ($verb) {
+            'click' {
+                $button = Find-Element -Root $root -ControlType ([System.Windows.Automation.ControlType]::Button) -Name $argument
+                if (-not $button.Current.IsEnabled) { throw "ボタン '$argument' が無効になっている" }
+                $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+                Start-Sleep -Seconds $ActionWaitSeconds
+                "押した: $argument"
+
+                # **ダイアログが開いたら黙って進まない。** 開いたことに気づかないまま
+                # 次の手順へ行くと、メインウィンドウを撮り続けて「何も起きない」ように見える。
+                $dialog = Find-Dialog -Process $process -TimeoutSeconds 3
+                if ($null -ne $dialog) {
+                    "ダイアログが開いた: $($dialog.Value)"
+                    "撮影: $(Save-WindowImage -Handle $dialog.Key -Label "dialog-$($dialog.Value)")"
+                    Read-Texts -Root $UIA::FromHandle($dialog.Key)
+                } else {
+                    "撮影: $(Save-WindowImage -Handle $process.MainWindowHandle -Label "click-$argument")"
+                }
+            }
+
+            'dialog' {
+                $dialog = Find-Dialog -Process $process -TimeoutSeconds 10
+                if ($null -eq $dialog) { throw "ダイアログが開いていないのに 'dialog:$argument' が来た" }
+
+                $dialogRoot = $UIA::FromHandle($dialog.Key)
+                $button = Find-Element -Root $dialogRoot -ControlType ([System.Windows.Automation.ControlType]::Button) -Name $argument
+                if (-not $button.Current.IsEnabled) { throw "ダイアログのボタン '$argument' が無効になっている" }
+                $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+                Start-Sleep -Seconds $ActionWaitSeconds
+                "ダイアログで押した: $argument"
+                "撮影: $(Save-WindowImage -Handle $process.MainWindowHandle -Label "after-$argument")"
+            }
+
+            'rule' {
+                $count = Select-GridRow -Root $root -AutomationId 'RuleResultGrid' -Index ([int]$argument)
+                Start-Sleep -Seconds $ActionWaitSeconds
+                "ルールの $argument 行目を選んだ（列挙 $count 行）"
+            }
+
+            'change' {
+                $count = Select-GridRow -Root $root -AutomationId 'InspectionChangeGrid' -Index ([int]$argument)
+                Start-Sleep -Seconds $ActionWaitSeconds
+                "明細の $argument 行目を選んだ（列挙 $count 行）"
+            }
+
+            'tab' {
+                $tabItem = Find-Element -Root $root -ControlType ([System.Windows.Automation.ControlType]::TabItem) -Name $argument
+                $tabItem.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+                Start-Sleep -Seconds $ActionWaitSeconds
+                "選んだ: $argument"
+                "撮影: $(Save-WindowImage -Handle $process.MainWindowHandle -Label "tab-$argument")"
+            }
+
+            'shot' {
+                "撮影: $(Save-WindowImage -Handle $process.MainWindowHandle -Label $argument)"
+            }
+
+            default {
+                throw "手順 '$step' が読めない。使えるのは click / dialog / rule / change / tab / shot"
+            }
+        }
     }
 
-    foreach ($name in $Tab) {
-        $tabItem = Find-Element -Root $root -ControlType ([System.Windows.Automation.ControlType]::TabItem) -Name $name
-        $tabItem.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
-        Start-Sleep -Seconds $ActionWaitSeconds
-        "選んだ: $name"
-        "撮影: $(Save-WindowImage -Handle $process.MainWindowHandle -Label "tab-$name")"
-    }
+    # **開いたままのダイアログを残さない。** CloseMainWindow が効かず、強制終了になる。
+    $stray = Find-Dialog -Process $process -TimeoutSeconds 1
+    if ($null -ne $stray) { throw "ダイアログ '$($stray.Value)' が開いたままになっている。dialog: で閉じる" }
 
     $process.CloseMainWindow() | Out-Null
     $process.WaitForExit(10000) | Out-Null

@@ -29,11 +29,32 @@ pwsh -NoProfile -File .claude/skills/verify-ui/verify-ui.ps1 -Build
 pwsh -NoProfile -File .claude/skills/verify-ui/verify-ui.ps1 -Click 検査 -Tab ファイル一覧
 ```
 
+**明細の行を選ぶ・ダイアログを押す導線は `-Steps` を使う。** `-Click` はボタンしか押せず、
+「行を選んでからボタン」という形の機能（「このアルバムの扱いを決める」「作品を辞書に追加」）を
+素通りしてしまう。
+
+```powershell
+pwsh -NoProfile -File .claude/skills/verify-ui/verify-ui.ps1 -Steps click:検査,change:1,click:このアルバムの扱いを決める,dialog:キャンセル
+```
+
+| 手順 | すること |
+|---|---|
+| `click:検査` | メインウィンドウのボタンを押す。**ダイアログが開いたら自動で撮り、文言も書き出す** |
+| `rule:1` | ルール一覧の n 行目を選ぶ（1 始まり） |
+| `change:1` | 明細の n 行目を選ぶ（1 始まり） |
+| `dialog:キャンセル` | 開いているダイアログのボタンを押す |
+| `tab:ファイル一覧` | タブを選ぶ |
+| `shot:任意の名前` | その時点を撮る |
+
+**開いたダイアログは `dialog:` で必ず閉じる。** 閉じ忘れるとスクリプトが名指しで落ちる
+（閉じないと `CloseMainWindow` が効かず、強制終了になって後始末が読めなくなる）。
+
 | 引数 | 既定 | 用途 |
 |---|---|---|
 | `-Build` | 無し | 起動前に `dotnet build` を走らせる |
-| `-Click` | 無し | 押すボタンの表示名。複数可 |
-| `-Tab` | 無し | 選ぶタブの表示名。複数可 |
+| `-Click` | 無し | 押すボタンの表示名。カンマ区切りで複数可 |
+| `-Tab` | 無し | 選ぶタブの表示名。カンマ区切りで複数可 |
+| `-Steps` | 無し | 手順を並べて実行する。上表の書式。`Steps` → `Click` → `Tab` の順 |
 | `-Reuse` | 無し | テスト用ライブラリを作り直さない。2 回目以降は速いが、前回の適用結果が残る |
 | `-SourceLibrary` | `settings.json` の `lastLibraryRoot` | コピー元 |
 | `-TestLibrary` | `%TEMP%\MusicTagAuditor-testlib` | テスト用ライブラリの置き場 |
@@ -50,10 +71,15 @@ pwsh -NoProfile -File .claude/skills/verify-ui/verify-ui.ps1 -Click 検査 -Tab 
   利用者の設定が書き換わったままなので、`$OutDir\settings.json.bak` から手で戻す
 - 撮った PNG は Read ツールで開いて目視する。**DataGrid の行の中身は UI Automation から
   読めない**（`AutomationProperties.Name` 未設定のため型名が返る）ので、セルの値は画像で確かめる
+- **ダイアログの文言は出力にそのまま出る。** `[Text]` / `[RadioButton]` / `[Button]` の行が
+  それ。TextBlock は Name として読めるので、注意書きを変えたときの確認は画像より確実
+- **`ダイアログが開いた:` が出たら、そこから先はメインウィンドウを撮っていない。** 続けて
+  操作するには `dialog:` を使う
 
 ## 自分でやる範囲
 
-起動確認・画面の目視・クリック・タブ切替までは自分でやる。**起動確認ごと丸投げしない。**
+起動確認・画面の目視・クリック・タブ切替・行の選択・ダイアログの操作までは自分でやる。
+**起動確認ごと丸投げしない。**
 委譲してよいのはドラッグ操作・実ライブラリでしか出ない事象・主観的な見え方の判断の 3 つだけ
 （[docs/manual_verification.md](../../../docs/manual_verification.md)）。依頼するときは、
 **自分で確認できたこと**と**確認できていないこと**を分けて書く。
@@ -63,9 +89,17 @@ pwsh -NoProfile -File .claude/skills/verify-ui/verify-ui.ps1 -Click 検査 -Tab 
 - **`-Click` に「チェックした項目を適用」を渡すとタグが書き換わる。** テスト用ライブラリの
   コピーが対象なので所蔵は無事だが、**バックアップ先は利用者の設定を共有している**
   （既定で `D:\music backup`）。検証のバックアップが実運用の履歴に混ざる
-- **辞書を編集する検証は `dictionary.json` を直接汚す。** このスクリプトが退避するのは
-  `settings.json` だけ。辞書に触るなら同じ要領で `%APPDATA%\MusicTagAuditor\dictionary.json`
-  も退避する
+- **辞書を書き換える検証に入る前に、ログで実体かどうかを確かめる。**
+  `%LOCALAPPDATA%\MusicTagAuditor\logs` の `辞書を読み込んだ … 個別例外=N` を利用者の実際の
+  件数と突き合わせる。**食い違っていれば写しなので書き換えてよく、一致していたら実体なので
+  やらない**（理由は [docs/manual_verification.md](../../../docs/manual_verification.md)）。
+  写しの側は汚れるので、足した項目は検証のあと**足した 1 件だけ**を消す
+- **`pwsh -File` では配列引数が束縛されない。** `-Click A,B` も `-Click 'A','B'` も 1 個の
+  文字列として渡ってくる。スクリプト側でカンマで割っているので気にしなくてよいが、
+  **手順名・ボタン名にカンマは使えない**
+- **テスト用ライブラリは m4a と flac を 1 フォルダずつ拾うだけ。** 特定の検出を再現したい
+  ときは、自分でフォルダを組んで `-TestLibrary` と `-Reuse` で開く。実ライブラリからの
+  コピーは読み取りだけなので所蔵は動かない
 - **`%APPDATA%` / `%LOCALAPPDATA%` は差し替えられない。** `Environment.GetFolderPath` は
   シェル API を見るため、環境変数を上書きしても実際のパスが使われる。設定・辞書・ログを
   分離する道は無い
