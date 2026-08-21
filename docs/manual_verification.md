@@ -67,8 +67,17 @@
   失敗・クリック座標・コマンドの早期 return と、当たっていない原因を順に疑った。
   `EnumWindows` でプロセスの可視ウィンドウを列挙すれば最初から `visible=True` で出ている。
   HWND を `AutomationElement.FromHandle` に渡せば、あとは同じように操作できる
-- **ダイアログの文言は UI Automation から読める。** `TextBlock` が Name として取れるので、
-  注意書きの確認は画像より確実
+- **ネイティブの MessageBox は UI Automation では押せない。** ボタンが `Button` ではなく
+  `Pane` として見えるため、`ControlType.Button` で探すと 0 件になる。pwsh の
+  `UIAutomationClient` が Win32 コントロールを翻訳するクライアント側プロキシを読めて
+  いないのが原因で、`ProxyManager.LoadDefaultProxies` が探す型名
+  （`UIAutomationClientSideProviders.…`）と実際の型名（`UIAutomationClientsideProviders.…`）が
+  食い違って `NullReferenceException` になる。**.NET 側の不整合なので手当てできない。**
+  ウィンドウクラスが `#32770` なら `EnumChildWindows` で子 HWND を拾い、`BM_CLICK` を
+  post する（2026-08-22）
+- **ダイアログの文言は画像を見ずに取れる。** 自前の `Window` は UI Automation で
+  `TextBlock` の Name として、ネイティブの MessageBox は子 HWND の `Static` ・`Button` の
+  ウィンドウテキストとして読める。注意書きの確認は画像より確実
 - **一覧の行の中身も Name として読める。ただし振ってあるグリッドに限る。**
   `AutomationProperties.Name` を振ってあるのは検査結果タブの上段（`RuleResultGrid`）と
   下段（`InspectionChangeGrid`）、辞書に無い値（`UnknownValueGrid`）、ファイル一覧

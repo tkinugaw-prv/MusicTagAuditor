@@ -72,10 +72,42 @@ public static class NativeWindow {
   [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr hwnd, IntPtr hdc, uint flags);
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hwnd, out Rect rect);
   [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc callback, IntPtr lparam);
+  [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr parent, EnumProc callback, IntPtr lparam);
   [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
   [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hwnd);
+  [DllImport("user32.dll")] static extern bool IsWindowEnabled(IntPtr hwnd);
+  [DllImport("user32.dll")] static extern int GetDlgCtrlID(IntPtr hwnd);
+  [DllImport("user32.dll")] static extern bool PostMessageW(IntPtr hwnd, uint message, IntPtr wparam, IntPtr lparam);
   [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowTextW(IntPtr hwnd, StringBuilder text, int max);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassNameW(IntPtr hwnd, StringBuilder text, int max);
   public struct Rect { public int Left, Top, Right, Bottom; }
+
+  /// <summary>ダイアログの子コントロール 1 つ分。</summary>
+  public class Control {
+    /// <summary>ウィンドウハンドル。</summary>
+    public IntPtr Handle;
+    /// <summary>ウィンドウクラス名。Button / Static など。</summary>
+    public string ClassName;
+    /// <summary>表示文字列。アクセラレータの &amp; を含む。</summary>
+    public string Text;
+    /// <summary>押せる状態か。</summary>
+    public bool Enabled;
+    /// <summary>コントロール ID。IDOK=1 / IDCANCEL=2 など。</summary>
+    public int Id;
+  }
+
+  static string TextOf(IntPtr hwnd) {
+    var text = new StringBuilder(1024);
+    GetWindowTextW(hwnd, text, 1024);
+    return text.ToString();
+  }
+
+  /// <summary>ウィンドウクラス名を返す。ネイティブのダイアログは #32770。</summary>
+  public static string ClassNameOf(IntPtr hwnd) {
+    var name = new StringBuilder(256);
+    GetClassNameW(hwnd, name, 256);
+    return name.ToString();
+  }
 
   /// <summary>プロセスの可視トップレベルウィンドウを (HWND, タイトル) で返す。</summary>
   public static List<KeyValuePair<IntPtr, string>> VisibleWindows(uint processId) {
@@ -84,13 +116,38 @@ public static class NativeWindow {
       uint pid;
       GetWindowThreadProcessId(hwnd, out pid);
       if (pid == processId && IsWindowVisible(hwnd)) {
-        var text = new StringBuilder(512);
-        GetWindowTextW(hwnd, text, 512);
-        if (text.Length > 0) { list.Add(new KeyValuePair<IntPtr, string>(hwnd, text.ToString())); }
+        var text = TextOf(hwnd);
+        if (text.Length > 0) { list.Add(new KeyValuePair<IntPtr, string>(hwnd, text)); }
       }
       return true;
     }, IntPtr.Zero);
     return list;
+  }
+
+  /// <summary>ウィンドウの子コントロールを並べる。</summary>
+  public static List<Control> Children(IntPtr parent) {
+    var list = new List<Control>();
+    EnumChildWindows(parent, (hwnd, lparam) => {
+      list.Add(new Control {
+        Handle = hwnd,
+        ClassName = ClassNameOf(hwnd),
+        Text = TextOf(hwnd),
+        Enabled = IsWindowEnabled(hwnd),
+        Id = GetDlgCtrlID(hwnd),
+      });
+      return true;
+    }, IntPtr.Zero);
+    return list;
+  }
+
+  /// <summary>BM_CLICK を post してボタンを押す。</summary>
+  /// <remarks>
+  /// SendMessage にしない。押した先でさらにモーダルが開くと、
+  /// 制御が戻らずこちらが止まる。
+  /// </remarks>
+  public static bool ClickButton(IntPtr hwnd) {
+    const uint BM_CLICK = 0x00F5;
+    return PostMessageW(hwnd, BM_CLICK, IntPtr.Zero, IntPtr.Zero);
   }
 }
 '@
@@ -192,18 +249,98 @@ function Split-Argument {
     所有ウィンドウのため子として並ばず、探しても見つからないので「開いていない」と
     読み違える。実際に 2026-08-22 にこれで 5 回遠回りした。EnumWindows で HWND を
     取り、FromHandle で掴む。
+
+    **クラス名も返す。** ネイティブの MessageBox（#32770）と自前の Window では
+    中身の読み方が違うので、ここで見分けて先を分ける。
 #>
 function Find-Dialog {
     param($Process, [int]$TimeoutSeconds = 10)
 
     for ($waited = 0; $waited -lt $TimeoutSeconds; $waited++) {
         foreach ($window in [NativeWindow]::VisibleWindows([uint32]$Process.Id)) {
-            if ($window.Key -ne $Process.MainWindowHandle) { return $window }
+            if ($window.Key -ne $Process.MainWindowHandle) {
+                $className = [NativeWindow]::ClassNameOf($window.Key)
+                return [pscustomobject]@{
+                    Handle    = $window.Key
+                    Title     = $window.Value
+                    ClassName = $className
+                    IsNative  = ($className -eq '#32770')
+                }
+            }
         }
         Start-Sleep -Seconds 1
     }
 
     return $null
+}
+
+<#
+.SYNOPSIS
+    ネイティブのボタン名の揺れを吸収する。
+.DESCRIPTION
+    MessageBox のボタンは OS が付けるので、日本語環境では「はい(&Y)」のように
+    アクセラレータ付きで返る。**手順には見えているままの「はい」を書きたい**ので、
+    生の文字列・& を抜いたもの・末尾の (Y) まで落としたもののどれでも拾う。
+#>
+function Get-ButtonLabel {
+    param([string]$Text)
+
+    $stripped = $Text -replace '&', ''
+    return @($Text, $stripped, ($stripped -replace '\([A-Za-z]\)\s*$', '')) | Select-Object -Unique
+}
+
+<#
+.SYNOPSIS
+    ネイティブのダイアログのボタンを押す。
+.DESCRIPTION
+    **UIA では押せない。** Win32 コントロールを UIA に翻訳するクライアント側プロキシ
+    （UIAutomationClientSideProviders）の登録が pwsh では失敗するため、MessageBox の子は
+    Button ではなく Pane に見える。ControlType.Button で探すと 0 件になり、候補も空のまま
+    落ちる。2026-08-22 に「選択行に一括入力」の確認ダイアログでこれに当たった。
+
+    登録を反射で通す道も試したが、ProxyManager.LoadDefaultProxies が探す型名
+    （UIAutomationClientSideProviders.…）と実際の型名（UIAutomationClientsideProviders.…）が
+    食い違っていて NullReferenceException になる。**.NET 側の不整合なので手当てできない。**
+    EnumChildWindows で子 HWND を拾い、BM_CLICK を post する。
+#>
+function Invoke-NativeDialogButton {
+    param([IntPtr]$Handle, [string]$Name)
+
+    $buttons = @([NativeWindow]::Children($Handle) | Where-Object { $_.ClassName -eq 'Button' })
+
+    foreach ($button in $buttons) {
+        if ((Get-ButtonLabel -Text $button.Text) -notcontains $Name) { continue }
+        if (-not $button.Enabled) { throw "ダイアログのボタン '$Name' が無効になっている" }
+        if (-not [NativeWindow]::ClickButton($button.Handle)) {
+            throw "ダイアログのボタン '$Name' に BM_CLICK を送れなかった"
+        }
+        return
+    }
+
+    $candidates = @($buttons | ForEach-Object { $_.Text -replace '&', '' })
+    throw ("ネイティブのボタン '{0}' が見つからない。候補: {1}" -f $Name, ($candidates -join ' / '))
+}
+
+<#
+.SYNOPSIS
+    ネイティブのダイアログに出ている文字を並べる。
+.DESCRIPTION
+    Read-Texts のネイティブ版。**出力の形は Read-Texts に合わせてある**ので、読む側は
+    ダイアログの種類を意識しなくてよい。アイコンだけの Static は文字を持たないので落ちる。
+#>
+function Read-NativeTexts {
+    param([IntPtr]$Handle)
+
+    $labels = [ordered]@{ 'Static' = 'Text'; 'Button' = 'Button' }
+    $children = [NativeWindow]::Children($Handle)
+
+    foreach ($className in $labels.Keys) {
+        foreach ($control in $children) {
+            if ($control.ClassName -ne $className) { continue }
+            if ([string]::IsNullOrWhiteSpace($control.Text)) { continue }
+            "    [{0}] {1}" -f $labels[$className], ($control.Text -replace '&', '')
+        }
+    }
 }
 
 <#
@@ -396,9 +533,13 @@ try {
                 # 次の手順へ行くと、メインウィンドウを撮り続けて「何も起きない」ように見える。
                 $dialog = Find-Dialog -Process $process -TimeoutSeconds 3
                 if ($null -ne $dialog) {
-                    "ダイアログが開いた: $($dialog.Value)"
-                    "撮影: $(Save-WindowImage -Handle $dialog.Key -Label "dialog-$($dialog.Value)")"
-                    Read-Texts -Root $UIA::FromHandle($dialog.Key)
+                    "ダイアログが開いた: $($dialog.Title)"
+                    "撮影: $(Save-WindowImage -Handle $dialog.Handle -Label "dialog-$($dialog.Title)")"
+                    if ($dialog.IsNative) {
+                        Read-NativeTexts -Handle $dialog.Handle
+                    } else {
+                        Read-Texts -Root $UIA::FromHandle($dialog.Handle)
+                    }
                 } else {
                     "撮影: $(Save-WindowImage -Handle $process.MainWindowHandle -Label "click-$argument")"
                 }
@@ -408,10 +549,16 @@ try {
                 $dialog = Find-Dialog -Process $process -TimeoutSeconds 10
                 if ($null -eq $dialog) { throw "ダイアログが開いていないのに 'dialog:$argument' が来た" }
 
-                $dialogRoot = $UIA::FromHandle($dialog.Key)
-                $button = Find-Element -Root $dialogRoot -ControlType ([System.Windows.Automation.ControlType]::Button) -Name $argument
-                if (-not $button.Current.IsEnabled) { throw "ダイアログのボタン '$argument' が無効になっている" }
-                $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+                # ネイティブの MessageBox と自前の Window では押し方が違う。理由は
+                # Invoke-NativeDialogButton に書いた。
+                if ($dialog.IsNative) {
+                    Invoke-NativeDialogButton -Handle $dialog.Handle -Name $argument
+                } else {
+                    $dialogRoot = $UIA::FromHandle($dialog.Handle)
+                    $button = Find-Element -Root $dialogRoot -ControlType ([System.Windows.Automation.ControlType]::Button) -Name $argument
+                    if (-not $button.Current.IsEnabled) { throw "ダイアログのボタン '$argument' が無効になっている" }
+                    $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+                }
                 Start-Sleep -Seconds $ActionWaitSeconds
                 "ダイアログで押した: $argument"
                 "撮影: $(Save-WindowImage -Handle $process.MainWindowHandle -Label "after-$argument")"
@@ -458,7 +605,7 @@ try {
 
     # **開いたままのダイアログを残さない。** CloseMainWindow が効かず、強制終了になる。
     $stray = Find-Dialog -Process $process -TimeoutSeconds 1
-    if ($null -ne $stray) { throw "ダイアログ '$($stray.Value)' が開いたままになっている。dialog: で閉じる" }
+    if ($null -ne $stray) { throw "ダイアログ '$($stray.Title)' が開いたままになっている。dialog: で閉じる" }
 
     $process.CloseMainWindow() | Out-Null
     $process.WaitForExit(10000) | Out-Null
