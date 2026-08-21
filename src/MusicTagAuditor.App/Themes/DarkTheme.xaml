@@ -165,6 +165,60 @@
         <Setter Property="Margin" Value="0,0,0,6" />
     </Style>
 
+    <!--
+        入力エリアの折り畳み見出し（docs/SPEC.md 5.1）。
+
+        Expander は使わない。ダークテーマ用の Expander テンプレートが無く、既定の
+        テンプレートは配色が浮く。見出し 1 行のためにフルテンプレートを起こすより
+        ToggleButton の方が小さく収まる。
+
+        **矢印の向きは TreeExpanderToggleStyle と逆になる。** あちらは
+        IsChecked=True が「展開」だが、ここでは IsChecked=True が「畳んでいる」。
+        そのまま流用すると矢印の意味が反転する。
+
+        Border に Transparent を敷いて行全体をヒット領域にしてある。矢印 9px だけを
+        当たり判定にすると狙いにくい。
+    -->
+    <Style x:Key="PanelExpanderToggleStyle" TargetType="ToggleButton">
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Border Padding="0,2" Background="Transparent">
+                        <DockPanel>
+                            <Path x:Name="Arrow"
+                                  DockPanel.Dock="Left"
+                                  Width="9"
+                                  Height="6"
+                                  Margin="0,0,7,0"
+                                  VerticalAlignment="Center"
+                                  Data="M0,0 L9,0 L4.5,6 Z"
+                                  Fill="{StaticResource TextSecondaryBrush}"
+                                  RenderTransformOrigin="0.5,0.5" />
+                            <ContentPresenter VerticalAlignment="Center" />
+                        </DockPanel>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <!-- 畳んでいるときは右向き（▸）。中身が横に隠れていることを示す。 -->
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Arrow" Property="RenderTransform">
+                                <Setter.Value>
+                                    <RotateTransform Angle="-90" />
+                                </Setter.Value>
+                            </Setter>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Arrow" Property="Fill" Value="{StaticResource AccentBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Arrow" Property="Fill" Value="{StaticResource AccentBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- セクション見出し（辞書タブの「正規形」「別名」等） -->
     <Style x:Key="SectionLabelStyle" TargetType="TextBlock" BasedOn="{StaticResource FieldLabelStyle}">
         <Setter Property="Margin" Value="0,0,0,4" />
@@ -609,6 +663,15 @@
                                    Fill="{StaticResource BorderStrongBrush}" />
                     </Border>
                     <ControlTemplate.Triggers>
+                        <!--
+                            グリップの既定は列スプリッタ用の縦線。行スプリッタは帯の高さが
+                            10px しかないため、縦線のままでは上下が切れて短い棒に見え、
+                            掴めるものだと気付けない。
+                        -->
+                        <Trigger Property="ResizeDirection" Value="Rows">
+                            <Setter TargetName="Grip" Property="Width" Value="28" />
+                            <Setter TargetName="Grip" Property="Height" Value="1" />
+                        </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Grip" Property="Fill" Value="{StaticResource AccentBrush}" />
                         </Trigger>

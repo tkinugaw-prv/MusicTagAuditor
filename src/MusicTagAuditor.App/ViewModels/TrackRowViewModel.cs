@@ -166,6 +166,32 @@ public sealed class TrackRowViewModel : ObservableObject
     }
 
     /// <summary>
+    /// UI Automation から読む行の名前（docs/DEVELOPMENT.md「画面」節）。
+    ///
+    /// **振らないと行の中身が読めない。** 名前は型名（<c>TrackRowViewModel</c>）になり、
+    /// 動作確認ではセルの値を PNG から目で読むしかなくなる。
+    ///
+    /// **編集の有無と複数値を先頭側に出すのは、画面では行の色でしか出ていないため**
+    /// （<c>RowEditedBrush</c> / <c>RowReviewBrush</c>）。色は画像からの判別が弱い。
+    ///
+    /// 並びは <see cref="ManualEditConst.EDITABLE_FIELDS"/> から取る。**列の順序をここへ
+    /// 写し取らない。** 写すと、編集できるフィールドが増えたときにこの名前だけ取り残される
+    /// （<c>TrackCsvExporter</c> が同じ理由で同じ並びを使っている）。
+    ///
+    /// 値が空でもラベルは残す。詰めて並べると、空欄が続いたときにどの列か読み取れなくなる。
+    /// </summary>
+    public string AutomationName => string.Join(
+        " / ",
+        new[]
+        {
+            $"パス:{RelativePath}",
+            $"形式:{Format}",
+            $"編集:{(IsEdited ? "あり" : "なし")}",
+            $"複数値:{(HasSplitValues ? "あり" : "なし")}",
+        }.Concat(ManualEditConst.EDITABLE_FIELDS.Select(
+            tagField => $"{ManualEditConst.Label(tagField)}:{Get(tagField)}")));
+
+    /// <summary>
     /// 編集が外部から変わったことを画面に伝える。一括入力や編集の破棄のあとに呼ぶ。
     /// </summary>
     public void NotifyEditsChanged()
@@ -195,5 +221,8 @@ public sealed class TrackRowViewModel : ObservableObject
         OnPropertyChanged(propertyName);
         OnPropertyChanged(nameof(IsEdited));
         OnPropertyChanged(nameof(HasEmptyField));
+
+        // 行の名前は全フィールドを束ねているので、どのセルを直しても出し直す。
+        OnPropertyChanged(nameof(AutomationName));
     }
 }

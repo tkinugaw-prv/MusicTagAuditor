@@ -1,9 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using System.Text;
 using System.Windows;
 using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -106,7 +104,17 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>開いているライブラリのルート。</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(RescanCommand))]
+    [NotifyPropertyChangedFor(nameof(PathSummary))]
     private string? _libraryRoot;
+
+    /// <summary>
+    /// ライブラリ・バックアップ先のパス欄を畳んでいるか（docs/SPEC.md 5.1）。
+    ///
+    /// 開いた後は触らない欄なので、畳んで下の一覧に高さを回せるようにしてある。
+    /// 値は <see cref="AppSettings.PathsCollapsed"/> に残り、次の起動へ引き継がれる。
+    /// </summary>
+    [ObservableProperty]
+    private bool _arePathsCollapsed;
 
     /// <summary>
     /// バックアップの保存先。空欄ならライブラリ直下（従来の動作）。
@@ -192,6 +200,11 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ExportCsvCommand))]
     private bool _hasInspectionResult;
+
+    /// <summary>読み取ったファイルがあるか。ファイル一覧の CSV 出力は検査を待たずに使える。</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ExportTrackCsvCommand))]
+    private bool _hasTracks;
 
     /// <summary>
     /// 差分明細をチェック済みの行だけに絞るか（docs/SPEC.md 5.3）。
@@ -294,6 +307,10 @@ public sealed partial class MainViewModel : ObservableObject
 
         _backupRoot = settingsStore.Current.BackupRoot;
 
+        // **プロパティではなくフィールドへ入れる。** プロパティ経由だと構築中に
+        // OnArePathsCollapsedChanged が走り、読んだばかりの値をそのまま書き戻す。
+        _arePathsCollapsed = settingsStore.Current.PathsCollapsed;
+
         Dictionary = dictionaryViewModel;
 
         // 辞書を保存したら検査をやり直す。タグは変わっていないので再スキャンは要らない。
@@ -381,6 +398,16 @@ public sealed partial class MainViewModel : ObservableObject
     public ObservableCollection<string> ApplyIssues { get; } = [];
 
     /// <summary>
+    /// パス欄を畳んでいるときに見出し行へ出す要約。
+    ///
+    /// **畳んでもどのライブラリを見ているかは残す。** 複数のライブラリを行き来する
+    /// ときに、開いている対象が画面から消えると取り違えが起きる。
+    /// バックアップ先は並べない。1 行に 2 つ入れると、切り詰めで先に消えるのが
+    /// 作業対象のフォルダ名になってしまう。
+    /// </summary>
+    public string PathSummary => LibraryRoot ?? "ライブラリ未選択";
+
+    /// <summary>
     /// 指定されたライブラリを開いてスキャンする。
     ///
     /// **ライブラリを開く経路はここに集約する。** フォルダ選択・コマンドライン引数・
@@ -434,6 +461,25 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         await OpenAsync(lastRoot);
+    }
+
+    /// <summary>
+    /// 折り畳みの状態を設定に残す。
+    ///
+    /// **保存に失敗しても操作は止めない。** 覚えられないのは次回に開き直す手間だけで、
+    /// いま畳めなくする理由にはならない（<see cref="RememberLibraryRoot"/> と同じ判断）。
+    /// </summary>
+    /// <param name="value">畳んでいるなら true。</param>
+    partial void OnArePathsCollapsedChanged(bool value)
+    {
+        try
+        {
+            _settingsStore.Save(_settingsStore.Current with { PathsCollapsed = value });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Warning(ex, "パス欄の折り畳みを記憶できなかった path={Path}", _settingsStore.FilePath);
+        }
     }
 
     /// <summary>
@@ -871,6 +917,13 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
+        // **Clear より先に控える。** RuleResults を空にすると上段 DataGrid の SelectedItem が
+        // null になり、双方向バインド経由で SelectedRule まで消える。控える対象が残らなくなる。
+        string? previousRuleId = SelectedRule?.RuleId;
+        TagChangeKey? previousChangeKey = SelectedChange is null
+            ? null
+            : TagChangeKey.From(SelectedChange.Change);
+
         ClearRuleResults();
         InspectionChanges.Clear();
         UnknownValues.Clear();
@@ -904,7 +957,11 @@ public sealed partial class MainViewModel : ObservableObject
             _lastInspection = result;
 
             // 表示用のルール行と選択中ルールはここで決まる。絞り込みが無効なら全件が入る。
-            ApplyInspectionScope();
+            // **ルール行は毎回作り直すので、参照では前の選択を追えない。** ID で引き直した実体を
+            // 渡せば、ApplyInspectionScope 側の参照一致がそのまま成立する。
+            ApplyInspectionScope(FindRule(previousRuleId));
+
+            RestoreSelectedChange(previousChangeKey);
 
             LoadUnknownValues(result);
 
@@ -943,6 +1000,39 @@ public sealed partial class MainViewModel : ObservableObject
 
         _allRuleResults.Clear();
         RuleResults.Clear();
+    }
+
+    /// <summary>
+    /// ルール ID から、作り直したあとのルール行を引く。
+    ///
+    /// 再検査は <see cref="RuleResultViewModel"/> を毎回新しく作るため、参照を持ち越しても
+    /// 一致しない。**キーで引き直す**（<c>DictionaryViewModel.Reveal</c> と同じ作法）。
+    /// </summary>
+    /// <param name="ruleId">探すルール ID。控えていなければ null。</param>
+    /// <returns>見つかったルール行。無ければ null。</returns>
+    private RuleResultViewModel? FindRule(string? ruleId)
+    {
+        return ruleId is null
+            ? null
+            : _allRuleResults.FirstOrDefault(rule => string.Equals(rule.RuleId, ruleId, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// 再検査の前に選んでいた明細を選び直す。
+    ///
+    /// **見つからなければ選択なしのままにする。** 対象外にしたアルバムの明細は一覧から消えるのが
+    /// 正しい挙動で、消えた行の代わりに別の行を選ぶと、直したつもりのない行を直すことになる。
+    /// </summary>
+    /// <param name="key">再検査の前に選んでいた明細のキー。無ければ null。</param>
+    private void RestoreSelectedChange(TagChangeKey? key)
+    {
+        if (key is null || SelectedChange is not null)
+        {
+            return;
+        }
+
+        SelectedChange = InspectionChanges
+            .FirstOrDefault(change => TagChangeKey.From(change.Change) == key.Value);
     }
 
     /// <summary>
@@ -1244,10 +1334,19 @@ public sealed partial class MainViewModel : ObservableObject
 
         AlbumOverrideEntry entry = viewModel.BuildEntry();
 
-        // 対象外にした単位は検査結果から消える（7.4.3 手順1）。消えたことが分かるように書く。
-        string message = entry.Exclude
-            ? $"「{FolderLabel(unit)}」を対象外にしました。この単位は検査結果から消えます。"
-            : $"「{FolderLabel(unit)}」に個別例外を登録して再検査しました。";
+        // 扱いを決めた単位は検査結果から消える（7.4.3 手順1）。消えたことが分かるように書く。
+        //
+        // **作曲家を指定した場合も R-501 からは消える**（3.5 規則5 の仕分けが済んだため）。
+        // 対象外と一括りに「登録しました」とだけ書くと、行が減った理由が画面から読めない。
+        string message = entry switch
+        {
+            { Exclude: true } => $"「{FolderLabel(unit)}」を対象外にしました。この単位は検査結果から消えます。",
+
+            { Composer: not null } => $"「{FolderLabel(unit)}」の主作品の作曲家を「{entry.Composer}」に"
+                + "指定しました。この単位は R-501 の一覧から消えます。",
+
+            _ => $"「{FolderLabel(unit)}」に個別例外を登録して再検査しました。",
+        };
 
         SaveDictionary(
             viewModel.Apply,
@@ -1412,10 +1511,7 @@ public sealed partial class MainViewModel : ObservableObject
                 : string.Empty;
 
             ChangeCsvExporter.WriteFile(dialog.FileName, exported);
-            File.WriteAllText(
-                summaryPath,
-                ChangeCsvExporter.BuildSummary(exported),
-                new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+            ChangeCsvExporter.WriteSummaryFile(summaryPath, exported);
 
             StatusText = string.Create(
                 CultureInfo.CurrentCulture,
@@ -1434,6 +1530,76 @@ public sealed partial class MainViewModel : ObservableObject
             StatusText = $"CSV の書き出しに失敗しました: {ex.Message}";
             Log.Error(ex, "CSV の書き出しに失敗した path={Path}", dialog.FileName);
         }
+    }
+
+    /// <summary>
+    /// いま一覧に出ている行を返す。**CSV に書き出す範囲そのもの。**
+    ///
+    /// ツリーのフォルダ選択（<see cref="Tracks"/> への詰め替え）と、検索文字列・
+    /// 「空欄のある行のみ」・「編集した行のみ」（<see cref="MatchesTrackFilter"/>）の
+    /// 両方が効いた結果になる。並べ替えも一覧のビューに従う。
+    /// </summary>
+    /// <returns>表示順に並んだ行。</returns>
+    public IReadOnlyList<TrackRowViewModel> VisibleTracks()
+    {
+        // ビューはファイル一覧タブを一度でも組み立てれば必ず在る。無い間は絞り込みも無い。
+        return _trackView is null
+            ? [.. Tracks]
+            : [.. _trackView.Cast<TrackRowViewModel>()];
+    }
+
+    /// <summary>
+    /// ファイル一覧を CSV に書き出す（docs/SPEC.md 5.2）。
+    ///
+    /// **書き出すのは画面に出ている行だけ。** 絞り込みで隠した行まで出ると、
+    /// 表と CSV のどちらが本当か確かめられない（検査結果の CSV 出力と同じ考え方）。
+    /// 値は保留中の手編集を反映したもの＝セルに見えているとおりになる。
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanExportTrackCsv))]
+    private void ExportTrackCsv()
+    {
+        SaveFileDialog dialog = new()
+        {
+            Title = "ファイル一覧を CSV に書き出す",
+            FileName = $"{AppConst.TRACK_CSV_FILE_NAME_PREFIX}{DateTime.Now:yyyyMMddHHmmss}.csv",
+            Filter = "CSV ファイル|*.csv",
+            DefaultExt = ".csv",
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        try
+        {
+            IReadOnlyList<TrackRowViewModel> exported = VisibleTracks();
+
+            TrackCsvExporter.WriteFile(dialog.FileName, exported.Select(row => row.Tags), _manualEdits);
+
+            // 全件数を併記する。件数だけでは、絞り込んだ結果なのか読み取れていないのかが判らない。
+            StatusText = string.Create(
+                CultureInfo.CurrentCulture,
+                $"CSV を書き出しました（{exported.Count:N0} 件 / 全 {_allTracks.Count:N0} 件）: ")
+                + Path.GetFileName(dialog.FileName);
+
+            Log.Information(
+                "ファイル一覧を CSV に書き出した path={Path} 件数={Count} 全件={Total}",
+                dialog.FileName,
+                exported.Count,
+                _allTracks.Count);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"CSV の書き出しに失敗しました: {ex.Message}";
+            Log.Error(ex, "ファイル一覧の CSV 書き出しに失敗した path={Path}", dialog.FileName);
+        }
+    }
+
+    /// <summary>ファイル一覧を書き出せるか。</summary>
+    private bool CanExportTrackCsv()
+    {
+        return HasTracks;
     }
 
     /// <summary>
@@ -1646,6 +1812,80 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
+    /// 保留中の手編集を 1 件だけ取り消す（下段の一覧の右クリック）。
+    ///
+    /// **間違えて 1 セル直してしまったときの戻り道。** これが無いと、誤入力を消す手段は
+    /// 全件破棄か、元の値を思い出して打ち直すかしか無い。
+    ///
+    /// **確認は出さない。** 取り消すのは右クリックした行そのもので、対象が画面に見えている。
+    /// 全件破棄と違い、取り違えても失うのは 1 項目だけで、打ち直せば戻せる。
+    /// </summary>
+    /// <param name="change">取り消す差分。null なら何もしない。</param>
+    [RelayCommand]
+    private void DiscardManualEdit(TagChange? change)
+    {
+        if (change is null || !_manualEdits.Remove(change.RelativePath, change.Field))
+        {
+            return;
+        }
+
+        // 消えたのは 1 行 1 フィールドだけなので、一覧も該当行だけ出し直す。
+        FindTrackRow(change.RelativePath)?.NotifyEditsChanged();
+
+        StatusText = $"「{Path.GetFileName(change.RelativePath)}」の{ManualEditConst.Label(change.Field)}の編集を取り消しました。";
+    }
+
+    /// <summary>
+    /// ある行の保留中の手編集をまとめて取り消す（ファイル一覧の右クリック）。
+    ///
+    /// 1 行を直しているうちに何項目も入ってしまうことがあり、下段から 1 件ずつ消すのは手間が勝つ。
+    /// 確認を出さない理由は <see cref="DiscardManualEdit"/> と同じ。
+    /// </summary>
+    /// <param name="row">対象の行。null なら何もしない。</param>
+    [RelayCommand(CanExecute = nameof(CanResetTrackEdits))]
+    private void ResetTrackEdits(TrackRowViewModel? row)
+    {
+        if (row is null)
+        {
+            return;
+        }
+
+        int removed = _manualEdits.Reset(row.RelativePath);
+
+        if (removed == 0)
+        {
+            return;
+        }
+
+        row.NotifyEditsChanged();
+
+        StatusText = string.Create(
+            CultureInfo.CurrentCulture,
+            $"「{row.FileName}」の編集 {removed:N0} 項目を取り消しました。");
+    }
+
+    /// <summary>
+    /// その行の編集を取り消せるか。編集が無い行では押せないようにする。
+    /// </summary>
+    /// <param name="row">対象の行。</param>
+    /// <returns>取り消せるなら true。</returns>
+    private static bool CanResetTrackEdits(TrackRowViewModel? row)
+    {
+        return row is { IsEdited: true };
+    }
+
+    /// <summary>
+    /// 相対パスからファイル一覧の行を探す。
+    /// </summary>
+    /// <param name="relativePath">対象ファイル。</param>
+    /// <returns>見つかった行。無ければ null。</returns>
+    private TrackRowViewModel? FindTrackRow(string relativePath)
+    {
+        return _allTracks
+            .FirstOrDefault(track => track.RelativePath.Equals(relativePath, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// 保留中の手編集を書き込む。
     ///
     /// 検査結果の適用とまったく同じ経路を通す。書き込み経路を 2 本持つと、
@@ -1788,6 +2028,11 @@ public sealed partial class MainViewModel : ObservableObject
 
         HasManualEdits = changes.Count > 0;
 
+        // 行の取り消しの可否は行ごとに変わる。**ここで知らせないと押せないままになる。**
+        // CommunityToolkit の RelayCommand は CommandManager の再問い合わせに乗らないため、
+        // 同じ行を右クリックし直しても CanExecute は評価し直されない。
+        ResetTrackEditsCommand.NotifyCanExecuteChanged();
+
         ManualEditSummary = changes.Count == 0
             ? "セルを直すと、ここに保留中の編集が集まります。"
             : string.Create(
@@ -1877,8 +2122,7 @@ public sealed partial class MainViewModel : ObservableObject
     /// <param name="relativePath">見せたいファイルの相対パス。</param>
     public void RevealTrack(string relativePath)
     {
-        TrackRowViewModel? row = _allTracks
-            .FirstOrDefault(track => track.RelativePath.Equals(relativePath, StringComparison.OrdinalIgnoreCase));
+        TrackRowViewModel? row = FindTrackRow(relativePath);
 
         if (row is null)
         {
@@ -1913,50 +2157,24 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         string fullPath = row.Tags.FullPath;
-        string? folder = Path.GetDirectoryName(fullPath);
 
         try
         {
-            if (File.Exists(fullPath))
+            if (ExplorerLauncher.RevealFile(fullPath))
             {
-                StartExplorer($"/select,\"{fullPath}\"");
                 StatusText = $"エクスプローラーで「{row.FileName}」を表示しました。";
                 return;
             }
 
-            if (folder is not null && Directory.Exists(folder))
-            {
-                StartExplorer($"\"{folder}\"");
-                StatusText = $"「{row.FileName}」が見つからないため、フォルダだけを開きました。";
-                return;
-            }
-
-            StatusText = $"「{row.RelativePath}」が見つかりません。再スキャンしてください。";
+            StatusText = Directory.Exists(Path.GetDirectoryName(fullPath))
+                ? $"「{row.FileName}」が見つからないため、フォルダだけを開きました。"
+                : $"「{row.RelativePath}」が見つかりません。再スキャンしてください。";
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
         {
             Log.Error(ex, "エクスプローラーを開けなかった path={Path}", fullPath);
             StatusText = $"エクスプローラーを開けませんでした: {ex.Message}";
         }
-    }
-
-    /// <summary>
-    /// エクスプローラーを起動する。
-    ///
-    /// **引数は文字列で渡すこと。** <c>ArgumentList</c> を使うと <c>/select,&lt;パス&gt;</c> 全体が
-    /// 1 個の引数として引用され、エクスプローラー側が解釈できずマイドキュメントが開く。
-    /// Windows のパスに <c>"</c> は入らないため、この引用で閉じられる。
-    /// 終了コードは見ない。エクスプローラーは正常時も 1 を返す。
-    /// </summary>
-    /// <param name="arguments">エクスプローラーに渡す引数。</param>
-    private static void StartExplorer(string arguments)
-    {
-        using Process? process = Process.Start(new ProcessStartInfo
-        {
-            FileName = "explorer.exe",
-            Arguments = arguments,
-            UseShellExecute = false,
-        });
     }
 
     /// <summary>
@@ -2593,6 +2811,9 @@ public sealed partial class MainViewModel : ObservableObject
 
         Failures.Clear();
         Tracks.Clear();
+
+        // 読み直しに失敗・中止したら一覧は空のまま戻る。書き出せる行が無いので出口も閉じる。
+        HasTracks = false;
         FolderTree.Clear();
         ProgressValue = 0;
         ProgressMaximum = 1;
@@ -2649,6 +2870,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         _lastScan = result;
         _allTracks = [.. result.Tracks.Select(track => new TrackRowViewModel(track, _manualEdits))];
+        HasTracks = _allTracks.Count > 0;
 
         foreach (ScanFailure failure in result.Failures)
         {

@@ -102,6 +102,35 @@ public sealed class AppSettingsStoreTests : IDisposable
     }
 
     /// <summary>
+    /// パス欄の折り畳みを覚える前に書かれた設定も読めることを確認する。
+    /// 項目が無いときは false（展開）でなければならない。既存の利用者が
+    /// 更新した途端に畳んだ状態で起動するのでは、何が起きたか分からない。
+    /// </summary>
+    [Fact]
+    public void TreatsMissingPathsCollapsedAsExpanded()
+    {
+        File.WriteAllText(
+            AppSettingsStore.GetSettingsPath(_directory),
+            """{ "backupRoot": "D:\\music backup" }""");
+
+        AppSettingsStore store = new(_directory);
+
+        Assert.False(store.Current.PathsCollapsed);
+        Assert.Null(store.LoadError);
+    }
+
+    /// <summary>
+    /// 折り畳みの状態が書き出して読み直しても残ることを確認する。
+    /// </summary>
+    [Fact]
+    public void RoundTripsPathsCollapsed()
+    {
+        new AppSettingsStore(_directory).Save(AppSettings.Default with { PathsCollapsed = true });
+
+        Assert.True(new AppSettingsStore(_directory).Current.PathsCollapsed);
+    }
+
+    /// <summary>
     /// 保存が現在の設定にも反映されることを確認する。読み直さないと効かないのでは使いにくい。
     /// </summary>
     [Fact]

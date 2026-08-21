@@ -84,6 +84,12 @@ public sealed class RemainingRuleTests
                 Date = "1994",
                 Note = "タグを直したあとに残った古い年の指定",
             },
+            new AlbumOverrideEntry
+            {
+                Folder = "ブラームス 1 - 主作品とカップリング",
+                Composer = "Johannes Brahms",
+                Note = "3.5 規則5 主作品はブラームスの交響曲第1番",
+            },
         ],
     });
 
@@ -611,6 +617,99 @@ public sealed class RemainingRuleTests
 
         Assert.Equal(2, ChangesOf(result, "R-501").Count);
         Assert.All(ChangesOf(result, "R-501"), change => Assert.False(change.HasFix));
+    }
+
+    /// <summary>
+    /// R-501: **対象外にした単位を明細から外す**ことを確認する（3.5 規則6）。
+    ///
+    /// R-501 は規則5・規則6 の対象を人が仕分けるための一覧（docs/SPEC.md 6.2）であり、
+    /// 仕分けが済んだ単位を出し続けると、まだ決めていない単位がその中に埋もれる。
+    /// </summary>
+    [Fact]
+    public void DoesNotFlagCollisionInExcludedUnit()
+    {
+        InspectionResult result = Works(
+            Track(
+                "シェエラザード/01.flac",
+                (TagField.Album, ["Scheherazade"]),
+                (TagField.Composer, ["Nikolai Rimsky-Korsakov"])),
+            Track(
+                "シェエラザード/02.flac",
+                (TagField.Album, ["Scheherazade"]),
+                (TagField.Composer, ["Anton Bruckner"])));
+
+        Assert.Empty(ChangesOf(result, "R-501"));
+    }
+
+    /// <summary>
+    /// R-501: **作曲家を指定した単位を明細から外す**ことを確認する（3.5 規則5）。
+    ///
+    /// 主作品の作曲家が書かれた時点で「主作品が定まるか」への答えは出ている。
+    /// </summary>
+    [Fact]
+    public void DoesNotFlagCollisionInUnitWithComposerOverride()
+    {
+        InspectionResult result = Works(
+            Track(
+                "ブラームス 1 - 主作品とカップリング/01.flac",
+                (TagField.Album, ["Symphony No.1"]),
+                (TagField.Composer, ["Johannes Brahms"])),
+            Track(
+                "ブラームス 1 - 主作品とカップリング/02.flac",
+                (TagField.Album, ["Symphony No.1"]),
+                (TagField.Composer, ["Richard Wagner"])));
+
+        Assert.Empty(ChangesOf(result, "R-501"));
+    }
+
+    /// <summary>
+    /// R-501: **作品名だけ・年だけの個別例外では外さない**ことを確認する。
+    ///
+    /// 版の違い（3.5 規則4）・同一演奏の別リリース（規則7）・年の指定（規則2）は、
+    /// 「主作品が定まるか」に答えていない。ここを広げると、決めていない単位まで一覧から消える。
+    /// </summary>
+    [Theory]
+    [InlineData(@"ショスタコーヴィチ\オリンピア盤")]
+    [InlineData(@"ブルックナー\ブルックナー 8 - 主作品とカップリング")]
+    public void FlagsCollisionWhenOverrideDoesNotDecideComposer(string folder)
+    {
+        InspectionResult result = Works(
+            Track(
+                $"{folder}\01.flac",
+                (TagField.Album, ["Symphony No.5"]),
+                (TagField.Composer, ["Dmitri Shostakovich"])),
+            Track(
+                $"{folder}\02.flac",
+                (TagField.Album, ["Symphony No.5"]),
+                (TagField.Composer, ["Sergei Prokofiev"])));
+
+        Assert.Equal(2, ChangesOf(result, "R-501").Count);
+    }
+
+    /// <summary>
+    /// R-501: 同じ <c>album</c> 名を共有する 2 単位のうち片方だけ決めたとき、
+    /// **残った側は出続け、根拠の人数は元のまま**であることを確認する。
+    ///
+    /// 明細から落とすのは扱いを決めた単位の行だけで、人数の集計には手を入れない。
+    /// 集計から外すと、決めた覚えのない側の根拠まで変わってしまう。
+    /// </summary>
+    [Fact]
+    public void KeepsComposerCountWhenOnlyOneUnitIsDecided()
+    {
+        InspectionResult result = Works(
+            Track(
+                "シェエラザード/01.flac",
+                (TagField.Album, ["Symphony No.5"]),
+                (TagField.Composer, ["Ludwig van Beethoven"])),
+            Track(
+                "b/01.flac",
+                (TagField.Album, ["Symphony No.5"]),
+                (TagField.Composer, ["Anton Bruckner"])));
+
+        TagChange change = Assert.Single(ChangesOf(result, "R-501"));
+
+        Assert.EndsWith(@"b\01.flac", change.RelativePath, StringComparison.Ordinal);
+        Assert.Contains("2 人の作曲家が混在", change.Rationale, StringComparison.Ordinal);
     }
 
     /// <summary>

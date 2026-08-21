@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
+using MusicTagAuditor.App.Controls;
 using MusicTagAuditor.App.Interop;
 using MusicTagAuditor.App.ViewModels;
 using MusicTagAuditor.Core.Dictionary;
@@ -57,6 +58,22 @@ public partial class MainWindow : Window
         if (sender is DataGridRow { Item: TagChangeViewModel change } && DataContext is MainViewModel viewModel)
         {
             viewModel.RevealTrack(change.RelativePath);
+        }
+    }
+
+    /// <summary>
+    /// 選ばれているルール行を画面内へ送る。
+    ///
+    /// **再検査をまたいで選択を復元したときに要る。** <c>DataGrid</c> はコードから
+    /// <c>SelectedItem</c> を差し替えてもスクロールしないため、復元した行が画面外にあると
+    /// 選択が戻ったことが見えず、先頭へ落ちたのと区別がつかない。
+    /// 利用者が自分でクリックした場合は既に見えているので、何も起きない。
+    /// </summary>
+    private void OnRuleResultSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (RuleResultGrid.SelectedItem is not null)
+        {
+            RuleResultGrid.ScrollIntoView(RuleResultGrid.SelectedItem);
         }
     }
 
@@ -126,10 +143,20 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// セルの編集が終わったら、見送っていた絞り込みを掛け直させる。
+    /// セルの編集が終わったら、入力をその場で書き戻し、見送っていた絞り込みを掛け直させる。
+    ///
+    /// **ここで書き戻さないと、同じ行の中で移動しただけでは保留に入らない。**
+    /// 理由は <see cref="CellEditCommit"/> に書いた。
+    ///
+    /// 取り消し（Esc）では書き戻さない。捨てるつもりの入力を保留に入れては意味が反転する。
     /// </summary>
     private void OnTrackCellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
     {
+        if (e.EditAction == DataGridEditAction.Commit)
+        {
+            CellEditCommit.Flush(e.EditingElement);
+        }
+
         ScheduleTrackEditFinished();
     }
 

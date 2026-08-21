@@ -20,6 +20,9 @@ public static class AppConst
     /// <summary>検査結果 CSV の既定ファイル名の接頭辞。後ろに日時が付く。</summary>
     public const string CHANGE_CSV_FILE_NAME_PREFIX = "MusicTagAuditor-changes-";
 
+    /// <summary>ファイル一覧 CSV の既定ファイル名の接頭辞。後ろに日時が付く。</summary>
+    public const string TRACK_CSV_FILE_NAME_PREFIX = "MusicTagAuditor-tracks-";
+
     /// <summary>同梱の既定辞書のファイル名。</summary>
     public const string BUNDLED_DICTIONARY_FILE_NAME = "default-dictionary.json";
 
