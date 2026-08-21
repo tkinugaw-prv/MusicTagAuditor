@@ -38,6 +38,7 @@ param(
     #   click:検査        メインウィンドウのボタンを押す
     #   rule:1            ルール一覧の n 行目を選ぶ（1 始まり）
     #   change:1          明細の n 行目を選ぶ（1 始まり）
+    #   rows:TrackGrid    一覧の行を番号付きで並べる（グリッドは x:Name で指す）
     #   dialog:キャンセル  開いているダイアログのボタンを押す
     #   tab:ファイル一覧   タブを選ぶ
     #   shot:任意の名前    その時点を撮る
@@ -209,8 +210,8 @@ function Find-Dialog {
 .SYNOPSIS
     ウィンドウに出ている文字を並べる。
 .DESCRIPTION
-    **注意書きや選択肢は PNG を目で読むより確実に取れる。** DataGrid の行と違い、
-    TextBlock は Name として読める。文言を変えたときの確認はここを見る。
+    **注意書きや選択肢は PNG を目で読むより確実に取れる。** 文言を変えたときの確認はここを見る。
+    一覧の行を読むのは rows: 手順（Get-GridRows）のほう。
 #>
 function Read-Texts {
     param($Root)
@@ -234,29 +235,59 @@ function Read-Texts {
 
 <#
 .SYNOPSIS
-    DataGrid の n 行目を選ぶ（1 始まり）。
+    DataGrid を AutomationId で掴む。
 .DESCRIPTION
-    **行の中身は UIA から読めない**（AutomationProperties.Name 未設定のため型名が返る）
-    ので、行は番号でしか指せない。選んだ結果は PNG で確かめる。
-    仮想化のため、画面に出ている行しか列挙されない点にも注意する。
+    AutomationId は XAML の x:Name がそのまま出たもの。名前の無いグリッドは指せない。
 #>
-function Select-GridRow {
-    param($Root, [string]$AutomationId, [int]$Index)
+function Find-Grid {
+    param($Root, [string]$AutomationId)
 
     $condition = New-Object System.Windows.Automation.PropertyCondition($UIA::AutomationIdProperty, $AutomationId)
     $grid = $Root.FindFirst($TREE_SCOPE, $condition)
     if ($null -eq $grid) { throw "DataGrid '$AutomationId' が見つからない" }
 
+    return $grid
+}
+
+<#
+.SYNOPSIS
+    DataGrid の行を並べて返す。
+.DESCRIPTION
+    **仮想化のため、画面に出ている行しか列挙されない。** 件数が合わないときはこれを疑う。
+
+    行の名前は AutomationProperties.Name で振ってある（MainWindow.xaml の
+    ChangeRowNameStyle ほか）。振ってあるのは検査結果の上段・下段、辞書に無い値、
+    ファイル一覧、保留中の編集の 5 つだけで、**それ以外のグリッドは型名が返る。**
+#>
+function Get-GridRows {
+    param($Grid)
+
     $rowCondition = New-Object System.Windows.Automation.PropertyCondition(
         $UIA::ControlTypeProperty, [System.Windows.Automation.ControlType]::DataItem)
-    $rows = $grid.FindAll([System.Windows.Automation.TreeScope]::Children, $rowCondition)
+
+    return @($Grid.FindAll([System.Windows.Automation.TreeScope]::Children, $rowCondition))
+}
+
+<#
+.SYNOPSIS
+    DataGrid の n 行目を選ぶ（1 始まり）。
+.DESCRIPTION
+    行は番号で指すが、**選んだ結果は名前で確かめられる。** 並べ替えや絞り込みが挟まると
+    番号と中身の対応は変わるので、出力に出た名前のほうを根拠にする。
+#>
+function Select-GridRow {
+    param($Root, [string]$AutomationId, [int]$Index)
+
+    $rows = @(Get-GridRows -Grid (Find-Grid -Root $Root -AutomationId $AutomationId))
 
     if ($Index -lt 1 -or $Index -gt $rows.Count) {
         throw "'$AutomationId' の $Index 行目は無い（列挙できたのは $($rows.Count) 行）"
     }
 
-    $rows.Item($Index - 1).GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
-    return $rows.Count
+    $row = $rows[$Index - 1]
+    $row.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+
+    return [pscustomobject]@{ Count = $rows.Count; Name = $row.Current.Name }
 }
 
 <#
@@ -387,15 +418,24 @@ try {
             }
 
             'rule' {
-                $count = Select-GridRow -Root $root -AutomationId 'RuleResultGrid' -Index ([int]$argument)
+                $selected = Select-GridRow -Root $root -AutomationId 'RuleResultGrid' -Index ([int]$argument)
                 Start-Sleep -Seconds $ActionWaitSeconds
-                "ルールの $argument 行目を選んだ（列挙 $count 行）"
+                "ルールの $argument 行目を選んだ（列挙 $($selected.Count) 行）: $($selected.Name)"
             }
 
             'change' {
-                $count = Select-GridRow -Root $root -AutomationId 'InspectionChangeGrid' -Index ([int]$argument)
+                $selected = Select-GridRow -Root $root -AutomationId 'InspectionChangeGrid' -Index ([int]$argument)
                 Start-Sleep -Seconds $ActionWaitSeconds
-                "明細の $argument 行目を選んだ（列挙 $count 行）"
+                "明細の $argument 行目を選んだ（列挙 $($selected.Count) 行）: $($selected.Name)"
+            }
+
+            'rows' {
+                # **撮らずに読む。** 行の中身は名前で取れるので、ここは PNG より確実。
+                $rows = @(Get-GridRows -Grid (Find-Grid -Root $root -AutomationId $argument))
+                "$argument の行（列挙 $($rows.Count) 行）"
+                for ($index = 0; $index -lt $rows.Count; $index++) {
+                    "    [{0}] {1}" -f ($index + 1), $rows[$index].Current.Name
+                }
             }
 
             'tab' {
@@ -411,7 +451,7 @@ try {
             }
 
             default {
-                throw "手順 '$step' が読めない。使えるのは click / dialog / rule / change / tab / shot"
+                throw "手順 '$step' が読めない。使えるのは click / dialog / rule / change / rows / tab / shot"
             }
         }
     }

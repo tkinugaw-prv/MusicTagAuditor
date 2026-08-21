@@ -67,10 +67,16 @@
   失敗・クリック座標・コマンドの早期 return と、当たっていない原因を順に疑った。
   `EnumWindows` でプロセスの可視ウィンドウを列挙すれば最初から `visible=True` で出ている。
   HWND を `AutomationElement.FromHandle` に渡せば、あとは同じように操作できる
-- **ダイアログの文言は UI Automation から読める。** DataGrid の行と違い `TextBlock` は Name
-  として取れるので、注意書きの確認は画像より確実
-- **DataGrid の行の中身は UI Automation から読めない。** `AutomationProperties.Name` を
-  振っていないため、行の名前は `RuleResultViewModel` という型名になる。セルの値は画像で確かめる
+- **ダイアログの文言は UI Automation から読める。** `TextBlock` が Name として取れるので、
+  注意書きの確認は画像より確実
+- **一覧の行の中身も Name として読める。ただし振ってあるグリッドに限る。**
+  `AutomationProperties.Name` を振ってあるのは検査結果タブの上段（`RuleResultGrid`）と
+  下段（`InspectionChangeGrid`）、辞書に無い値（`UnknownValueGrid`）、ファイル一覧
+  （`TrackGrid`）、保留中の編集（`ManualEditChangeGrid`）の 5 つ。**それ以外は型名が返る**
+  （辞書タブとダイアログの表がまだ読めない）。書式と足し方は
+  [DEVELOPMENT.md](DEVELOPMENT.md) の「一覧の行には名前を振る」
+- **列挙できるのは画面に出ている行だけ。** DataGrid が仮想化しているため、スクロールの外は
+  出てこない。読めた行数が画面の件数表示と食い違うのはこれが理由で、異常ではない
 - **押すボタンは名前で特定する。** 索引で選ぶと、ボタンが 1 つ増えただけで別のものを押す
 
 ## ユーザーに委譲してよい範囲

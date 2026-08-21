@@ -80,6 +80,24 @@ DataGrid のセル編集で使う場合は `GridEditingSuggestBoxStyle` を当�
 
 一括操作の通知は**最後に 1 回だけ上げる**（`RuleResultViewModel.ChangeSelectionChanged`）。受け手は件数を数え直し、下段の絞り込みも掛け直す。明細 1 件ごとに上げると、1,000 件を超えるルールの「全選択」で画面が固まる。
 
+### 一覧の行には名前を振る
+
+**`DataGrid` の行に `AutomationProperties.Name` を振ること。** 振っていない行は UI Automation から見た名前が `TagChangeViewModel` のような型名になり、**セルの値を読む手段が PNG の目視しか無くなる**。判定区分・保留中の編集・複数値のように**画面では行の色でしか出ていない**情報は、画像からの判別が特に弱い。動作確認の手順は `docs/manual_verification.md`。
+
+書式は「ラベル:値」を ` / ` でつないで揃える。**値が空でもラベルは残す。** 値だけを並べると、空欄が続いたときにどの列なのか読み取れなくなる。
+
+```
+区分:確定 / パス:ブルックナー.flac / タグ:Composer / 変更前:Bruckner / 変更後:Anton Bruckner / 根拠:辞書の別名
+```
+
+組み立ては原則 XAML 側（`MainWindow.xaml` の `ChangeRowNameStyle` / `RuleRowStyle` / `UnknownValueRowStyle`）に置く。束ねているのは既存の表示用プロパティなので、`MultiBinding` が各プロパティの通知にそのまま乗る。ViewModel に文字列プロパティを足すと、値が動くたびに `OnPropertyChanged` を書き足して回ることになり、`RuleResultViewModel.SetScope` のような場所で落としやすい。
+
+例外はファイル一覧の行（`TrackRowViewModel.AutomationName`）で、こちらは ViewModel が組み立てる。列が 14 あり、XAML に並べると `ManualEditConst.EDITABLE_FIELDS` の並びを写し取ることになるため（`TrackCsvExporter` が同じ理由で同じ並びを使っている）。
+
+**適用チェックの状態は名前に入れない。** `Core` の `TagChange.IsSelected` は通知を持たないので（上節）、同じ書式を共有している「保留中の編集」の側だけ古い値で固まる。片方だけ正しい表示は、名前が画像より確実だという前提を壊す。チェック状態はセルの `CheckBox` から読める。
+
+**新しく `x:Key` 付きの `RowStyle` を当てるときは `BasedOn="{StaticResource {x:Type DataGridRow}}"` を落とさないこと。** それまで効いていた暗黙スタイルが適用されなくなり、ホバー・選択色・行の見た目がまとめて飛ぶ。
+
 ### アイコン
 
 音符とタグを組み合わせたマーク。配色は「音楽フォルダー時間フィッター」のアイコンと同じ 4 色で、並べたときに同じ組の道具に見えるようにしている。

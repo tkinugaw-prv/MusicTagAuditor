@@ -40,8 +40,9 @@ pwsh -NoProfile -File .claude/skills/verify-ui/verify-ui.ps1 -Steps click:検査
 | 手順 | すること |
 |---|---|
 | `click:検査` | メインウィンドウのボタンを押す。**ダイアログが開いたら自動で撮り、文言も書き出す** |
-| `rule:1` | ルール一覧の n 行目を選ぶ（1 始まり） |
-| `change:1` | 明細の n 行目を選ぶ（1 始まり） |
+| `rule:1` | ルール一覧の n 行目を選ぶ（1 始まり）。選んだ行の名前も出す |
+| `change:1` | 明細の n 行目を選ぶ（1 始まり）。選んだ行の名前も出す |
+| `rows:TrackGrid` | 一覧の行を番号付きで並べる。**セルの値はここで読む** |
 | `dialog:キャンセル` | 開いているダイアログのボタンを押す |
 | `tab:ファイル一覧` | タブを選ぶ |
 | `shot:任意の名前` | その時点を撮る |
@@ -69,8 +70,12 @@ pwsh -NoProfile -File .claude/skills/verify-ui/verify-ui.ps1 -Steps click:検査
 - **ボタン名が違う**と、実在する候補を並べて落ちる。その一覧から正しい名前を選び直す
 - **`設定を復元:` に元のライブラリのパスが出ていること**を必ず確認する。ここが出ていなければ
   利用者の設定が書き換わったままなので、`$OutDir\settings.json.bak` から手で戻す
-- 撮った PNG は Read ツールで開いて目視する。**DataGrid の行の中身は UI Automation から
-  読めない**（`AutomationProperties.Name` 未設定のため型名が返る）ので、セルの値は画像で確かめる
+- **一覧の行は `rows:` で読む。**「区分:確定 / パス:… / 変更前:… / 変更後:…」の形で出るので、
+  セルの値の確認は画像より確実（`rule:` / `change:` も選んだ行の名前を出す）。指せるグリッドは
+  `RuleResultGrid` / `InspectionChangeGrid` / `UnknownValueGrid` / `TrackGrid` /
+  `ManualEditChangeGrid`
+- 撮った PNG は Read ツールで開いて目視する。**画像でしか分からないのは配色・字詰め・
+  レイアウト**で、値そのものは `rows:` のほうが確実
 - **ダイアログの文言は出力にそのまま出る。** `[Text]` / `[RadioButton]` / `[Button]` の行が
   それ。TextBlock は Name として読めるので、注意書きを変えたときの確認は画像より確実
 - **`ダイアログが開いた:` が出たら、そこから先はメインウィンドウを撮っていない。** 続けて
@@ -78,7 +83,7 @@ pwsh -NoProfile -File .claude/skills/verify-ui/verify-ui.ps1 -Steps click:検査
 
 ## 自分でやる範囲
 
-起動確認・画面の目視・クリック・タブ切替・行の選択・ダイアログの操作までは自分でやる。
+起動確認・画面の目視・クリック・タブ切替・行の選択と読み出し・ダイアログの操作までは自分でやる。
 **起動確認ごと丸投げしない。**
 委譲してよいのはドラッグ操作・実ライブラリでしか出ない事象・主観的な見え方の判断の 3 つだけ
 （[docs/manual_verification.md](../../../docs/manual_verification.md)）。依頼するときは、
@@ -103,5 +108,15 @@ pwsh -NoProfile -File .claude/skills/verify-ui/verify-ui.ps1 -Steps click:検査
 - **`%APPDATA%` / `%LOCALAPPDATA%` は差し替えられない。** `Environment.GetFolderPath` は
   シェル API を見るため、環境変数を上書きしても実際のパスが使われる。設定・辞書・ログを
   分離する道は無い
+- **行の名前が `TagChangeViewModel` のような型名で出たら、そのグリッドには振っていない。**
+  上に挙げた 5 つ以外（辞書タブ・バックアップ・復元・失敗一覧・ダイアログの表）はまだ読めない。
+  必要になったら `AutomationProperties.Name` を足す
+  （[docs/DEVELOPMENT.md](../../../docs/DEVELOPMENT.md)「一覧の行には名前を振る」）
+- **ネイティブの MessageBox は `dialog:` で閉じられない。** 2026-08-22 に「選択行に一括入力」
+  （空欄で実行 → 確認ダイアログ）で当たった。ダイアログとしては見つかり撮影もできるが、
+  ボタンが 1 つも列挙されず「候補: 」が空のまま落ちる。**閉じられないので手順ごと諦める。**
+  `Window` を継承した自前のダイアログ（辞書の追加・アルバムの扱い）は今までどおり押せる
+- **`rows:` は画面に出ている行しか並べない。** DataGrid が仮想化しているため、スクロールの外は
+  列挙されない。「列挙 N 行」が画面の件数表示と食い違うのはこれが理由で、異常ではない
 - **`-TestLibrary` をリポジトリ内にしない。** 音源がコミット候補に入る。コピー元と同じか
   その配下を指した場合はスクリプトが起動前に止める
