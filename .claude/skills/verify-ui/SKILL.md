@@ -43,6 +43,7 @@ pwsh -NoProfile -File .claude/skills/verify-ui/verify-ui.ps1 -Steps click:検査
 | `rule:1` | ルール一覧の n 行目を選ぶ（1 始まり）。選んだ行の名前も出す |
 | `change:1` | 明細の n 行目を選ぶ（1 始まり）。選んだ行の名前も出す |
 | `rows:TrackGrid` | 一覧の行を番号付きで並べる。**セルの値はここで読む** |
+| `check:発音区別符号も検査` | チェックボックスを切り替える。**`click:` では押せない**（あちらは Button だけ）。切り替え前後の状態も出す |
 | `dialog:キャンセル` | 開いているダイアログのボタンを押す |
 | `tab:ファイル一覧` | タブを選ぶ |
 | `shot:任意の名前` | その時点を撮る |
@@ -120,5 +121,8 @@ pwsh -NoProfile -File .claude/skills/verify-ui/verify-ui.ps1 -Steps click:検査
   （背景は [docs/manual_verification.md](../../../docs/manual_verification.md)）
 - **`rows:` は画面に出ている行しか並べない。** DataGrid が仮想化しているため、スクロールの外は
   列挙されない。「列挙 N 行」が画面の件数表示と食い違うのはこれが理由で、異常ではない
+- **`check:` に渡す名前からは `_` が落ちる。** UI Automation の Name は下線をアクセスキーの
+  印として取り除くため、画面に `TAGGING_POLICY 2.2` と出ていても指すときは `TAGGINGPOLICY 2.2`
+  と書く（表示は下線付きのまま。落ちるのは指し方だけ）。名前が違えば候補が並ぶので、そこから拾う
 - **`-TestLibrary` をリポジトリ内にしない。** 音源がコミット候補に入る。コピー元と同じか
   その配下を指した場合はスクリプトが起動前に止める

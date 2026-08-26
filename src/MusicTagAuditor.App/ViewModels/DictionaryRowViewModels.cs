@@ -282,6 +282,14 @@ public sealed partial class EnsembleRowViewModel : ObservableObject, IDictionary
     [ObservableProperty]
     private bool _noEraSplit;
 
+    /// <summary>
+    /// 指揮者を置かない団体か（合奏団・弦楽四重奏団など。docs/TAGGING_POLICY.md 2.2）。
+    ///
+    /// **立てないと R-402 がこの団体の録音を誤検出する。**
+    /// </summary>
+    [ObservableProperty]
+    private bool _noConductor;
+
     /// <summary>ラテン文字の別名。1 行 1 件。</summary>
     [ObservableProperty]
     private string _aliasesText;
@@ -301,6 +309,7 @@ public sealed partial class EnsembleRowViewModel : ObservableObject, IDictionary
         _entityId = entry.EntityId;
         _canonical = entry.Canonical ?? string.Empty;
         _noEraSplit = entry.NoEraSplit;
+        _noConductor = entry.NoConductor;
         _aliasesText = AliasText.Join(entry.Aliases);
         _aliasesJaText = AliasText.Join(entry.AliasesJa);
 
@@ -328,6 +337,11 @@ public sealed partial class EnsembleRowViewModel : ObservableObject, IDictionary
 
     /// <summary>
     /// 編集内容を辞書のエントリに戻す。
+    ///
+    /// **設定を 1 つでも書き戻し忘れると、保存のたびにその設定が全団体から消える。**
+    /// 保存は編集行から辞書を作り直すため（<c>DictionaryViewModel.BuildDictionary</c>）、
+    /// ここに無い項目は既定値に戻る。実際に <c>noConductor</c> が落ちており、
+    /// 辞書タブで別の団体を直して保存しただけで R-402 が誤検出に戻っていた。
     /// </summary>
     /// <returns>エントリ。</returns>
     public EnsembleEntry ToEntry()
@@ -337,6 +351,7 @@ public sealed partial class EnsembleRowViewModel : ObservableObject, IDictionary
             EntityId = EntityId.Trim(),
             Canonical = Canonical.Trim().Length == 0 ? null : Canonical.Trim(),
             NoEraSplit = NoEraSplit,
+            NoConductor = NoConductor,
             Eras = [.. Eras.Select(era => era.ToEra())],
             Aliases = AliasText.Split(AliasesText),
             AliasesJa = AliasText.Split(AliasesJaText),
