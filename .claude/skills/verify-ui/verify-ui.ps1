@@ -39,6 +39,7 @@ param(
     #   rule:1            ルール一覧の n 行目を選ぶ（1 始まり）
     #   change:1          明細の n 行目を選ぶ（1 始まり）
     #   rows:TrackGrid    一覧の行を番号付きで並べる（グリッドは x:Name で指す）
+    #   check:発音区別符号も検査  チェックボックスを切り替える（click: では押せない）
     #   dialog:キャンセル  開いているダイアログのボタンを押す
     #   tab:ファイル一覧   タブを選ぶ
     #   shot:任意の名前    その時点を撮る
@@ -576,6 +577,18 @@ try {
                 "明細の $argument 行目を選んだ（列挙 $($selected.Count) 行）: $($selected.Name)"
             }
 
+            'check' {
+                # **チェックボックスは click: では押せない。** click: が探すのは Button だけで、
+                # チェックボックスは ControlType.CheckBox として別に並ぶ。
+                $box = Find-Element -Root $root -ControlType ([System.Windows.Automation.ControlType]::CheckBox) -Name $argument
+                $toggle = $box.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern)
+                $before = $toggle.Current.ToggleState
+                $toggle.Toggle()
+                Start-Sleep -Seconds $ActionWaitSeconds
+                $after = $box.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern).Current.ToggleState
+                "チェックを切り替えた: $argument（$before → $after）"
+            }
+
             'rows' {
                 # **撮らずに読む。** 行の中身は名前で取れるので、ここは PNG より確実。
                 $rows = @(Get-GridRows -Grid (Find-Grid -Root $root -AutomationId $argument))
@@ -598,7 +611,7 @@ try {
             }
 
             default {
-                throw "手順 '$step' が読めない。使えるのは click / dialog / rule / change / rows / tab / shot"
+                throw "手順 '$step' が読めない。使えるのは click / check / dialog / rule / change / rows / tab / shot"
             }
         }
     }

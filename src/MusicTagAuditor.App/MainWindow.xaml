@@ -1211,6 +1211,9 @@
                         <CheckBox Content="時代分割を行わない（個別例外。TAGGING_POLICY 5.3.2）"
                                   IsChecked="{Binding SelectedEnsemble.NoEraSplit}" Margin="0,10,0,0" />
 
+                        <CheckBox Content="指揮者を置かない団体（合奏団・弦楽四重奏団など。TAGGING_POLICY 2.2）"
+                                  IsChecked="{Binding SelectedEnsemble.NoConductor}" Margin="0,10,0,0" />
+
                         <DockPanel Margin="0,14,0,6">
                           <Button DockPanel.Dock="Right" Content="区分を削除" Command="{Binding RemoveEraCommand}"
                                   Style="{StaticResource SmallOutlineButtonStyle}" />
