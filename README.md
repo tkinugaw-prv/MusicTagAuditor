@@ -33,6 +33,7 @@
 | DI | Microsoft.Extensions.DependencyInjection 10.0.10 |
 | タグ入出力 | TagLibSharp 2.3.0 + 自前の MP4 atom リーダー（[ADR-0001](docs/adr/0001-tag-io-library.md)） |
 | ログ | Serilog 4.4.0 + Serilog.Sinks.File 7.0.0 |
+| 原則の表示 | Markdig 1.4.0（`docs/TAGGING_POLICY.md` を画面で読むため） |
 | テスト | xUnit 2.9.3 + coverlet.collector 6.0.4 |
 
 .NET 8 / .NET 9 は 2026-11-10 にサポート終了のため採用しない。
@@ -214,4 +215,4 @@ MIT License — [LICENSE](LICENSE) を参照。
 dotnet publish src/MusicTagAuditor.App -c Release -r win-x64 --self-contained false -p:PublishSingleFile=false
 ```
 
-Serilog は Apache-2.0、CommunityToolkit.Mvvm と Microsoft.Extensions.DependencyInjection は MIT。詳細は [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) を参照。
+Serilog は Apache-2.0、CommunityToolkit.Mvvm と Microsoft.Extensions.DependencyInjection は MIT、Markdig は BSD-2-Clause。詳細は [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) を参照。

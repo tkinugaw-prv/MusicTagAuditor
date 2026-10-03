@@ -261,6 +261,14 @@
                    FontSize="11.5"
                    Foreground="{StaticResource TextSecondaryBrush}"
                    Text="タグ検査・編集" />
+        <!--
+          原則はどのタブからも引くので、タブの中ではなくタイトルバーに置く（docs/SPEC.md 5.5）。
+        -->
+        <Button DockPanel.Dock="Right"
+                Content="タグ付け原則"
+                Style="{StaticResource SmallOutlineButtonStyle}"
+                ToolTip="タグ付けの原則（TAGGING_POLICY）を別ウィンドウで開きます"
+                Click="OnOpenPolicy" />
         <TextBlock Text="" />
       </DockPanel>
     </Border>

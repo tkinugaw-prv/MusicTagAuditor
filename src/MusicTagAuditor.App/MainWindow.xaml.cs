@@ -39,6 +39,14 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// タグ付け原則のウィンドウを開く。ライブラリの状態に関わらず読めるため、ビューモデルを経由しない。
+    /// </summary>
+    private void OnOpenPolicy(object sender, RoutedEventArgs e)
+    {
+        PolicyWindow.ShowShared(this);
+    }
+
+    /// <summary>
     /// ツリーの選択変更をビューモデルへ渡す。
     /// TreeView.SelectedItem は読み取り専用でバインドできないため、コードビハインドで中継する。
     /// </summary>
