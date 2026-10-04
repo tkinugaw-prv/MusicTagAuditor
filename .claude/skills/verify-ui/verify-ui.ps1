@@ -260,26 +260,63 @@ function Split-Argument {
 
     **クラス名も返す。** ネイティブの MessageBox（#32770）と自前の Window では
     中身の読み方が違うので、ここで見分けて先を分ける。
+
+    **所有者のあるウィンドウ（ダイアログ）を先に返す。** タグ付け原則のような所有者の無い
+    モードレスのウィンドウは開いたまま残る。列挙順で最初の 1 つを返していた頃は、
+    それが先に返ると本物のダイアログを見逃し、dialog: が原則ウィンドウを掴んだり、
+    終了前の「開いたまま」判定をすり抜けて強制終了に入ったりした。
+    所有者の無いウィンドウは -OwnedOnly で外せる。-Exclude に渡したものも返さない
+    （押す前から開いていたものを、押して開いたと読み違えないため）。
 #>
 function Find-Dialog {
-    param($Process, [int]$TimeoutSeconds = 10)
+    param($Process, [int]$TimeoutSeconds = 10, [switch]$OwnedOnly, [IntPtr[]]$Exclude = @())
 
     for ($waited = 0; $waited -lt $TimeoutSeconds; $waited++) {
+        $unowned = $null
+
         foreach ($window in [NativeWindow]::VisibleWindows([uint32]$Process.Id)) {
-            if ($window.Key -ne $Process.MainWindowHandle) {
-                $className = [NativeWindow]::ClassNameOf($window.Key)
-                return [pscustomobject]@{
-                    Handle    = $window.Key
-                    Title     = $window.Value
-                    ClassName = $className
-                    IsNative  = ($className -eq '#32770')
-                }
+            if ($window.Key -eq $Process.MainWindowHandle) { continue }
+
+            if ([NativeWindow]::HasOwner($window.Key)) {
+                return ConvertTo-DialogInfo -Window $window
+            }
+
+            if ($null -eq $unowned -and -not $OwnedOnly -and $Exclude -notcontains $window.Key) {
+                $unowned = $window
             }
         }
+
+        if ($null -ne $unowned) { return ConvertTo-DialogInfo -Window $unowned }
+
         Start-Sleep -Seconds 1
     }
 
     return $null
+}
+
+function ConvertTo-DialogInfo {
+    # Find-Dialog が返す形にする。
+    param($Window)
+
+    $className = [NativeWindow]::ClassNameOf($Window.Key)
+
+    return [pscustomobject]@{
+        Handle    = $Window.Key
+        Title     = $Window.Value
+        ClassName = $className
+        IsNative  = ($className -eq '#32770')
+    }
+}
+
+function Get-UnownedWindows {
+    # メイン以外の、所有者の無い可視ウィンドウの HWND を並べる。
+    param($Process)
+
+    return @(
+        [NativeWindow]::VisibleWindows([uint32]$Process.Id) |
+            Where-Object { $_.Key -ne $Process.MainWindowHandle -and -not [NativeWindow]::HasOwner($_.Key) } |
+            ForEach-Object { $_.Key }
+    )
 }
 
 <#
@@ -533,13 +570,15 @@ try {
             'click' {
                 $button = Find-Element -Root $root -ControlType ([System.Windows.Automation.ControlType]::Button) -Name $argument
                 if (-not $button.Current.IsEnabled) { throw "ボタン '$argument' が無効になっている" }
+                $openBefore = Get-UnownedWindows -Process $process
                 $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
                 Start-Sleep -Seconds $ActionWaitSeconds
                 "押した: $argument"
 
                 # **ダイアログが開いたら黙って進まない。** 開いたことに気づかないまま
                 # 次の手順へ行くと、メインウィンドウを撮り続けて「何も起きない」ように見える。
-                $dialog = Find-Dialog -Process $process -TimeoutSeconds 3
+                # 所有者の無いウィンドウは、押して新しく開いたものだけを拾う（原則ウィンドウを開くボタン）。
+                $dialog = Find-Dialog -Process $process -TimeoutSeconds 3 -Exclude $openBefore
                 if ($null -ne $dialog) {
                     "ダイアログが開いた: $($dialog.Title)"
                     "撮影: $(Save-WindowImage -Handle $dialog.Handle -Label "dialog-$($dialog.Title)")"
@@ -554,7 +593,8 @@ try {
             }
 
             'dialog' {
-                $dialog = Find-Dialog -Process $process -TimeoutSeconds 10
+                # 押すボタンを持つのはダイアログだけ。原則ウィンドウを掴まないよう所有者の無いものは外す。
+                $dialog = Find-Dialog -Process $process -TimeoutSeconds 10 -OwnedOnly
                 if ($null -eq $dialog) { throw "ダイアログが開いていないのに 'dialog:$argument' が来た" }
 
                 # ネイティブの MessageBox と自前の Window では押し方が違う。理由は
@@ -626,8 +666,7 @@ try {
     # **開いたままのダイアログを残さない。** CloseMainWindow が効かず、強制終了になる。
     # 所有者の無いウィンドウ（タグ付け原則のようなモードレスの別ウィンドウ）は除く。
     # メイン画面と一緒に閉じる作りなので、CloseMainWindow で片付く。
-    $stray = Find-Dialog -Process $process -TimeoutSeconds 1
-    if ($null -ne $stray -and -not [NativeWindow]::HasOwner($stray.Handle)) { $stray = $null }
+    $stray = Find-Dialog -Process $process -TimeoutSeconds 1 -OwnedOnly
     if ($null -ne $stray) { throw "ダイアログ '$($stray.Title)' が開いたままになっている。dialog: で閉じる" }
 
     $process.CloseMainWindow() | Out-Null
