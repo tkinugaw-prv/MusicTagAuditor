@@ -818,7 +818,8 @@ public sealed partial class MainViewModel : ObservableObject
                 .ApplyAsync(LibraryRoot, [.. RestoreItems], progress)
                 .ConfigureAwait(true);
 
-            StatusText = BuildRestoreResultText(result);
+            string resultText = BuildRestoreResultText(result);
+            StatusText = resultText;
 
             Log.Information(
                 "復元完了 対象={Attempted} 成功={Succeeded} 項目={Items} 失敗={Failures} 不一致={Mismatches}",
@@ -843,6 +844,9 @@ public sealed partial class MainViewModel : ObservableObject
             RefreshBackups();
 
             await ScanAsync().ConfigureAwait(true);
+
+            // 不一致は必ず知らせる。読み直しの文言に上書きさせない。
+            KeepResultInStatus(resultText);
         }
         catch (Exception ex)
         {
@@ -1912,11 +1916,37 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
+        await ApplyConfirmedManualEditsAsync(targets).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// 確認の済んだ手編集を書き込み、読み直す。
+    ///
+    /// 確認ダイアログ（<c>MessageBox.Show</c>）を経由する <see cref="ApplyManualEditsCommand"/> は
+    /// 自動テストで実行できないため、確認より後ろをここに切り出してある。
+    ///
+    /// **適用が例外で終わったら、保留中の編集を残して読み直さない。** 読み直しは
+    /// <see cref="ScanAsync"/> 経由で編集を捨てるため、以前は保存先に書けないだけで
+    /// 入力した編集が黙って消え、失敗の文言もスキャン結果の文言に上書きされていた。
+    /// <see cref="ApplyService.ApplyAsync"/> はファイル単位の失敗を結果に積んで返すので、
+    /// 例外で抜けるのは書き込みより前（スナップショットの取得など）に限られ、
+    /// ファイルは 1 つも書き換わっていない。読み直す必要も無い。
+    /// </summary>
+    /// <param name="targets">書き込む手編集。</param>
+    internal async Task ApplyConfirmedManualEditsAsync(IReadOnlyList<TagChange> targets)
+    {
+        if (_lastScan is null)
+        {
+            return;
+        }
+
         IsScanning = true;
         ApplyIssues.Clear();
         ProgressValue = 0;
         ProgressMaximum = 1;
         StatusText = "手編集を適用しています…";
+
+        string resultText;
 
         try
         {
@@ -1930,22 +1960,25 @@ public sealed partial class MainViewModel : ObservableObject
                 .ApplyAsync(
                     _lastScan,
                     targets,
-                    note: $"手編集の適用前（{targets.Length} 項目）",
+                    note: $"手編集の適用前（{targets.Count} 項目）",
                     portableLibraryPath: TagWriter.GetPortableLibraryPath(),
                     progress: progress)
                 .ConfigureAwait(true);
 
             ShowApplyResult(result);
+            resultText = StatusText;
 
-            Log.Information("手編集を適用した 項目={Count}", targets.Length);
+            Log.Information("手編集を適用した 項目={Count}", targets.Count);
 
             // 書き込みが済んだので保留分は役目を終える。残すと二重に適用しかねない。
             _manualEdits.Clear();
         }
         catch (Exception ex)
         {
-            StatusText = $"手編集の適用に失敗しました: {ex.Message}";
+            StatusText = $"手編集の適用に失敗しました: {ex.Message}"
+                + " 保留中の編集はそのまま残しています。";
             Log.Error(ex, "手編集の適用に失敗した root={Root}", LibraryRoot);
+            return;
         }
         finally
         {
@@ -1953,7 +1986,21 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         await ScanAsync().ConfigureAwait(true);
+        KeepResultInStatus(resultText);
         RefreshBackups();
+    }
+
+    /// <summary>
+    /// 適用・復元の結果を、直後の読み直しの文言の前に戻す。
+    ///
+    /// 読み直しは完了時に件数の文言で <see cref="StatusText"/> を上書きする。そのままだと、
+    /// 失敗や読み戻し不一致の知らせが一瞬で消えてログにしか残らない。
+    /// 読み直しの文言も捨てない。読み直しに失敗した場合は、その知らせも要るため。
+    /// </summary>
+    /// <param name="resultText">適用・復元の結果の文言。</param>
+    private void KeepResultInStatus(string resultText)
+    {
+        StatusText = resultText + " ／ " + StatusText;
     }
 
     /// <summary>
