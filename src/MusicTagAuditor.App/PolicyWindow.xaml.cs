@@ -254,9 +254,20 @@ public partial class PolicyWindow : Window, INotifyPropertyChanged
 
     /// <summary>
     /// Ctrl+F で検索欄へ移る。
+    ///
+    /// **ApplicationCommands.Find の結び付けでは受けない。** FlowDocumentScrollViewer は Ctrl+F に
+    /// 自前の検索バーを結び付けており、本文にフォーカスがあるとそちらが開く（2026-10-04 に利用者が発見）。
+    /// コマンドの PreviewExecuted で横取りする案は、Executed を持たない CommandBinding が
+    /// 実行不可と判定されて一切動かなかった。キーをトンネルの段階で直接受け止める。
     /// </summary>
-    private void OnFindCommand(object sender, ExecutedRoutedEventArgs e)
+    private void OnWindowPreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key != Key.F || Keyboard.Modifiers != ModifierKeys.Control)
+        {
+            return;
+        }
+
+        e.Handled = true;
         SearchBox.Focus();
         SearchBox.SelectAll();
     }

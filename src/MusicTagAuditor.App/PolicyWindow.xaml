@@ -8,7 +8,8 @@
         Background="{StaticResource BgOuterBrush}"
         FontFamily="{StaticResource AppFontFamily}"
         FontSize="13"
-        WindowStartupLocation="CenterScreen">
+        WindowStartupLocation="CenterScreen"
+        PreviewKeyDown="OnWindowPreviewKeyDown">
 
   <!--
     モードレスで開く（docs/SPEC.md 5.5）。検査結果や辞書の画面と並べて読むためのもので、
@@ -17,13 +18,6 @@
   <Window.Resources>
     <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
   </Window.Resources>
-
-  <Window.InputBindings>
-    <KeyBinding Key="F" Modifiers="Control" Command="{x:Static ApplicationCommands.Find}" />
-  </Window.InputBindings>
-  <Window.CommandBindings>
-    <CommandBinding Command="{x:Static ApplicationCommands.Find}" Executed="OnFindCommand" />
-  </Window.CommandBindings>
 
   <DockPanel>
 
