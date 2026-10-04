@@ -1,4 +1,8 @@
 using System.Diagnostics;
+using System.Globalization;
+using System.Reflection;
+using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using MusicTagAuditor.Core.Backup;
 using MusicTagAuditor.Core.Models;
 using MusicTagAuditor.Core.Scanning;
@@ -298,6 +302,172 @@ public sealed class RestoreScriptTests : IDisposable
 
         Assert.Equal([PROTECTED_VALUE], restored.GetValues(TagField.AlbumArtist));
         Assert.False(restored.HasMultipleValues(TagField.AlbumArtist));
+    }
+
+    /// <summary>
+    /// スナップショットの後に入った値を、スクリプトが空に戻すことを確認する。
+    ///
+    /// スナップショットは空のフィールドをキーごと省く。以前のスクリプトはキーのあるフィールドしか
+    /// 回さなかったため、genre の補完や指揮者の手編集で埋めた値が残り、
+    /// アプリの復元（<see cref="RestoreService.BuildPlan"/>）と結果が食い違っていた。
+    /// </summary>
+    [PowerShellFact]
+    public async Task RemovesValuesAddedAfterTheSnapshot()
+    {
+        string[] fileNames = ["01.m4a", "02.flac", "03.mp3", "04.aif"];
+
+        foreach (string fileName in fileNames)
+        {
+            CreateFile(fileName);
+            _writer.Write(Path.Combine(_root, fileName), new Dictionary<TagField, IReadOnlyList<string>>
+            {
+                [TagField.Composer] = ["Anton Bruckner"],
+            });
+        }
+
+        string backupDirectory = await CreateSnapshotAsync();
+
+        foreach (string fileName in fileNames)
+        {
+            Dictionary<TagField, IReadOnlyList<string>> added = new()
+            {
+                [TagField.Conductor] = ["Günter Wand"],
+                [TagField.Genre] = ["Classic"],
+                [TagField.TrackNumber] = ["3/9"],
+            };
+
+            // ID3 は comment を扱わない（docs/TAGGING_POLICY.md 4.4）。
+            if (Path.GetExtension(fileName) is ".m4a" or ".flac")
+            {
+                added[TagField.Comment] = ["ハース版"];
+            }
+
+            _writer.Write(Path.Combine(_root, fileName), added);
+        }
+
+        (int exitCode, string output) = RunRestoreScript(backupDirectory, dryRun: false);
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains("復元 4 件", output, StringComparison.Ordinal);
+
+        foreach (string fileName in fileNames)
+        {
+            TrackTags restored = _reader.Read(Path.Combine(_root, fileName), fileName);
+
+            Assert.Equal("Anton Bruckner", restored.Composer);
+            Assert.Null(restored.Conductor);
+            Assert.Null(restored.Genre);
+            Assert.Null(restored.TrackNumber);
+            Assert.Null(restored.Comment);
+        }
+    }
+
+    /// <summary>
+    /// そのフィールドを記録していなかった版のスナップショットからは、今入っている値を消さないことを確認する。
+    /// 版 1 は comment を記録していない。キーが無いのは「空だった」からとは限らない。
+    /// </summary>
+    [PowerShellFact]
+    public async Task KeepsFieldsTheOldSchemaDidNotRecord()
+    {
+        CreateFile("01.m4a");
+        string fullPath = Path.Combine(_root, "01.m4a");
+
+        _writer.Write(fullPath, new Dictionary<TagField, IReadOnlyList<string>>
+        {
+            [TagField.Composer] = ["Anton Bruckner"],
+        });
+
+        string backupDirectory = await CreateSnapshotAsync();
+        RewriteSchemaVersion(backupDirectory, BackupConst.SCHEMA_VERSION_WITH_COMMENT - 1);
+
+        _writer.Write(fullPath, new Dictionary<TagField, IReadOnlyList<string>>
+        {
+            [TagField.Comment] = ["ハース版"],
+            [TagField.Genre] = ["Classic"],
+        });
+
+        (int exitCode, _) = RunRestoreScript(backupDirectory, dryRun: false);
+
+        Assert.Equal(0, exitCode);
+
+        TrackTags restored = _reader.Read(fullPath, "01.m4a");
+
+        Assert.Equal("ハース版", restored.Comment);
+
+        // 版 1 でも記録していたフィールドは、これまでどおり空に戻る。
+        Assert.Null(restored.Genre);
+    }
+
+    /// <summary>
+    /// スクリプトが持つフィールドの表が、アプリの定義と一致することを確認する。
+    ///
+    /// スクリプトは単体で動く必要があるので、<see cref="TagField"/> と
+    /// <see cref="BackupConst.IsFieldRecorded"/> の表を写して持っている。
+    /// フィールドや版を足したときにスクリプトだけ取り残されると、そのフィールドは復元されないか、
+    /// 古い版から戻したときに今の値を消す。pwsh が無くても検出できるよう、本文を読んで比べる。
+    /// </summary>
+    [Fact]
+    public void ScriptFieldTablesMatchTheApplication()
+    {
+        string script = ReadEmbeddedScript();
+
+        Match fieldBlock = Regex.Match(script, @"\$ALL_FIELDS = @\((?<body>[^)]*)\)");
+        Assert.True(fieldBlock.Success, "スクリプトに $ALL_FIELDS が見つかりません");
+
+        string[] scriptFields = [.. Regex.Matches(fieldBlock.Groups["body"].Value, "'(?<name>[A-Za-z]+)'")
+            .Select(match => match.Groups["name"].Value)];
+
+        Assert.Equal(Enum.GetNames<TagField>(), scriptFields);
+
+        Match versionBlock = Regex.Match(script, @"\$FIRST_VERSION_BY_FIELD = @\{(?<body>[^}]*)\}");
+        Assert.True(versionBlock.Success, "スクリプトに $FIRST_VERSION_BY_FIELD が見つかりません");
+
+        Dictionary<string, int> scriptVersions = Regex.Matches(versionBlock.Groups["body"].Value, @"(?<name>[A-Za-z]+)\s*=\s*(?<version>\d+)")
+            .ToDictionary(
+                match => match.Groups["name"].Value,
+                match => int.Parse(match.Groups["version"].Value, CultureInfo.InvariantCulture));
+
+        // 本体の表は非公開なので、版ごとの判定結果で比べる。
+        foreach (TagField field in Enum.GetValues<TagField>())
+        {
+            for (int version = 1; version <= BackupConst.SCHEMA_VERSION; version++)
+            {
+                bool scriptRecorded = !scriptVersions.TryGetValue(field.ToString(), out int firstVersion)
+                    || version >= firstVersion;
+
+                Assert.True(
+                    BackupConst.IsFieldRecorded(version, field) == scriptRecorded,
+                    $"{field} の版 {version} での扱いがスクリプトと本体で食い違っています");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 本体に埋め込まれた復元スクリプトを読む。バックアップへ書き出されるのと同じ本文。
+    /// </summary>
+    private static string ReadEmbeddedScript()
+    {
+        Assembly assembly = typeof(SnapshotService).Assembly;
+
+        string resourceName = assembly.GetManifestResourceNames()
+            .Single(name => name.EndsWith(BackupConst.RESTORE_SCRIPT_FILE_NAME, StringComparison.Ordinal));
+
+        using Stream stream = assembly.GetManifestResourceStream(resourceName)!;
+        using StreamReader reader = new(stream);
+
+        return reader.ReadToEnd();
+    }
+
+    /// <summary>
+    /// スナップショットのスキーマ版を書き換える。古い版で取ったバックアップを再現するために使う。
+    /// </summary>
+    private static void RewriteSchemaVersion(string backupDirectory, int version)
+    {
+        string snapshotPath = Path.Combine(backupDirectory, BackupConst.SNAPSHOT_FILE_NAME);
+
+        JsonNode snapshot = JsonNode.Parse(File.ReadAllText(snapshotPath))!;
+        snapshot["version"] = version;
+        File.WriteAllText(snapshotPath, snapshot.ToJsonString());
     }
 
     /// <summary>
