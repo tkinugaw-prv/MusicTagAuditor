@@ -16,6 +16,14 @@ public interface IInspectionRule
     /// <summary>一覧に出す説明。</summary>
     string Description { get; }
 
+    /// <summary>
+    /// 根拠となるタグ付け原則の箇所。1 つ以上を持つ（docs/SPEC.md 6.1 の「根拠」列）。
+    ///
+    /// **既定の実装を持たせない。** ルールを足したときに根拠を書き忘れると、コンパイルが通らない。
+    /// 原則に根拠が無いルールは、先に原則を改訂する（CLAUDE.md）。
+    /// </summary>
+    IReadOnlyList<PolicyBasis> PolicyBases { get; }
+
     /// <summary>既定で有効かどうか。誤検出が多いものは無効にしておく。</summary>
     bool IsEnabledByDefault => true;
 

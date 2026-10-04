@@ -26,6 +26,9 @@ public sealed class TypoRule : IInspectionRule
     public string Description => "楽語・人名の typo";
 
     /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("5.4")];
+
+    /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
     {
         foreach (TrackTags track in context.Tracks)
@@ -79,6 +82,9 @@ public sealed class TitleContainsExtensionRule : IInspectionRule
     public string Description => "title に拡張子が含まれる";
 
     /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("3.6", 1)];
+
+    /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
     {
         foreach (TrackTags track in context.Tracks)
@@ -126,6 +132,9 @@ public sealed class PlaceholderTitleRule : IInspectionRule
 
     /// <inheritdoc />
     public string Description => "title がプレースホルダ";
+
+    /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("3.6", 2)];
 
     /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
@@ -188,6 +197,9 @@ public sealed class DiacriticMissingRule : IInspectionRule
 
     /// <inheritdoc />
     public string Description => "曲名中の発音区別符号の欠落";
+
+    /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("6.3")];
 
     /// <inheritdoc />
     public bool IsEnabledByDefault => false;

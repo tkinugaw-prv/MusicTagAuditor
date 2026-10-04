@@ -29,6 +29,9 @@ public sealed class AlbumNameRule : IInspectionRule
     public string Description => "album が「作曲家: 作品名 - 年/演奏者」形式と不一致";
 
     /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("3.5")];
+
+    /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
     {
         foreach (AlbumUnit unit in context.Units)
@@ -285,6 +288,9 @@ public sealed class AlbumNameCollisionRule : IInspectionRule
     public string Description => "同一アルバム名に複数の作曲家／演奏者が混在";
 
     /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("3.5", 5), new("3.5", 6)];
+
+    /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
     {
         var byAlbum = context.Tracks
@@ -391,6 +397,9 @@ public sealed class JapaneseAlbumNameRule : IInspectionRule
     public string Description => "アルバム名が日本語";
 
     /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("3.5")];
+
+    /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
     {
         foreach (TrackTags track in context.Tracks)
@@ -462,6 +471,9 @@ public sealed class MovementNumberStyleRule : IInspectionRule
 
     /// <inheritdoc />
     public string Description => "楽章番号の書式がフォルダ内で不統一";
+
+    /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("6.2")];
 
     /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)

@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
 using MusicTagAuditor.App.Policy;
+using MusicTagAuditor.Core.Inspection;
 
 namespace MusicTagAuditor.App.Controls;
 
@@ -13,9 +14,30 @@ namespace MusicTagAuditor.App.Controls;
 ///
 /// <c>Text</c> の代わりに <c>ctl:PolicyText.Text</c> を指定する。参照を押すと原則ウィンドウが
 /// その箇所を開く。文言そのものは変えないので、参照が無い文言はそのまま出る。
+///
+/// ルール ID を並べる欄には <c>ctl:PolicyText.RuleIds</c> を使う。ID の後ろに、そのルールの
+/// 根拠の節をリンクで添える（docs/SPEC.md 5.5.2）。
 /// </summary>
 public static class PolicyText
 {
+    /// <summary>ルール ID から根拠を引く表。ルールの定義は起動中に変わらないので 1 度だけ作る。</summary>
+    private static readonly Lazy<IReadOnlyDictionary<string, IReadOnlyList<PolicyBasis>>> BASES_BY_RULE_ID = new(
+        () => InspectionEngine.CreateDefaultRules().ToDictionary(rule => rule.Id, rule => rule.PolicyBases, StringComparer.Ordinal));
+
+    /// <summary>ルール ID と根拠の間の空き。</summary>
+    private const string ID_BASIS_GAP = "  ";
+
+    /// <summary>ルールが複数並ぶときの区切り。</summary>
+    private const string RULE_SEPARATOR = "   ";
+
+    /// <summary>表示するルール ID。1 つなら文字列、複数なら文字列の列。</summary>
+    public static readonly DependencyProperty RuleIdsProperty =
+        DependencyProperty.RegisterAttached(
+            "RuleIds",
+            typeof(object),
+            typeof(PolicyText),
+            new PropertyMetadata(null, OnRuleIdsChanged));
+
     /// <summary>表示する文言。</summary>
     public static readonly DependencyProperty TextProperty =
         DependencyProperty.RegisterAttached(
@@ -46,6 +68,105 @@ public static class PolicyText
         ArgumentNullException.ThrowIfNull(element);
 
         element.SetValue(TextProperty, value);
+    }
+
+    /// <summary>
+    /// 表示するルール ID を取得する。
+    /// </summary>
+    /// <param name="element">対象の要素。</param>
+    /// <returns>ルール ID。</returns>
+    public static object? GetRuleIds(DependencyObject element)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+
+        return element.GetValue(RuleIdsProperty);
+    }
+
+    /// <summary>
+    /// 表示するルール ID を設定する。
+    /// </summary>
+    /// <param name="element">対象の要素。</param>
+    /// <param name="value">ルール ID。1 つなら文字列、複数なら文字列の列。</param>
+    public static void SetRuleIds(DependencyObject element, object? value)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+
+        element.SetValue(RuleIdsProperty, value);
+    }
+
+    /// <summary>
+    /// ルール ID の根拠を引く。表に無い ID（手編集など）は空を返す。
+    /// </summary>
+    /// <param name="ruleId">ルール ID。</param>
+    /// <returns>根拠。</returns>
+    public static IReadOnlyList<PolicyBasis> GetBases(string ruleId)
+    {
+        ArgumentNullException.ThrowIfNull(ruleId);
+
+        return BASES_BY_RULE_ID.Value.TryGetValue(ruleId, out IReadOnlyList<PolicyBasis>? bases) ? bases : [];
+    }
+
+    /// <summary>
+    /// ルール ID が変わったら、ID と根拠のリンクを並べ直す。
+    ///
+    /// 同じ節の規則は「3.5 規則5・規則6」のように節番号を 1 度だけ書き、規則ごとにリンクを分ける。
+    /// 根拠が複数の節にわたるルールは「5.2 / 5.3」のように節ごとにリンクを分ける。
+    /// </summary>
+    private static void OnRuleIdsChanged(DependencyObject element, DependencyPropertyChangedEventArgs e)
+    {
+        if (element is not TextBlock textBlock)
+        {
+            return;
+        }
+
+        textBlock.Inlines.Clear();
+
+        string[] ruleIds = e.NewValue switch
+        {
+            string single => [single],
+            IEnumerable<string> many => [.. many],
+            _ => [],
+        };
+
+        for (int index = 0; index < ruleIds.Length; index++)
+        {
+            if (index > 0)
+            {
+                textBlock.Inlines.Add(new Run(RULE_SEPARATOR));
+            }
+
+            textBlock.Inlines.Add(new Run(ruleIds[index]));
+
+            IReadOnlyList<PolicyBasis> bases = GetBases(ruleIds[index]);
+
+            if (bases.Count > 0)
+            {
+                textBlock.Inlines.Add(new Run(ID_BASIS_GAP));
+                AddBasisLinks(textBlock, bases);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 根拠をリンクにして足す。
+    /// </summary>
+    private static void AddBasisLinks(TextBlock textBlock, IReadOnlyList<PolicyBasis> bases)
+    {
+        string? previousSection = null;
+
+        foreach (PolicyBasis basis in bases)
+        {
+            bool sameSection = basis.Section == previousSection && basis.Rule is not null;
+
+            if (previousSection is not null)
+            {
+                textBlock.Inlines.Add(new Run(sameSection ? "・" : " / "));
+            }
+
+            string label = sameSection ? $"規則{basis.Rule}" : basis.ToString();
+            textBlock.Inlines.Add(CreateLink(textBlock, label, new PolicyReference(basis.Section, basis.Rule)));
+            previousSection = basis.Section;
+        }
     }
 
     /// <summary>

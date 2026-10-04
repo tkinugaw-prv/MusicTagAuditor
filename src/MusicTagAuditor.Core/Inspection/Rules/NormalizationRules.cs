@@ -16,6 +16,9 @@ public sealed class ComposerNotCanonicalRule : IInspectionRule
     public string Description => "composer が辞書の正規形と不一致";
 
     /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("5.1")];
+
+    /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
     {
         foreach (TrackTags track in context.Tracks)
@@ -75,6 +78,9 @@ public sealed class PerformerNotCanonicalRule : IInspectionRule
 
     /// <inheritdoc />
     public string Description => "artist / conductor / albumartist が辞書の正規形と不一致";
+
+    /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("5.2"), new("5.3")];
 
     /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
@@ -174,6 +180,9 @@ public sealed class EnsembleEraRule : IInspectionRule
 
     /// <inheritdoc />
     public string Description => "albumartist が収録時点の団体名と不一致";
+
+    /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("3.1.2", 3)];
 
     /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
