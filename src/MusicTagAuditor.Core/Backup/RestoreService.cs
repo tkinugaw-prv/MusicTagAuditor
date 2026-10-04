@@ -8,7 +8,7 @@ namespace MusicTagAuditor.Core.Backup;
 /// スナップショットからタグを復元する。
 ///
 /// **書き込んだあと必ず読み戻して照合する。** 書き込みの成功と、意図した値が入っていることは別である
-/// （docs/TAGGING_POLICY.md 7.3 / docs/SPEC.md 9章）。
+/// （docs/TAGGING_POLICY.md 7章 原則3 / docs/SPEC.md 9章）。
 /// </summary>
 public sealed class RestoreService
 {

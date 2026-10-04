@@ -111,7 +111,7 @@ public sealed class ApplyServiceTests : IDisposable
 
     /// <summary>
     /// 修正値を持たない項目は、チェックされていても書き込まないことを確認する。
-    /// 「確信が持てない項目は書き換えない」（docs/TAGGING_POLICY.md 7.4）。
+    /// 「確信が持てない項目は書き換えない」（docs/TAGGING_POLICY.md 7章 原則4）。
     /// </summary>
     [Fact]
     public async Task SkipsChangesWithoutFixEvenWhenSelected()
@@ -314,7 +314,7 @@ public sealed class ApplyServiceTests : IDisposable
     /// 手編集で値を消す指示が書き込まれることを確認する。
     ///
     /// 修正案が空であること（ルールの「決められなかった」）と、削除の指示は別物である。
-    /// 空欄にするのは原則が認める操作（docs/TAGGING_POLICY.md 7.4）。
+    /// 空欄にするのは原則が認める操作（docs/TAGGING_POLICY.md 7章 原則4）。
     /// </summary>
     [Fact]
     public async Task AppliesManualClear()

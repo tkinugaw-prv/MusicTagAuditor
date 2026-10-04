@@ -492,7 +492,7 @@ V1 が不一致だった場合の対処案:
 | `HOLD_DATE_UNKNOWN` | `date` が未設定、または単位内で値が割れている（3.5 規則2） | `date` を埋める。**割れている場合は単位の切り方を先に疑う** |
 | `HOLD_ARTIST_UNKNOWN` | `artist` が単位内で一意に決まらない | `artist` を直す（R-203 / R-402 と同じ母集団） |
 
-`HOLD_ERA_UNKNOWN`（`TAGGING_POLICY.md` 7.5 の団体名）と同じ仕組みに乗せる。
+`HOLD_ERA_UNKNOWN`（`TAGGING_POLICY.md` 7章 原則5 の団体名）と同じ仕組みに乗せる。
 
 **保留の根拠には、次にどの画面で何をするのかまで書く**（2026-08-15 追加）。保留の理由だけを書くと、利用者は手近な導線を試すしかない。`HOLD_ARTIST_UNKNOWN` は**個別例外では解けない**（`albumOverrides` に `artist` は無い）にもかかわらず、「このアルバムの扱いを決める」で対象外にすれば一覧からは消える。それはタグが割れたまま消えるだけで、規則2 の保留を規則6 で握り潰すことになる。
 
@@ -620,7 +620,7 @@ V1 が不一致だった場合の対処案:
 
 ⚠ を含めるのは、該当する R-102 / R-103 / R-104 がいずれも修正値を一意に決められるため。genre は必ず `Classic`、単一ディスクなら `1/1`、ISO 形式からは年を抽出できる。
 
-**重大度が ⛔ でも、修正値を決められなければチェックしない。** R-203 は 162 件検出しても指揮者を特定できたのは 34 件だけで、残りは一覧に出すに留める（`TAGGING_POLICY.md` 7.4）。
+**重大度が ⛔ でも、修正値を決められなければチェックしない。** R-203 は 162 件検出しても指揮者を特定できたのは 34 件だけで、残りは一覧に出すに留める（`TAGGING_POLICY.md` 7章 原則4）。
 
 ---
 
@@ -647,7 +647,7 @@ enum Severity { Error, Warning, Info, Manual }
     // 独立区分で、原則違反の重さを持たない
 
 enum HoldReason { None, EraUnknown, WorkUnknown, DateUnknown, ArtistUnknown }
-    // 修正を保留する理由。重大度の3段階とは別軸（TAGGING_POLICY.md 7.5）。
+    // 修正を保留する理由。重大度の3段階とは別軸（TAGGING_POLICY.md 7章 原則5）。
     // EraUnknown は date が未設定で収録時点の団体名を決められない状態（HOLD_ERA_UNKNOWN）。
     // date が埋まれば自動的に再判定できる
     // WorkUnknown / DateUnknown / ArtistUnknown はアルバム名（R-504）の保留（7.4.4）。
