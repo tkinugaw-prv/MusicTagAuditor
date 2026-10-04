@@ -20,6 +20,9 @@ public sealed class ComposerMissingRule : IInspectionRule
     public string Description => "composer 未設定";
 
     /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("2.1")];
+
+    /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
     {
         foreach (TrackTags track in context.Tracks)
@@ -77,6 +80,9 @@ public sealed class ConductorMissingRule : IInspectionRule
 
     /// <inheritdoc />
     public string Description => "conductor 未設定";
+
+    /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("2.2")];
 
     /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
@@ -180,6 +186,9 @@ public sealed class MojibakeRule : IInspectionRule
 
     /// <inheritdoc />
     public string Description => "文字化け（Shift-JIS の誤解釈）";
+
+    /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("6.6")];
 
     /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)

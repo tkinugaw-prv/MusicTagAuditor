@@ -444,8 +444,16 @@
                                           EditingElementStyle="{StaticResource RuleApplyCheckBoxStyle}" />
                   <DataGridTemplateColumn Header="重大度" CellTemplate="{StaticResource SeverityBadge}"
                                           IsReadOnly="True" Width="80" SortMemberPath="Severity" />
-                  <DataGridTextColumn Header="ID" Binding="{Binding RuleId}" IsReadOnly="True" Width="70"
-                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                  <!-- ID の後ろに根拠の節をリンクで添える（docs/SPEC.md 5.5.2）。並べ替えとコピーは ID の文字列で行う -->
+                  <DataGridTemplateColumn Header="ID / 根拠" IsReadOnly="True" Width="170"
+                                          SortMemberPath="RuleId"
+                                          ClipboardContentBinding="{Binding RuleId}">
+                    <DataGridTemplateColumn.CellTemplate>
+                      <DataTemplate>
+                        <TextBlock Style="{StaticResource EllipsisTextStyle}" ctl:PolicyText.RuleIds="{Binding RuleId}" />
+                      </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                  </DataGridTemplateColumn>
                   <!-- 件数は ID の隣にまとめる。「内容」の後ろに置くと右端まで目線が飛ぶ -->
                   <DataGridTextColumn Header="検出" Binding="{Binding Count, StringFormat=N0}" IsReadOnly="True" Width="70"
                                       ElementStyle="{StaticResource NumericCell}"
@@ -642,8 +650,16 @@
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
                   <DataGridTextColumn Header="フィールド" Binding="{Binding FieldsText}" Width="150"
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
-                  <DataGridTextColumn Header="ルール" Binding="{Binding RuleIdsText}" Width="80"
-                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                  <!-- ルールごとに根拠の節をリンクで添える（docs/SPEC.md 5.5.2） -->
+                  <DataGridTemplateColumn Header="ルール / 根拠" IsReadOnly="True" Width="220"
+                                          SortMemberPath="RuleIdsText"
+                                          ClipboardContentBinding="{Binding RuleIdsText}">
+                    <DataGridTemplateColumn.CellTemplate>
+                      <DataTemplate>
+                        <TextBlock Style="{StaticResource EllipsisTextStyle}" ctl:PolicyText.RuleIds="{Binding RuleIds}" />
+                      </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                  </DataGridTemplateColumn>
                   <DataGridTextColumn Header="代表ファイル" Binding="{Binding SampleRelativePath}" Width="3*" MinWidth="200"
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
                 </DataGrid.Columns>

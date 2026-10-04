@@ -2,6 +2,7 @@ using System.IO;
 using System.Text.RegularExpressions;
 using System.Windows.Documents;
 using MusicTagAuditor.App.Policy;
+using MusicTagAuditor.Core.Inspection;
 
 namespace MusicTagAuditor.App.Tests.Policy;
 
@@ -38,6 +39,32 @@ public sealed partial class PolicyReferenceTargetTests
 
             Assert.True(checkedCount > 0, "参照が 1 件も見つからない。ソースの探し方が壊れている");
             Assert.True(broken.Count == 0, "開けない参照:\n" + string.Join("\n", broken));
+
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>
+    /// 検査ルールの根拠がすべて原則の見出し（と規則）に行き着くことを確認する（docs/SPEC.md 5.5.2）。
+    /// 原則の節を振り直すと、ルール ID のリンクが黙って開けなくなる。
+    /// </summary>
+    [Fact]
+    public void ルールの根拠はすべて原則に実在する()
+    {
+        DispatcherTestRunner.Run(() =>
+        {
+            PolicyDocument document = PolicyDocument.LoadEmbedded();
+            PolicyRendering rendering = new PolicyFlowDocumentBuilder(null).Build(document);
+
+            string[] broken =
+            [
+                .. InspectionEngine.CreateDefaultRules()
+                    .SelectMany(rule => rule.PolicyBases.Select(basis => (rule.Id, basis)))
+                    .Where(pair => !Resolves(document, rendering, new PolicyReference(pair.basis.Section, pair.basis.Rule)))
+                    .Select(pair => $"{pair.Id}: {pair.basis}"),
+            ];
+
+            Assert.True(broken.Length == 0, "開けない根拠:\n" + string.Join("\n", broken));
 
             return Task.CompletedTask;
         });

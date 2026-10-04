@@ -17,6 +17,9 @@ public sealed class ComposerInArtistRule : IInspectionRule
     public string Description => "artist に作曲家名が入っている";
 
     /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("2.2")];
+
+    /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
     {
         foreach (TrackTags track in context.Tracks)
@@ -67,6 +70,9 @@ public sealed class ComposerInAlbumArtistRule : IInspectionRule
 
     /// <inheritdoc />
     public string Description => "albumartist に作曲家名が入っている";
+
+    /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("2.3")];
 
     /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
@@ -165,6 +171,9 @@ public sealed class ComposerMismatchRule : IInspectionRule
     public string Description => "ファイル名・title・フォルダ名に composer と違う作曲家名が出てくる";
 
     /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("6.9")];
+
+    /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
     {
         foreach (TrackTags track in context.Tracks)
@@ -254,6 +263,9 @@ public sealed class SemicolonValueRule : IInspectionRule
     public string Description => "値に ; が含まれる（AIMP が分割する）";
 
     /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("3.4")];
+
+    /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
     {
         foreach (TrackTags track in context.Tracks)
@@ -300,6 +312,9 @@ public sealed class DuplicateConcatenationRule : IInspectionRule
 
     /// <inheritdoc />
     public string Description => "同一値の重複連結";
+
+    /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("3.4")];
 
     /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
@@ -389,6 +404,9 @@ public sealed class PersonNameFormatRule : IInspectionRule
 
     /// <inheritdoc />
     public string Description => "人名に生没年・「姓, 名」順・全大文字が含まれる";
+
+    /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("3.2")];
 
     /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
@@ -508,6 +526,9 @@ public sealed class JapanesePerformerNameRule : IInspectionRule
 
     /// <inheritdoc />
     public string Description => "日本語表記の人名・団体名";
+
+    /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("3.1")];
 
     /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
