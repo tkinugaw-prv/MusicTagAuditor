@@ -586,8 +586,18 @@
                                         ElementStyle="{StaticResource EllipsisTextStyle}" />
                     <DataGridTextColumn Header="変更後" Binding="{Binding AfterText}" IsReadOnly="True" Width="190"
                                         ElementStyle="{StaticResource EllipsisTextStyle}" />
-                    <DataGridTextColumn Header="根拠" Binding="{Binding Rationale}" IsReadOnly="True" Width="*" MinWidth="460"
-                                        ElementStyle="{StaticResource EllipsisTextStyle}" />
+                    <!-- 根拠に書かれた原則の参照（3.5 規則5 など）をリンクにする（docs/SPEC.md 5.5.1）。
+                         テンプレート列は並べ替えとコピーの対象を持たないので、SortMemberPath と
+                         ClipboardContentBinding で文字列の列と同じ振る舞いに揃える。 -->
+                    <DataGridTemplateColumn Header="根拠" IsReadOnly="True" Width="*" MinWidth="460"
+                                            SortMemberPath="Rationale"
+                                            ClipboardContentBinding="{Binding Rationale}">
+                      <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                          <TextBlock Style="{StaticResource EllipsisTextStyle}" ctl:PolicyText.Text="{Binding Rationale}" />
+                        </DataTemplate>
+                      </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
                   </DataGrid.Columns>
                   </DataGrid>
                 </DockPanel>
@@ -878,7 +888,7 @@
                 </ItemsControl.Template>
                 <ItemsControl.ItemTemplate>
                   <DataTemplate>
-                    <TextBlock Style="{StaticResource NoticeItemTextStyle}" Text="{Binding Summary}" />
+                    <TextBlock Style="{StaticResource NoticeItemTextStyle}" ctl:PolicyText.Text="{Binding Summary}" />
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
@@ -910,8 +920,18 @@
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
                   <DataGridTextColumn Header="変更後" Binding="{Binding AfterText}" IsReadOnly="True" Width="190"
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
-                  <DataGridTextColumn Header="根拠" Binding="{Binding Rationale}" IsReadOnly="True" Width="*" MinWidth="460"
-                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                  <!-- 根拠に書かれた原則の参照（3.5 規則5 など）をリンクにする（docs/SPEC.md 5.5.1）。
+                       テンプレート列は並べ替えとコピーの対象を持たないので、SortMemberPath と
+                       ClipboardContentBinding で文字列の列と同じ振る舞いに揃える。 -->
+                  <DataGridTemplateColumn Header="根拠" IsReadOnly="True" Width="*" MinWidth="460"
+                                          SortMemberPath="Rationale"
+                                          ClipboardContentBinding="{Binding Rationale}">
+                    <DataGridTemplateColumn.CellTemplate>
+                      <DataTemplate>
+                        <TextBlock Style="{StaticResource EllipsisTextStyle}" ctl:PolicyText.Text="{Binding Rationale}" />
+                      </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                  </DataGridTemplateColumn>
                 </DataGrid.Columns>
               </DataGrid>
             </Border>
@@ -1227,7 +1247,7 @@
                                   Style="{StaticResource SmallOutlineButtonStyle}" />
                           <Button DockPanel.Dock="Right" Content="区分を追加" Command="{Binding AddEraCommand}"
                                   Style="{StaticResource SmallOutlineButtonStyle}" Margin="0,0,6,0" />
-                          <TextBlock Text="時代分割（収録時点の名称を採用する。TAGGING_POLICY 5.3.1）"
+                          <TextBlock ctl:PolicyText.Text="時代分割（収録時点の名称を採用する。TAGGING_POLICY 5.3.1）"
                                      Style="{StaticResource FieldLabel}" Margin="0" VerticalAlignment="Center" />
                         </DockPanel>
                         <Border Style="{StaticResource CardBorderStyle}" Padding="1">
@@ -1397,7 +1417,7 @@
                     <Button DockPanel.Dock="Left" Content="削除" Command="{Binding RemoveAlbumOverrideCommand}"
                             Style="{StaticResource SmallOutlineButtonStyle}" Margin="0,0,14,0" />
                     <TextBlock Style="{StaticResource HintTextStyle}" VerticalAlignment="Center" TextWrapping="Wrap"
-                               Text="そのアルバムだけの例外（TAGGING_POLICY 3.5 規則2・規則4・規則6・規則7）。追加は検査結果タブの「このアルバムの扱いを決める」から行う。disc が空欄ならそのフォルダの全ディスクに効く。年は単位内で録音年が割れている場合だけ効く。" />
+                               ctl:PolicyText.Text="そのアルバムだけの例外（TAGGING_POLICY 3.5 規則2・規則4・規則6・規則7）。追加は検査結果タブの「このアルバムの扱いを決める」から行う。disc が空欄ならそのフォルダの全ディスクに効く。年は単位内で録音年が割れている場合だけ効く。" />
                   </DockPanel>
 
                   <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Padding="1">
@@ -1498,7 +1518,7 @@
 
                   <StackPanel Grid.Row="0" Margin="0,0,0,10">
                     <TextBlock Style="{StaticResource HintTextStyle}"
-                               Text="配役情報を含むため書き換えない albumartist（TAGGING_POLICY 2.3）。ここに載っている値は全ルールの検査前に除外される。" />
+                               ctl:PolicyText.Text="配役情報を含むため書き換えない albumartist（TAGGING_POLICY 2.3）。ここに載っている値は全ルールの検査前に除外される。" />
                     <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                       <Button Content="追加" Command="{Binding AddProtectedValueCommand}"
                               Style="{StaticResource SmallOutlineButtonStyle}" Margin="0,0,6,0" />

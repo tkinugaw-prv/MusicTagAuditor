@@ -5,7 +5,7 @@ using System.Windows.Media;
 namespace MusicTagAuditor.App.Policy;
 
 /// <summary>
-/// 検索で選んだ一致を、本文の上に重ねて塗る。
+/// 検索で選んだ一致を本文の上に重ねて塗る。参照から飛んだ規則には、本文の左に帯を引く。
 ///
 /// **選択（TextSelection）では示さない。** 本文にフォーカスが無いと選択の反転は
 /// スクロールに追従せず、画面の同じ位置に古い四角が残った（2026-10-04 実測）。
@@ -17,23 +17,38 @@ public sealed class PolicyMatchAdorner : Adorner
     /// <summary>同じ行とみなす上端の差（DIP）。</summary>
     private const double SAME_LINE_TOLERANCE = 1.0;
 
+    /// <summary>帯の幅（DIP）。</summary>
+    private const double BAR_WIDTH = 4.0;
+
+    /// <summary>帯と本文の間隔（DIP）。リストの番号より左に出す。</summary>
+    private const double BAR_GAP = 30.0;
+
     /// <summary>塗りの色。</summary>
     private readonly Brush _fill;
 
+    /// <summary>帯の色。</summary>
+    private readonly Brush _bar;
+
     /// <summary>塗る範囲。null なら何も描かない。</summary>
     private TextRange? _range;
+
+    /// <summary>塗らずに左に帯を引くか。</summary>
+    private bool _asBar;
 
     /// <summary>
     /// 本文の描画面に重ねる。
     /// </summary>
     /// <param name="renderScope">本文を描いている要素（FlowDocumentScrollViewer の内側）。</param>
     /// <param name="fill">塗りの色。</param>
-    public PolicyMatchAdorner(UIElement renderScope, Brush fill)
+    /// <param name="bar">帯の色。</param>
+    public PolicyMatchAdorner(UIElement renderScope, Brush fill, Brush bar)
         : base(renderScope)
     {
         ArgumentNullException.ThrowIfNull(fill);
+        ArgumentNullException.ThrowIfNull(bar);
 
         _fill = fill;
+        _bar = bar;
         IsHitTestVisible = false;
     }
 
@@ -44,6 +59,31 @@ public sealed class PolicyMatchAdorner : Adorner
     public void Show(TextRange? range)
     {
         _range = range;
+        _asBar = false;
+        InvalidateVisual();
+    }
+
+    /// <summary>
+    /// 帯を引いていれば消す。検索の塗りは残す。
+    /// </summary>
+    public void HideBar()
+    {
+        if (_asBar)
+        {
+            Show(null);
+        }
+    }
+
+    /// <summary>
+    /// 範囲の左に帯を引く。規則の項目は数行に及ぶので、全体を塗ると本文が読みにくくなる。
+    /// </summary>
+    /// <param name="range">印を付ける範囲。</param>
+    public void ShowBar(TextRange range)
+    {
+        ArgumentNullException.ThrowIfNull(range);
+
+        _range = range;
+        _asBar = true;
         InvalidateVisual();
     }
 
@@ -60,10 +100,27 @@ public sealed class PolicyMatchAdorner : Adorner
             return;
         }
 
-        foreach (Rect rect in GetLineRects(_range))
+        Rect[] lines = [.. GetLineRects(_range)];
+
+        if (!_asBar)
         {
-            drawingContext.DrawRectangle(_fill, null, rect);
+            foreach (Rect rect in lines)
+            {
+                drawingContext.DrawRectangle(_fill, null, rect);
+            }
+
+            return;
         }
+
+        if (lines.Length == 0)
+        {
+            return;
+        }
+
+        double left = lines.Min(rect => rect.Left) - BAR_GAP;
+        double top = lines.Min(rect => rect.Top);
+        double bottom = lines.Max(rect => rect.Bottom);
+        drawingContext.DrawRectangle(_bar, null, new Rect(Math.Max(0, left), top, BAR_WIDTH, bottom - top));
     }
 
     /// <summary>

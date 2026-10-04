@@ -76,6 +76,8 @@ public sealed class PolicyFlowDocumentBuilder
         Dictionary<HeadingBlock, PolicyHeading> headingByBlock = document.Headings.ToDictionary(heading => heading.Block);
         Dictionary<PolicyHeading, Paragraph> headingParagraphs = [];
         List<PolicyChapterFold> folds = [];
+        Dictionary<PolicyHeading, List<WpfList>> orderedLists = [];
+        PolicyHeading? currentHeading = null;
 
         // 折りたたむ章の本文は Section にまとめ、文書には入れずに持っておく。
         // FlowDocument の要素には Visibility が無いため、出し入れで開閉する。
@@ -87,6 +89,7 @@ public sealed class PolicyFlowDocumentBuilder
             {
                 Paragraph paragraph = CreateHeading(headingBlock);
                 headingParagraphs[heading] = paragraph;
+                currentHeading = heading;
 
                 if (heading.Level <= 2)
                 {
@@ -113,10 +116,26 @@ public sealed class PolicyFlowDocumentBuilder
             foreach (WpfBlock rendered in RenderBlock(block))
             {
                 AddBlock(flow, currentFold, rendered);
+
+                // 「3.5 規則5」の規則は節の直下の番号付きリストの項目にあたる。参照から項目へ飛ぶために控えておく。
+                if (currentHeading is not null && rendered is WpfList { MarkerStyle: TextMarkerStyle.Decimal } list)
+                {
+                    if (!orderedLists.TryGetValue(currentHeading, out List<WpfList>? lists))
+                    {
+                        lists = [];
+                        orderedLists[currentHeading] = lists;
+                    }
+
+                    lists.Add(list);
+                }
             }
         }
 
-        return new PolicyRendering(flow, headingParagraphs, folds);
+        return new PolicyRendering(
+            flow,
+            headingParagraphs,
+            folds,
+            orderedLists.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<WpfList>)pair.Value));
     }
 
     /// <summary>
@@ -545,7 +564,67 @@ public sealed class PolicyFlowDocumentBuilder
 /// <param name="Document">画面に出す文書。</param>
 /// <param name="HeadingParagraphs">見出しと、それを描いた段落の対応。</param>
 /// <param name="Folds">折りたたむ章。</param>
+/// <param name="OrderedLists">見出しごとの、その直下にある番号付きリスト（規則の一覧）。</param>
 public sealed record PolicyRendering(
     FlowDocument Document,
     IReadOnlyDictionary<PolicyHeading, Paragraph> HeadingParagraphs,
-    IReadOnlyList<PolicyChapterFold> Folds);
+    IReadOnlyList<PolicyChapterFold> Folds,
+    IReadOnlyDictionary<PolicyHeading, IReadOnlyList<WpfList>> OrderedLists)
+{
+    /// <summary>
+    /// 節の規則（番号付きリストの項目）を引く。節の直下に無ければ、配下の小見出しまで探す。
+    ///
+    /// 「3.1 規則3」の規則は小見出し 3.1.2 の下にある。番号で引くので、規則 1〜6 と 1〜5 の
+    /// ように番号の範囲が違うリストが続いても取り違えない。
+    /// </summary>
+    /// <param name="headings">文書順の見出し。</param>
+    /// <param name="section">節の見出し。</param>
+    /// <param name="rule">規則の番号。</param>
+    /// <returns>規則の項目。無ければ null。</returns>
+    public ListItem? FindRule(IReadOnlyList<PolicyHeading> headings, PolicyHeading section, int rule)
+    {
+        ArgumentNullException.ThrowIfNull(headings);
+        ArgumentNullException.ThrowIfNull(section);
+
+        int start = -1;
+
+        for (int index = 0; index < headings.Count; index++)
+        {
+            if (ReferenceEquals(headings[index], section))
+            {
+                start = index;
+                break;
+            }
+        }
+
+        if (start < 0)
+        {
+            return null;
+        }
+
+        for (int index = start; index < headings.Count; index++)
+        {
+            if (index > start && headings[index].Level <= section.Level)
+            {
+                break;
+            }
+
+            if (!OrderedLists.TryGetValue(headings[index], out IReadOnlyList<WpfList>? lists))
+            {
+                continue;
+            }
+
+            foreach (WpfList list in lists)
+            {
+                int offset = rule - list.StartIndex;
+
+                if (offset >= 0 && offset < list.ListItems.Count)
+                {
+                    return list.ListItems.ElementAt(offset);
+                }
+            }
+        }
+
+        return null;
+    }
+}

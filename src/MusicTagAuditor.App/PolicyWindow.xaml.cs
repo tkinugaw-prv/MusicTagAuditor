@@ -25,8 +25,14 @@ public partial class PolicyWindow : Window, INotifyPropertyChanged
     /// <summary>一致の塗りの不透明度。下の文字が読める濃さにする。</summary>
     private const double MATCH_FILL_OPACITY = 0.45;
 
+    /// <summary>原則文書。</summary>
+    private readonly PolicyDocument _document;
+
     /// <summary>組み立てた原則文書。</summary>
     private readonly PolicyRendering _rendering;
+
+    /// <summary>表示前に頼まれた参照。本文の描画面ができてから開く。</summary>
+    private PolicyReference? _pendingReference;
 
     /// <summary>現在の検索の一致範囲（開いている部分だけ）。</summary>
     private IReadOnlyList<TextRange> _matches = [];
@@ -53,6 +59,7 @@ public partial class PolicyWindow : Window, INotifyPropertyChanged
 
         InitializeComponent();
 
+        _document = document;
         _rendering = new PolicyFlowDocumentBuilder(Application.Current?.Resources).Build(document);
         Outline = PolicyOutlineItem.CreateOutline(document);
 
@@ -100,9 +107,9 @@ public partial class PolicyWindow : Window, INotifyPropertyChanged
     /// 原則ウィンドウを開く。開いていれば前に出す。
     /// </summary>
     /// <param name="mainWindow">メインウィンドウ。閉じたら原則ウィンドウも閉じる。</param>
-    /// <param name="sectionNumber">開く節の番号（例: <c>3.5</c>）。null なら位置を変えない。</param>
+    /// <param name="reference">開く箇所。null なら位置を変えない。</param>
     /// <returns>原則ウィンドウ。</returns>
-    public static PolicyWindow ShowShared(Window mainWindow, string? sectionNumber = null)
+    public static PolicyWindow ShowShared(Window mainWindow, PolicyReference? reference = null)
     {
         ArgumentNullException.ThrowIfNull(mainWindow);
 
@@ -129,48 +136,95 @@ public partial class PolicyWindow : Window, INotifyPropertyChanged
                 _shared.WindowState = WindowState.Normal;
             }
 
+            // ダイアログの中の参照から呼ばれたとき、先に開いていた原則ウィンドウは無効にされている。
+            WindowEnabling.EnsureEnabled(_shared);
             _shared.Activate();
         }
 
-        if (sectionNumber is not null)
+        if (reference is not null)
         {
-            _shared.OpenSection(sectionNumber);
+            _shared.OpenReference(reference);
         }
 
         return _shared;
     }
 
     /// <summary>
-    /// 節を開いて先頭を表示する。
+    /// 参照の箇所を開く（docs/SPEC.md 5.5.1）。節なら見出しを、規則なら規則の項目を画面の先頭に出す。
     /// </summary>
-    /// <param name="sectionNumber">節番号（例: <c>3.5</c>）。</param>
-    /// <returns>節が見つかったか。</returns>
-    public bool OpenSection(string sectionNumber)
+    /// <param name="reference">参照。</param>
+    /// <returns>参照先が見つかったか。見つからなくてもウィンドウは開いたままにする。</returns>
+    public bool OpenReference(PolicyReference reference)
     {
-        ArgumentNullException.ThrowIfNull(sectionNumber);
+        ArgumentNullException.ThrowIfNull(reference);
 
-        PolicyOutlineItem? item = Outline.FirstOrDefault(
-            candidate => string.Equals(candidate.Heading.Number, sectionNumber, StringComparison.Ordinal));
+        // 開いた直後は本文の描画面がまだ無く、帯を引けない。表示が済んでから開く。
+        if (!IsLoaded)
+        {
+            _pendingReference = reference;
+            return FindHeading(reference) is not null;
+        }
 
-        if (item is null)
+        PolicyHeading? heading = FindHeading(reference);
+
+        if (heading is null)
         {
             return false;
         }
 
+        PolicyOutlineItem? item = Outline.FirstOrDefault(candidate => ReferenceEquals(candidate.Heading, heading));
+
         // 目次の選択を変えると OnOutlineSelectionChanged が移動を行う。
         // 同じ項目が選ばれていると選択変更が起きないので、そのときは直接移動する。
-        if (ReferenceEquals(OutlineList.SelectedItem, item))
+        // 章（##）より浅い見出しは目次に無いので、これも直接移動する。
+        if (item is null || ReferenceEquals(OutlineList.SelectedItem, item))
         {
-            NavigateTo(item.Heading);
+            NavigateTo(heading);
         }
         else
         {
             OutlineList.SelectedItem = item;
+            OutlineList.ScrollIntoView(item);
         }
 
-        OutlineList.ScrollIntoView(item);
+        if (reference.Rule is int rule
+            && _rendering.FindRule(_document.Headings, heading, rule) is ListItem ruleItem)
+        {
+            ShowRule(ruleItem);
+        }
 
         return true;
+    }
+
+    /// <summary>
+    /// 参照の指す見出しを引く。補足は見出しの接頭辞で、それ以外は節番号で引く。
+    /// </summary>
+    private PolicyHeading? FindHeading(PolicyReference reference)
+    {
+        if (reference.Supplement is string supplement)
+        {
+            // 「3.5 補足2」が「3.5 補足21」に当たらないよう、接頭辞の直後が数字でないことも見る。
+            return _document.Headings.FirstOrDefault(heading =>
+                heading.Text.StartsWith(supplement, StringComparison.Ordinal)
+                && (heading.Text.Length == supplement.Length || !char.IsAsciiDigit(heading.Text[supplement.Length])));
+        }
+
+        return _document.FindSection(reference.Section);
+    }
+
+    /// <summary>
+    /// 規則の項目を画面の先頭に出し、左に帯を引く。
+    /// </summary>
+    private void ShowRule(ListItem item)
+    {
+        Viewer.UpdateLayout();
+        GetScrollViewer()?.ScrollToEnd();
+        Viewer.UpdateLayout();
+        item.BringIntoView();
+
+        // 帯は項目の最初の段落にだけ引く。入れ子の箇条まで含めると、規則によっては画面より長くなる。
+        Block first = item.Blocks.FirstBlock;
+        _matchAdorner?.ShowBar(new TextRange(first.ContentStart, first.ContentEnd));
     }
 
     /// <summary>
@@ -192,6 +246,9 @@ public partial class PolicyWindow : Window, INotifyPropertyChanged
         {
             return;
         }
+
+        // 前に参照から飛んだ規則の帯は、別の箇所へ移ったら意味を失う。検索の塗りは残す。
+        _matchAdorner?.HideBar();
 
         PolicyChapterFold? fold = _rendering.Folds.FirstOrDefault(
             candidate => candidate.Heading.ChapterNumber == heading.ChapterNumber);
@@ -222,15 +279,22 @@ public partial class PolicyWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        Brush fill = (TryFindResource("AccentBrush") as Brush ?? Brushes.SteelBlue).Clone();
+        Brush accent = TryFindResource("AccentBrush") as Brush ?? Brushes.SteelBlue;
+        Brush fill = accent.Clone();
         fill.Opacity = MATCH_FILL_OPACITY;
         fill.Freeze();
 
-        _matchAdorner = new PolicyMatchAdorner(renderScope, fill);
+        _matchAdorner = new PolicyMatchAdorner(renderScope, fill, accent);
         layer.Add(_matchAdorner);
 
         // 文字の位置はスクロールと折り返し幅で変わる。どちらも ScrollChanged で拾える。
         scrollViewer.ScrollChanged += (_, _) => _matchAdorner.InvalidateVisual();
+
+        if (_pendingReference is PolicyReference pending)
+        {
+            _pendingReference = null;
+            OpenReference(pending);
+        }
     }
 
     /// <summary>

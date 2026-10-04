@@ -1779,7 +1779,7 @@ public sealed partial class MainViewModel : ObservableObject
         return MessageBox.Show(
             string.Create(CultureInfo.CurrentCulture, $"{rowCount:N0} 行のタグを空にします。")
             + Environment.NewLine + Environment.NewLine
-            + "空欄にすること自体は原則が認める操作ですが（TAGGING_POLICY 7.4）、"
+            + "空欄にすること自体は原則が認める操作ですが（TAGGING_POLICY 7章 原則4）、"
             + "入力し忘れでないかを確認してください。",
             "選択した行のタグを空にしますか？",
             MessageBoxButton.OKCancel,
