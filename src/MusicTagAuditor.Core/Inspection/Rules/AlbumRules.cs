@@ -131,7 +131,7 @@ public sealed class AlbumNameRule : IInspectionRule
                     track.GetValues(TagField.Album),
                     [album],
                     RULE_ID,
-                    $"{workSource}{dateSource}。3.5 の書式で組み立てた",
+                    $"{workSource}{dateSource}。TAGGING_POLICY 3.5 の書式で組み立てた",
                     Severity.Warning)),
         ];
     }
