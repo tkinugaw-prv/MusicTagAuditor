@@ -8,7 +8,7 @@ namespace MusicTagAuditor.Core.Tests.Backup;
 /// <summary>
 /// 復元のテスト。
 /// **書き込んだあと読み戻して照合する**工程が動いていることを重点的に確認する
-/// （docs/TAGGING_POLICY.md 7.3）。
+/// （docs/TAGGING_POLICY.md 7章 原則3）。
 /// </summary>
 public sealed class RestoreServiceTests
 {

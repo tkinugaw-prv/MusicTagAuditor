@@ -106,7 +106,7 @@
   "_ensemblesComment": [
     "eras を持つ団体は録音年で正規形が変わる（5.3.1）。これは表記揺れではないので片寄せしない。",
     "同一性は entityId で判断する。名前が似ていても別実体、名前が違っても同一実体がある。",
-    "date が空欄で eras を持つ団体は HOLD_ERA_UNKNOWN として保留する（7.5）。",
+    "date が空欄で eras を持つ団体は HOLD_ERA_UNKNOWN として保留する（TAGGING_POLICY 7章 原則5）。",
     "noConductor は指揮者を置かない団体（合奏団・弦楽四重奏団）。conductor が空なのが正しい（2.2）。"
   ],
 

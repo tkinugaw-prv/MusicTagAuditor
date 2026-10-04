@@ -4,7 +4,7 @@ namespace MusicTagAuditor.Core.Models;
 /// 書き込んだが意図した値になっていなかった項目。
 ///
 /// **書き込みの成功と、意図した値が入っていることは別である**
-/// （docs/TAGGING_POLICY.md 7.3 / docs/SPEC.md 9章の工程6）。
+/// （docs/TAGGING_POLICY.md 7章 原則3 / docs/SPEC.md 9章の工程6）。
 /// 復元と適用の両方で使う。
 /// </summary>
 /// <param name="RelativePath">対象ファイル。</param>

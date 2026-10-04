@@ -111,7 +111,7 @@ public sealed class RealLibraryManualEditTests(ITestOutputHelper output) : IDisp
     /// <summary>
     /// 手編集でタグを消せることを確認する。
     ///
-    /// 空欄にするのは原則が認める操作である（docs/TAGGING_POLICY.md 7.4。
+    /// 空欄にするのは原則が認める操作である（docs/TAGGING_POLICY.md 7章 原則4。
     /// 誤った値で埋めるより空欄のほうが後から対処できる）。
     /// </summary>
     [RealLibraryFact]

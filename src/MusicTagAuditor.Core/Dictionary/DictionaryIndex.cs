@@ -18,7 +18,7 @@ public enum EnsembleResolution
 
     /// <summary>
     /// 時代分割の対象だが録音年が不明なため決められない（<c>HOLD_ERA_UNKNOWN</c>）。
-    /// docs/TAGGING_POLICY.md 7.5。<c>date</c> が埋まった時点で自動的に再判定できる。
+    /// docs/TAGGING_POLICY.md 7章 原則5。<c>date</c> が埋まった時点で自動的に再判定できる。
     /// </summary>
     HoldEraUnknown,
 }

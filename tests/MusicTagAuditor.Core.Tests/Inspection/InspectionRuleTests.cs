@@ -178,7 +178,7 @@ public sealed class InspectionRuleTests
     }
 
     /// <summary>
-    /// <c>date</c> が空欄の時代分割対象を保留にすることを確認する（7.5 の <c>HOLD_ERA_UNKNOWN</c>）。
+    /// <c>date</c> が空欄の時代分割対象を保留にすることを確認する（7章 原則5 の <c>HOLD_ERA_UNKNOWN</c>）。
     /// 誤った値で埋めるより保留のほうが後から対処できる。
     /// </summary>
     [Fact]
@@ -354,7 +354,7 @@ public sealed class InspectionRuleTests
 
     /// <summary>
     /// 修正値を決められなかったものは、重大度が ⛔ でもチェックしないことを確認する。
-    /// 「確信が持てない項目は書き換えない」という原則（docs/TAGGING_POLICY.md 7.4）。
+    /// 「確信が持てない項目は書き換えない」という原則（docs/TAGGING_POLICY.md 7章 原則4）。
     /// </summary>
     [Fact]
     public void DoesNotSelectChangesWithoutFixEvenForErrors()

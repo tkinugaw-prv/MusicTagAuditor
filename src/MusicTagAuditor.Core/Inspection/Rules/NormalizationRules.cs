@@ -162,7 +162,7 @@ public sealed class PerformerNotCanonicalRule : IInspectionRule
 /// R-209: <c>albumartist</c> が収録時点の団体名と不一致（docs/TAGGING_POLICY.md 5.3.1）。
 ///
 /// **同一性は実体 ID で判断する。名前の類似で束ねない。**
-/// <c>date</c> が空欄で時代分割の対象なら、書き換えずに保留する（7.5 の <c>HOLD_ERA_UNKNOWN</c>）。
+/// <c>date</c> が空欄で時代分割の対象なら、書き換えずに保留する（7章 原則5 の <c>HOLD_ERA_UNKNOWN</c>）。
 /// </summary>
 public sealed class EnsembleEraRule : IInspectionRule
 {
