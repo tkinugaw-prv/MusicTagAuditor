@@ -15,6 +15,7 @@ Music Tag Auditor 本体は MIT License（[LICENSE](LICENSE)）で提供する�
 | TagLibSharp | 2.3.0 | **LGPL-2.1-only**（付録 C） | Copyright (c) 2006-2007 Brian Nickel. Copyright (c) 2009-2020 Other contributors | https://github.com/mono/taglib-sharp |
 | Serilog | 4.4.0 | Apache-2.0（付録 B） | Copyright © Serilog Contributors | https://github.com/serilog/serilog |
 | Serilog.Sinks.File | 7.0.0 | Apache-2.0（付録 B） | Serilog Contributors | https://github.com/serilog/serilog-sinks-file |
+| Markdig | 1.4.0 | BSD-2-Clause（付録 D） | Copyright (c) 2016-2026, Alexandre Mutel | https://github.com/xoofx/markdig |
 | CommunityToolkit.Mvvm | 8.4.2 | MIT（付録 A） | (c) .NET Foundation and Contributors. All rights reserved. | https://github.com/CommunityToolkit/dotnet |
 | Microsoft.Extensions.DependencyInjection | 10.0.10 | MIT（付録 A） | © Microsoft Corporation. All rights reserved. | https://github.com/dotnet/runtime |
 | .NET ランタイム / WPF<br>（自己完結型 exe のみ） | 10.0 | MIT（付録 A） | © Microsoft Corporation. All rights reserved. | https://github.com/dotnet/runtime<br>https://github.com/dotnet/wpf |
@@ -804,4 +805,34 @@ necessary.  Here is a sample; alter the names:
   Moe Ghoul, President of Vice
 
 That's all there is to it!
+```
+
+---
+
+## 付録 D: BSD 2-Clause License（Markdig）
+
+```
+Copyright (c) 2016-2026, Alexandre Mutel
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification
+, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this 
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice, 
+   this list of conditions and the following disclaimer in the documentation 
+   and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE 
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER 
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE 
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```

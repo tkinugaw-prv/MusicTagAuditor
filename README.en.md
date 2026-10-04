@@ -33,6 +33,7 @@ Main features:
 | DI | Microsoft.Extensions.DependencyInjection 10.0.10 |
 | Tag I/O | TagLibSharp 2.3.0 plus a purpose-built MP4 atom reader ([ADR-0001](docs/adr/0001-tag-io-library.md)) |
 | Logging | Serilog 4.4.0 with Serilog.Sinks.File 7.0.0 |
+| Policy viewer | Markdig 1.4.0 (renders `docs/TAGGING_POLICY.md` in the app) |
 | Tests | xUnit 2.9.3 with coverlet.collector 6.0.4 |
 
 The UI shares its design tokens with the sibling project [MusicFolderTimeFitter](https://github.com/tkinugaw-prv/MusicFolderTimeFitter).
@@ -172,4 +173,4 @@ Note, however, that the released executables bundle `TagLibSharp.dll` inside the
 dotnet publish src/MusicTagAuditor.App -c Release -r win-x64 --self-contained false -p:PublishSingleFile=false
 ```
 
-Serilog is Apache-2.0; CommunityToolkit.Mvvm and Microsoft.Extensions.DependencyInjection are MIT. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for details.
+Serilog is Apache-2.0; CommunityToolkit.Mvvm and Microsoft.Extensions.DependencyInjection are MIT; Markdig is BSD-2-Clause. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for details.

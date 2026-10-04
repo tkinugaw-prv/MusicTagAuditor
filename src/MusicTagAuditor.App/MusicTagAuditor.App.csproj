@@ -7,6 +7,7 @@
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="Markdig" Version="1.4.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
     <PackageReference Include="Serilog" Version="4.4.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
@@ -23,6 +24,16 @@
 
   <ItemGroup>
     <Resource Include="Assets\app_icon.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      タグ付け原則の原本をそのまま埋め込む（docs/SPEC.md 5.5）。写しを置かないのは、
+      原本だけが改訂されて画面の原則が古くなるのを防ぐため。名前は PolicyDocument.RESOURCE_NAME と揃える。
+    -->
+    <EmbeddedResource Include="..\..\docs\TAGGING_POLICY.md"
+                      LogicalName="MusicTagAuditor.App.TAGGING_POLICY.md"
+                      Link="Policy\TAGGING_POLICY.md" />
   </ItemGroup>
 
 </Project>

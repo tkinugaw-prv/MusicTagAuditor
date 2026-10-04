@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     MusicTagAuditor を安全に起動して動作確認する。
 
@@ -76,6 +76,7 @@ public static class NativeWindow {
   [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr parent, EnumProc callback, IntPtr lparam);
   [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
   [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hwnd);
+  [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr hwnd, uint command);
   [DllImport("user32.dll")] static extern bool IsWindowEnabled(IntPtr hwnd);
   [DllImport("user32.dll")] static extern int GetDlgCtrlID(IntPtr hwnd);
   [DllImport("user32.dll")] static extern bool PostMessageW(IntPtr hwnd, uint message, IntPtr wparam, IntPtr lparam);
@@ -101,6 +102,12 @@ public static class NativeWindow {
     var text = new StringBuilder(1024);
     GetWindowTextW(hwnd, text, 1024);
     return text.ToString();
+  }
+
+  /// <summary>所有者を持つか。ダイアログは所有され、モードレスの別ウィンドウは所有されない。</summary>
+  public static bool HasOwner(IntPtr hwnd) {
+    const uint GW_OWNER = 4;
+    return GetWindow(hwnd, GW_OWNER) != IntPtr.Zero;
   }
 
   /// <summary>ウィンドウクラス名を返す。ネイティブのダイアログは #32770。</summary>
@@ -617,7 +624,10 @@ try {
     }
 
     # **開いたままのダイアログを残さない。** CloseMainWindow が効かず、強制終了になる。
+    # 所有者の無いウィンドウ（タグ付け原則のようなモードレスの別ウィンドウ）は除く。
+    # メイン画面と一緒に閉じる作りなので、CloseMainWindow で片付く。
     $stray = Find-Dialog -Process $process -TimeoutSeconds 1
+    if ($null -ne $stray -and -not [NativeWindow]::HasOwner($stray.Handle)) { $stray = $null }
     if ($null -ne $stray) { throw "ダイアログ '$($stray.Title)' が開いたままになっている。dialog: で閉じる" }
 
     $process.CloseMainWindow() | Out-Null
