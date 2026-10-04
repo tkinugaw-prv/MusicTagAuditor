@@ -61,7 +61,7 @@ public sealed class TypoRule : IInspectionRule
     }
 }
 
-/// <summary>R-302: <c>title</c> に拡張子が含まれる。</summary>
+/// <summary>R-302: <c>title</c> に拡張子が含まれる（docs/TAGGING_POLICY.md 3.6 規則1）。</summary>
 public sealed class TitleContainsExtensionRule : IInspectionRule
 {
     /// <summary>末尾の拡張子。対象拡張子は docs/SPEC.md 11章。</summary>
@@ -110,11 +110,11 @@ public sealed class TitleContainsExtensionRule : IInspectionRule
 }
 
 /// <summary>
-/// R-303: <c>title</c> がプレースホルダ（<c>Track04</c>、<c>ショス15 - 01</c> 等）。
+/// R-303: <c>title</c> がプレースホルダ（<c>Track04</c>、<c>ショス15 - 01</c> 等。docs/TAGGING_POLICY.md 3.6 規則2）。
 ///
 /// ファイル名から補完できる場合は修正値を出すが、**既定ではチェックしない**。
 /// ファイル名には Windows で使えない文字の代替が混じっており、日本語のものもある。
-/// 1 件ずつ人間が見て決める（docs/TAGGING_POLICY.md 7.4）。
+/// 1 件ずつ人間が見て決める（docs/TAGGING_POLICY.md 3.6 規則3 / 7章 原則4）。
 /// </summary>
 public sealed class PlaceholderTitleRule : IInspectionRule
 {
