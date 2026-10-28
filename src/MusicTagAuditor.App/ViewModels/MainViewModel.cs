@@ -1380,7 +1380,20 @@ public sealed partial class MainViewModel : ObservableObject
         TrackTags? track = _lastScan.Tracks.FirstOrDefault(
             candidate => string.Equals(candidate.RelativePath, change.RelativePath, StringComparison.OrdinalIgnoreCase));
 
-        if (track is null)
+        return track is null ? null : FindUnit(track);
+    }
+
+    /// <summary>
+    /// ファイルが属するアルバム単位を探す。単位は検査で組み立てるので、検査前は null。
+    ///
+    /// 照合には読み取った値の <c>discnumber</c> を使う。単位も読み取った値から組んでおり、
+    /// 保留中の手編集の値で引くと単位が見つからなくなる。
+    /// </summary>
+    /// <param name="track">対象のファイル。</param>
+    /// <returns>該当する単位。見つからなければ null。</returns>
+    private AlbumUnit? FindUnit(TrackTags track)
+    {
+        if (_lastContext is null)
         {
             return null;
         }
@@ -1447,9 +1460,120 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
+    /// ファイル一覧の行の右クリック「辞書に追加」に並べる項目を作る（docs/SPEC.md 5.2）。
+    ///
+    /// **メニューを開くたびに作り直す。** 登録済みかどうかは辞書の状態で変わるため、
+    /// 行に持たせておくと、登録した直後に同じ行を開いたとき古い判定が出る。
+    /// </summary>
+    /// <param name="row">右クリックされた行。</param>
+    /// <returns>並べる項目。</returns>
+    public IReadOnlyList<DictionaryTargetViewModel> BuildDictionaryTargets(TrackRowViewModel row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+
+        return DictionaryTargetViewModel.Build(
+            row, _dictionaryStore.Index, FindUnit(row.Tags), AddTrackValueToDictionaryCommand);
+    }
+
+    /// <summary>
+    /// ファイル一覧の値を辞書に足して再検査する（docs/SPEC.md 5.2）。
+    ///
+    /// 検査結果に出ていない値でも登録できるようにする入口。曲名をそのまま作品名にしたい、
+    /// 検出される前に名前を正規形として先に入れておきたい、という場面でコピーして
+    /// 辞書タブへ貼りに行く手間を無くす。ダイアログは検査結果からの導線と同じものを使う。
+    /// </summary>
+    /// <param name="target">押された項目。</param>
+    [RelayCommand(CanExecute = nameof(CanAddTrackValueToDictionary))]
+    private void AddTrackValueToDictionary(DictionaryTargetViewModel? target)
+    {
+        if (target is not { CanAdd: true })
+        {
+            return;
+        }
+
+        if (target.Kind == DictionaryTargetKind.Work)
+        {
+            AddWorkFromTrack(target);
+            return;
+        }
+
+        UnknownValue unknown = new(
+            target.Value,
+            target.Category,
+            1,
+            [target.Field],
+            target.Row.RelativePath,
+            []);
+
+        // artist は協奏曲ならソリスト（TAGGING_POLICY 2.2 の 1）。指揮者が主役の録音は
+        // conductor 側から登録できるので、artist から開いたときはソリストを既定にする。
+        AddToDictionary(unknown, viewModel =>
+        {
+            if (target.Field == TagField.Artist)
+            {
+                viewModel.IsConductor = false;
+                viewModel.IsSoloist = true;
+            }
+        });
+    }
+
+    /// <summary>ファイル一覧の値を辞書に足せるか。</summary>
+    private bool CanAddTrackValueToDictionary(DictionaryTargetViewModel? target)
+    {
+        return !IsScanning && target is { CanAdd: true };
+    }
+
+    /// <summary>
+    /// ファイル一覧の曲名・アルバムから作品を辞書に足す。
+    /// </summary>
+    private void AddWorkFromTrack(DictionaryTargetViewModel target)
+    {
+        if (target.Composer is not string composer || FindUnit(target.Row.Tags) is not AlbumUnit unit)
+        {
+            return;
+        }
+
+        if (!Dictionary.ConfirmDiscardIfDirty())
+        {
+            return;
+        }
+
+        // 曲名から開いたときだけ曲名を作品名の初期値にする。アルバムから開いたときは
+        // 検査結果からの導線と同じく空で出す（album は誤っていることがある。3.5 補足2）。
+        AddWorkViewModel viewModel = new(
+            _dictionaryStore.Dictionary,
+            _dictionaryStore.Index,
+            unit,
+            composer,
+            target.Field == TagField.Title ? target.Value : null);
+
+        AddWorkWindow window = new(viewModel)
+        {
+            Owner = Application.Current?.MainWindow,
+        };
+
+        if (window.ShowDialog() != true)
+        {
+            return;
+        }
+
+        SaveDictionary(
+            viewModel.Apply,
+            $"作品「{viewModel.Canonical.Trim()}」を辞書に登録して再検査しました。",
+            () => Log.Information(
+                "ファイル一覧から作品を辞書に追加した composer={Composer} canonical={Canonical} field={Field} path={Path}",
+                composer,
+                viewModel.Canonical.Trim(),
+                target.Field,
+                target.Row.RelativePath));
+    }
+
+    /// <summary>
     /// 追加ダイアログを開き、確定したら辞書を保存して再検査する。
     /// </summary>
-    private void AddToDictionary(UnknownValue unknown)
+    /// <param name="unknown">登録する値。</param>
+    /// <param name="configure">ダイアログを開く前に初期値を整える。不要なら null。</param>
+    private void AddToDictionary(UnknownValue unknown, Action<AddToDictionaryViewModel>? configure = null)
     {
         if (!Dictionary.ConfirmDiscardIfDirty())
         {
@@ -1457,6 +1581,7 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         AddToDictionaryViewModel viewModel = new(_dictionaryStore.Dictionary, _dictionaryStore.Index, unknown);
+        configure?.Invoke(viewModel);
 
         AddToDictionaryWindow window = new(viewModel)
         {

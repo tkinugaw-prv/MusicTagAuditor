@@ -671,8 +671,16 @@ try {
                 "撮影: $(Save-WindowImage -Handle $process.MainWindowHandle -Label $argument)"
             }
 
+            'wait' {
+                # 右クリックメニューのように UI Automation では本物の入力にならない操作を、
+                # 外から実際のマウスで行う間だけ待つ。待っている間も設定の復元は finally が持つ。
+                "待機: $argument 秒（この間に外から操作できる）"
+                Start-Sleep -Seconds ([int]$argument)
+                "待機を終えた"
+            }
+
             default {
-                throw "手順 '$step' が読めない。使えるのは click / check / dialog / rule / change / rows / tab / shot"
+                throw "手順 '$step' が読めない。使えるのは click / check / dialog / rule / change / rows / tab / shot / wait"
             }
         }
     }

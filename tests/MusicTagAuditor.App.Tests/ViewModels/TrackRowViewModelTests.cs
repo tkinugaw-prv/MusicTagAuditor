@@ -133,6 +133,35 @@ public sealed class TrackRowViewModelTests
     }
 
     /// <summary>
+    /// 辞書に足す値は、複数値なら 1 つずつに分けて返すことを確認する（docs/SPEC.md 5.2）。
+    ///
+    /// **連結した文字列のまま登録すると、どの値でも引けない別名ができる。** セルには
+    /// `Günter Wand; Berliner Philharmoniker` と見えていても、辞書に入れるのは 1 人ずつである。
+    /// </summary>
+    [Fact]
+    public void ValuesForDictionarySplitMultipleValues()
+    {
+        TrackRowViewModel row = Row(SplitValueTrack(TagField.Artist, "Günter Wand", "Berliner Philharmoniker"));
+
+        Assert.Equal(["Günter Wand", "Berliner Philharmoniker"], row.GetValuesForDictionary(TagField.Artist));
+    }
+
+    /// <summary>
+    /// 手で編集したフィールドは、セルに見えている編集後の値を返すことを確認する。
+    /// 空のフィールドは何も返さない（メニューに空の項目を並べない）。
+    /// </summary>
+    [Fact]
+    public void ValuesForDictionaryFollowEditAndSkipEmpty()
+    {
+        TrackRowViewModel row = Row(SplitValueTrack(TagField.Artist, "Wand", "BPO"));
+
+        row.Artist = "Günter Wand";
+
+        Assert.Equal(["Günter Wand"], row.GetValuesForDictionary(TagField.Artist));
+        Assert.Empty(row.GetValuesForDictionary(TagField.Conductor));
+    }
+
+    /// <summary>
     /// 行を作る。
     /// </summary>
     private static TrackRowViewModel Row(TrackTags tags, ManualEditSet? edits = null)
