@@ -160,7 +160,23 @@
       MainViewModel のコマンドへ届かせるのに、行の Tag に DataGrid の DataContext を
       載せて中継している（TrackRowStyle 側の Tag の Setter とセットで意味を持つ）。
     -->
-    <ContextMenu x:Key="TrackRowContextMenu">
+    <ContextMenu x:Key="TrackRowContextMenu" Opened="OnTrackRowContextMenuOpened">
+      <!--
+        行の値を辞書に足す（docs/SPEC.md 5.2）。項目はメニューを開くたびに
+        OnTrackRowContextMenuOpened で作り直す。登録済みかどうかは辞書の状態で変わる。
+        押せない項目も消さずに並べ、理由はツールチップに出す（無効でも出るよう ShowOnDisabled）。
+      -->
+      <MenuItem Name="TrackDictionaryMenuItem" Header="辞書に追加">
+        <MenuItem.ItemContainerStyle>
+          <Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
+            <Setter Property="Header" Value="{Binding Header}" />
+            <Setter Property="Command" Value="{Binding Command}" />
+            <Setter Property="CommandParameter" Value="{Binding}" />
+            <Setter Property="ToolTip" Value="{Binding ToolTip}" />
+            <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
+          </Style>
+        </MenuItem.ItemContainerStyle>
+      </MenuItem>
       <MenuItem Header="エクスプローラーで表示"
                 Command="{Binding PlacementTarget.Tag.RevealInExplorerCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                 CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />

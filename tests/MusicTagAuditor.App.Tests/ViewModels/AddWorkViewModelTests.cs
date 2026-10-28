@@ -122,12 +122,38 @@ public sealed class AddWorkViewModelTests
     }
 
     /// <summary>
+    /// ファイル一覧の曲名から開くと、曲名が作品名に入り、別名の候補は選ばれずに出ることを確認する
+    /// （docs/SPEC.md 5.2）。
+    ///
+    /// **候補を選んだまま出してはならない。** 単位の album・フォルダ名はアルバム全体を指しており、
+    /// カップリング盤では主作品の名前になっている。選んだまま登録すると、主作品のフォルダ名が
+    /// この曲の作品の別名として入る。
+    /// </summary>
+    [Fact]
+    public void OpensFromTitleWithCanonicalFilledAndCandidatesUnselected()
+    {
+        AddWorkViewModel viewModel = Create(title: " Alto Rhapsody ");
+
+        Assert.Equal("Alto Rhapsody", viewModel.Canonical);
+        Assert.NotEmpty(viewModel.Candidates);
+        Assert.All(viewModel.Candidates, candidate => Assert.False(candidate.IsSelected));
+        Assert.Contains("カップリング盤", viewModel.Notice, StringComparison.Ordinal);
+
+        WorkEntry work = Assert.Single(viewModel.Apply().Works);
+
+        Assert.Equal("Alto Rhapsody", work.Canonical);
+        Assert.Empty(work.Aliases);
+        Assert.Empty(work.AliasesJa);
+    }
+
+    /// <summary>
     /// ブルックナー 8 番の単位を対象にしたダイアログを作る。
     /// </summary>
     /// <param name="works">辞書に入れておく作品。</param>
     /// <param name="folder">単位のフォルダ。album と食い違う番号を試すときに変える。</param>
+    /// <param name="title">ファイル一覧の曲名から開くときの曲名。</param>
     /// <returns>ビューモデル。</returns>
-    private static AddWorkViewModel Create(IReadOnlyList<WorkEntry>? works = null, string? folder = null)
+    private static AddWorkViewModel Create(IReadOnlyList<WorkEntry>? works = null, string? folder = null, string? title = null)
     {
         TagDictionary dictionary = new()
         {
@@ -147,6 +173,6 @@ public sealed class AddWorkViewModelTests
             ["1990"],
             ["Bruckner Symphony No.8"]);
 
-        return new AddWorkViewModel(dictionary, new DictionaryIndex(dictionary), unit, "Anton Bruckner");
+        return new AddWorkViewModel(dictionary, new DictionaryIndex(dictionary), unit, "Anton Bruckner", title);
     }
 }

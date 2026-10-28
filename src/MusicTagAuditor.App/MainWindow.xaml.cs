@@ -14,6 +14,9 @@ namespace MusicTagAuditor.App;
 /// </summary>
 public partial class MainWindow : Window
 {
+    /// <summary>ファイル一覧の右クリックにある「辞書に追加」の名前。MainWindow.xaml の Name と揃える。</summary>
+    private const string TRACK_DICTIONARY_MENU_ITEM_NAME = "TrackDictionaryMenuItem";
+
     /// <summary>
     /// メインウィンドウを初期化する。
     /// </summary>
@@ -44,6 +47,31 @@ public partial class MainWindow : Window
     private void OnOpenPolicy(object sender, RoutedEventArgs e)
     {
         PolicyWindow.ShowShared(this);
+    }
+
+    /// <summary>
+    /// ファイル一覧の右クリックを開いたら「辞書に追加」の項目を作り直す（docs/SPEC.md 5.2）。
+    ///
+    /// **バインドで行に持たせない。** メニューは全行で 1 つを共有しており、同じ行を開き直しても
+    /// DataContext が変わらないためバインドが評価し直されない。登録した直後に開くと、
+    /// 登録前の「未登録」が出たままになる。
+    /// </summary>
+    private void OnTrackRowContextMenuOpened(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ContextMenu menu
+            || DataContext is not MainViewModel viewModel
+            || menu.DataContext is not TrackRowViewModel row
+            || menu.Items.OfType<MenuItem>().FirstOrDefault(item => item.Name == TRACK_DICTIONARY_MENU_ITEM_NAME) is not MenuItem dictionaryItem)
+        {
+            return;
+        }
+
+        IReadOnlyList<DictionaryTargetViewModel> targets = viewModel.BuildDictionaryTargets(row);
+
+        dictionaryItem.ItemsSource = targets;
+
+        // 項目が 1 つも無い行（辞書が扱うフィールドが全部空）では、開いても何も無い見出しになる。
+        dictionaryItem.IsEnabled = targets.Count > 0;
     }
 
     /// <summary>
