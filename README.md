@@ -119,7 +119,8 @@ NuGet パッケージと GitHub Actions のバージョン更新は Dependabot �
 ### ローカルでの再現手順
 
 ```powershell
-# 1. テスト実行 + TRX ログ + カバレッジ収集（要 .NET 10 SDK）
+# 1. 前回の結果を消してから、テスト実行 + TRX ログ + カバレッジ収集（要 .NET 10 SDK）
+if (Test-Path "reports/raw") { Remove-Item "reports/raw" -Recurse -Force }
 dotnet test --logger "trx" --collect:"XPlat Code Coverage" --results-directory "reports/raw"
 ```
 
@@ -132,6 +133,8 @@ dotnet tool install --global dotnet-reportgenerator-globaltool
 # 3. HTML レポート生成（reports/ は git 管理外）
 reportgenerator "-reports:reports/raw/*/coverage.cobertura.xml" "-targetdir:reports/coverage/html" "-reporttypes:Html;TextSummary"
 ```
+
+手順 1 の削除を省かないこと。`dotnet test` は古い結果を消さないため、残したまま集計すると過去の実行分との合算値が出る。
 
 手順 3 のグロブを `**/` にしないこと。TRX ロガーが `coverage.cobertura.xml` を添付ディレクトリにも複製するため、同じレポートを二重に読み込む。
 
