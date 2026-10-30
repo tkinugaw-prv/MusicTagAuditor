@@ -10,6 +10,9 @@ description: リリース前の定型ワークフロー。全テスト実行(カ
 ## 1. テスト実行 + カバレッジ確認
 
 ```powershell
+# 前回までの結果を消す（残すと次の reportgenerator が過去の実行分まで合算する）
+if (Test-Path "reports/raw") { Remove-Item "reports/raw" -Recurse -Force }
+
 dotnet test --logger "trx" --collect:"XPlat Code Coverage" --results-directory "reports/raw"
 ```
 
@@ -80,6 +83,7 @@ git push origin v1.0.0
 
 - **`reports/` は git 管理外**（.gitignore 済み）— TRX にはローカルのユーザー名・マシン名、Cobertura にはソースの絶対パスが入るため絶対にコミットしない。
 - **`dotnet test` は Debug 構成で走る** — Release ビルド（手順 2）とは別物。両方必要。
+- **`reports/raw` はテスト前に必ず空にする** — `dotnet test` は実行ごとに GUID のディレクトリを足すだけで古い結果を消さない。残したまま集計すると、失敗もせず過去の実行分との合算値が出る（実際に 72.5% が 75.4% と出た）。
 - **`-reports` のグロブは `*/` の 1 階層にする** — TRX ロガーが `coverage.cobertura.xml` を添付ディレクトリにも複製するため、`**/` にすると同じレポートを二重に読み込む。
 - **`TreatWarningsAsErrors=true` + `GenerateDocumentationFile=true`**（`Directory.Build.props`）のため、public メンバーに XML ドキュメントコメントが無いと **CS1591 でビルドが落ちる**。警告 0 件でないとそもそもビルドが通らない。
 - **検証用のタグを PR の head コミットに打たない** — タグ push で走った Release の Run は、そのコミットを head に持つ PR のチェック一覧に紐付く。

@@ -113,7 +113,8 @@ Actions in the workflows are pinned to commit SHAs. Dependabot rewrites both the
 ### Reproducing locally
 
 ```powershell
-# 1. Run tests with a TRX log and coverage collection (.NET 10 SDK required)
+# 1. Clear previous results, then run tests with a TRX log and coverage collection (.NET 10 SDK required)
+if (Test-Path "reports/raw") { Remove-Item "reports/raw" -Recurse -Force }
 dotnet test --logger "trx" --collect:"XPlat Code Coverage" --results-directory "reports/raw"
 ```
 
@@ -126,6 +127,8 @@ dotnet tool install --global dotnet-reportgenerator-globaltool
 # 3. Generate the HTML report (reports/ is not tracked by git)
 reportgenerator "-reports:reports/raw/*/coverage.cobertura.xml" "-targetdir:reports/coverage/html" "-reporttypes:Html;TextSummary"
 ```
+
+Do not skip the cleanup in step 1. `dotnet test` leaves old results in place, so the report would otherwise merge them with earlier runs.
 
 Do not widen the glob in step 3 to `**/`. The TRX logger also copies `coverage.cobertura.xml` into its attachment directory, so `**/` would read the same report twice.
 
