@@ -205,6 +205,7 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>読み取ったファイルがあるか。ファイル一覧の CSV 出力は検査を待たずに使える。</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ExportTrackCsvCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RevealAlbumOverrideTracksCommand))]
     private bool _hasTracks;
 
     /// <summary>
@@ -338,8 +339,9 @@ public sealed partial class MainViewModel : ObservableObject
     /// ファイル一覧で特定の行を見せてほしいという要求。
     ///
     /// タブの切り替えとスクロールは View の仕事なので、ビューモデルからは要求だけを出す。
+    /// 行が空なら、タブを切り替えるだけで何も選ばない（指定のディスクが無かった個別例外）。
     /// </summary>
-    public event EventHandler<TrackRowViewModel>? TrackRevealRequested;
+    public event EventHandler<IReadOnlyList<TrackRowViewModel>>? TrackRevealRequested;
 
     /// <summary>辞書タブ。</summary>
     public DictionaryViewModel Dictionary { get; }
@@ -2391,7 +2393,67 @@ public sealed partial class MainViewModel : ObservableObject
             ? $"ファイル一覧で「{row.FileName}」を選びました。"
             : $"ファイル一覧で「{row.FileName}」を選びました。 絞り込みを解除しました（{string.Join(" / ", released)}）。";
 
-        TrackRevealRequested?.Invoke(this, row);
+        TrackRevealRequested?.Invoke(this, [row]);
+    }
+
+    /// <summary>
+    /// 個別例外が効くファイルを、ファイル一覧でまとめて選ぶ（docs/SPEC.md 7.3.1）。
+    ///
+    /// **先頭 1 行ではなく単位の全行を選ぶ。** 例外の範囲がそのまま見え、一括入力へ続けられる。
+    /// フォルダの照合は検査（<see cref="DictionaryIndex.TryResolveAlbumOverride"/>）と基準を揃える。
+    /// 揃えないと、効いている例外が飛べない、または効いていない例外が飛べるという嘘をつく。
+    ///
+    /// **フォルダが見つからなければツリーをルートへ戻さない。** 黙って全件を見せると、
+    /// 打ち間違いや改名で効かなくなった例外に気づく機会を潰す。
+    /// </summary>
+    /// <param name="row">対象の個別例外。</param>
+    [RelayCommand(CanExecute = nameof(CanRevealAlbumOverrideTracks))]
+    private void RevealAlbumOverrideTracks(AlbumOverrideRowViewModel? row)
+    {
+        if (row is null)
+        {
+            return;
+        }
+
+        AlbumOverrideEntry entry = row.ToEntry();
+        string folder = DictionaryIndex.NormalizeFolder(entry.Folder);
+
+        // 空のフォルダは検査でも無視される。ルート直下の行と一致させない。
+        List<TrackRowViewModel> folderRows = folder.Length == 0
+            ? []
+            : [.. _allTracks.Where(track => DictionaryIndex.NormalizeFolder(track.FolderPath)
+                .Equals(folder, StringComparison.OrdinalIgnoreCase))];
+
+        if (folderRows.Count == 0)
+        {
+            StatusText = $"「{entry.Folder}」はライブラリにありません。名前の変更か打ち間違いの可能性があります。";
+            return;
+        }
+
+        List<TrackRowViewModel> targets = entry.Disc is int disc
+            ? [.. folderRows.Where(track => AlbumUnit.GetDisc(track.Tags.DiscNumber) == disc)]
+            : folderRows;
+
+        SelectFolderFor(folderRows[0]);
+
+        // ディスクが無くてもフォルダは見せるので、その行を隠す絞り込みは解除する。
+        List<string> released = [.. (targets.Count > 0 ? targets : folderRows)
+            .SelectMany(ReleaseFiltersHiding)];
+
+        string suffix = released.Count == 0 ? string.Empty : $" 絞り込みを解除しました（{string.Join(" / ", released)}）。";
+
+        StatusText = targets.Count == 0
+            ? $"「{entry.Folder}」に disc {entry.Disc} のファイルがありません。フォルダだけを開きました。{suffix}"
+            : string.Create(CultureInfo.CurrentCulture, $"ファイル一覧で「{entry.Folder}」の {targets.Count:N0} 行を選びました。{suffix}");
+
+        TrackRevealRequested?.Invoke(this, targets);
+    }
+
+    /// <summary>個別例外からファイル一覧へ移れるか。読み取り前は移っても見せる行が無い。</summary>
+    /// <param name="row">対象の個別例外。</param>
+    private bool CanRevealAlbumOverrideTracks(AlbumOverrideRowViewModel? row)
+    {
+        return row is not null && HasTracks;
     }
 
     /// <summary>
