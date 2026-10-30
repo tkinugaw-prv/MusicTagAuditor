@@ -32,6 +32,7 @@ public sealed partial class DictionaryViewModel : ObservableObject
         DictionaryValidator.CATEGORY_ENSEMBLE,
         DictionaryValidator.CATEGORY_WORK,
         DictionaryValidator.CATEGORY_OVERRIDE,
+        DictionaryValidator.CATEGORY_MENTION_EXCEPTION,
         DictionaryValidator.CATEGORY_TYPO,
         DictionaryValidator.CATEGORY_PROTECTED,
     ];
@@ -86,6 +87,11 @@ public sealed partial class DictionaryViewModel : ObservableObject
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(RemoveAlbumOverrideCommand))]
     private AlbumOverrideRowViewModel? _selectedAlbumOverride;
+
+    /// <summary>選択中の語句の例外。</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RemoveComposerMentionExceptionCommand))]
+    private ComposerMentionExceptionRowViewModel? _selectedComposerMentionException;
 
     /// <summary>選択中の誤記。</summary>
     [ObservableProperty]
@@ -160,6 +166,9 @@ public sealed partial class DictionaryViewModel : ObservableObject
 
     /// <summary>アルバム単位の個別例外（docs/SPEC.md 7.4.5）。</summary>
     public ObservableCollection<AlbumOverrideRowViewModel> AlbumOverrides { get; } = [];
+
+    /// <summary>R-210 の照合から外す語句（docs/TAGGING_POLICY.md 6.9）。</summary>
+    public ObservableCollection<ComposerMentionExceptionRowViewModel> ComposerMentionExceptions { get; } = [];
 
     /// <summary>
     /// 作品の作曲家に選べる正規形。**自由入力させないための選択肢**（docs/SPEC.md 7.3.1）。
@@ -719,6 +728,24 @@ public sealed partial class DictionaryViewModel : ObservableObject
     }
 
     /// <summary>
+    /// 語句の例外を削除する。**追加の入口はここに置かない**（docs/SPEC.md 7.3.2）。
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanRemoveComposerMentionException))]
+    private void RemoveComposerMentionException()
+    {
+        if (SelectedComposerMentionException is null
+            || !ConfirmRemove(
+                DictionaryValidator.CATEGORY_MENTION_EXCEPTION,
+                SelectedComposerMentionException.SortKey,
+                "削除すると、この語句の作曲家名は R-210 でふたたび検出されます。"))
+        {
+            return;
+        }
+
+        ComposerMentionExceptions.Remove(SelectedComposerMentionException);
+    }
+
+    /// <summary>
     /// 誤記を追加する。
     /// </summary>
     [RelayCommand]
@@ -858,6 +885,12 @@ public sealed partial class DictionaryViewModel : ObservableObject
         return SelectedAlbumOverride is not null;
     }
 
+    /// <summary>語句の例外を削除できるか。</summary>
+    private bool CanRemoveComposerMentionException()
+    {
+        return SelectedComposerMentionException is not null;
+    }
+
     /// <summary>誤記を削除できるか。</summary>
     private bool CanRemoveTypo()
     {
@@ -873,12 +906,15 @@ public sealed partial class DictionaryViewModel : ObservableObject
     /// <summary>
     /// 削除してよいかを確認する。
     /// </summary>
-    private static bool ConfirmRemove(string category, string name)
+    private static bool ConfirmRemove(
+        string category,
+        string name,
+        string consequence = "削除すると、この名前に対する修正案は出なくなります。")
     {
         return MessageBox.Show(
             $"{category}「{name}」を辞書から削除します。"
             + Environment.NewLine + Environment.NewLine
-            + "削除すると、この名前に対する修正案は出なくなります。",
+            + consequence,
             "辞書から削除しますか？",
             MessageBoxButton.OKCancel,
             MessageBoxImage.Warning,
@@ -945,6 +981,10 @@ public sealed partial class DictionaryViewModel : ObservableObject
 
             case DictionaryValidator.CATEGORY_OVERRIDE:
                 Reveal(issue, AlbumOverrides, row => SelectedAlbumOverride = row);
+                break;
+
+            case DictionaryValidator.CATEGORY_MENTION_EXCEPTION:
+                Reveal(issue, ComposerMentionExceptions, row => SelectedComposerMentionException = row);
                 break;
 
             case DictionaryValidator.CATEGORY_TYPO:
@@ -1067,6 +1107,7 @@ public sealed partial class DictionaryViewModel : ObservableObject
         Ensembles.Clear();
         Works.Clear();
         AlbumOverrides.Clear();
+        ComposerMentionExceptions.Clear();
         Typos.Clear();
         ProtectedValues.Clear();
         Issues.Clear();
@@ -1096,6 +1137,11 @@ public sealed partial class DictionaryViewModel : ObservableObject
         foreach (AlbumOverrideEntry entry in dictionary.AlbumOverrides ?? [])
         {
             AlbumOverrides.Add(new AlbumOverrideRowViewModel(entry));
+        }
+
+        foreach (ComposerMentionExceptionEntry entry in dictionary.ComposerMentionExceptions ?? [])
+        {
+            ComposerMentionExceptions.Add(new ComposerMentionExceptionRowViewModel(entry));
         }
 
         foreach (TypoEntry entry in dictionary.Typos ?? [])
@@ -1133,6 +1179,7 @@ public sealed partial class DictionaryViewModel : ObservableObject
         AddView(Ensembles);
         AddView(Works);
         AddView(AlbumOverrides);
+        AddView(ComposerMentionExceptions);
         AddView(Typos);
         AddView(ProtectedValues);
     }
@@ -1227,6 +1274,7 @@ public sealed partial class DictionaryViewModel : ObservableObject
         Ensembles.CollectionChanged += OnCollectionChanged;
         Works.CollectionChanged += OnCollectionChanged;
         AlbumOverrides.CollectionChanged += OnCollectionChanged;
+        ComposerMentionExceptions.CollectionChanged += OnCollectionChanged;
         Typos.CollectionChanged += OnCollectionChanged;
         ProtectedValues.CollectionChanged += OnCollectionChanged;
 
@@ -1251,6 +1299,7 @@ public sealed partial class DictionaryViewModel : ObservableObject
         Ensembles.CollectionChanged -= OnCollectionChanged;
         Works.CollectionChanged -= OnCollectionChanged;
         AlbumOverrides.CollectionChanged -= OnCollectionChanged;
+        ComposerMentionExceptions.CollectionChanged -= OnCollectionChanged;
         Typos.CollectionChanged -= OnCollectionChanged;
         ProtectedValues.CollectionChanged -= OnCollectionChanged;
 
@@ -1276,6 +1325,7 @@ public sealed partial class DictionaryViewModel : ObservableObject
             .Concat(Ensembles.SelectMany(ensemble => ensemble.Eras))
             .Concat(Works)
             .Concat(AlbumOverrides)
+            .Concat(ComposerMentionExceptions)
             .Concat(Typos)
             .Concat(ProtectedValues);
     }
@@ -1361,6 +1411,7 @@ public sealed partial class DictionaryViewModel : ObservableObject
             Ensembles = [.. Ensembles.Select(row => row.ToEntry())],
             Works = [.. Works.Select(row => row.ToEntry())],
             AlbumOverrides = [.. AlbumOverrides.Select(row => row.ToEntry())],
+            ComposerMentionExceptions = [.. ComposerMentionExceptions.Select(row => row.ToEntry())],
             Typos = [.. Typos.Select(row => row.ToEntry())],
             ProtectedAlbumArtists = [.. ProtectedValues.Select(row => row.Value.Trim()).Where(value => value.Length > 0)],
         };

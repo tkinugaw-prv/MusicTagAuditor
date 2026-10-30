@@ -536,9 +536,14 @@
                     その入口がここだと気付けなかった（docs/SPEC.md 7.3.2）。
                   -->
                   <Button DockPanel.Dock="Left" Content="このアルバムの扱いを決める"
-                          Command="{Binding AddAlbumOverrideFromChangeCommand}" Margin="0,0,14,0"
+                          Command="{Binding AddAlbumOverrideFromChangeCommand}" Margin="0,0,8,0"
                           ToolTipService.ShowOnDisabled="True"
                           ToolTip="R-504 の「作品が決まらない」保留行と R-501 の明細から、そのアルバム単位の個別例外を登録します。対象外にするか、作曲家・作品名を指定するかをダイアログで選びます。「年が決まらない」「演奏者が決まらない」保留行では押せません（個別例外に date と artist は書けないため、ファイル一覧タブでタグを直します）" />
+                  <!-- フォルダ名だけの検出は作品の語句ではないので押せない（docs/TAGGING_POLICY.md 6.9） -->
+                  <Button DockPanel.Dock="Left" Content="この語句を例外に登録"
+                          Command="{Binding AddComposerMentionExceptionFromChangeCommand}" Margin="0,0,14,0"
+                          ToolTipService.ShowOnDisabled="True"
+                          ToolTip="R-210 の行で、曲名の語句に含まれる作曲家名が別人を指していないと確認できたときに登録します。ファイル名にも曲名にも作曲家名が出ない行（フォルダ名だけの検出）と、composer が辞書に無い行では押せません" />
                   <TextBlock Style="{StaticResource StatusTextStyle}"
                              Text="{Binding InspectionSummary}" TextWrapping="Wrap" />
                 </DockPanel>
@@ -1478,6 +1483,46 @@
                                                 Binding="{Binding Exclude, UpdateSourceTrigger=PropertyChanged}"
                                                 ElementStyle="{StaticResource GridCheckBoxStyle}"
                                                 EditingElementStyle="{StaticResource GridCheckBoxStyle}" />
+                        <DataGridTextColumn Header="理由" Binding="{Binding Note, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="200"
+                                            ElementStyle="{StaticResource EllipsisTextStyle}"
+                                            EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
+                      </DataGrid.Columns>
+                    </DataGrid>
+                  </Border>
+                </Grid>
+              </TabItem>
+
+              <!-- R-210 の照合から外す語句（docs/TAGGING_POLICY.md 6.9） -->
+              <TabItem Header="語句の例外">
+                <Grid Margin="0,12,0,0">
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                  </Grid.RowDefinitions>
+
+                  <DockPanel Grid.Row="0" Margin="0,0,0,10">
+                    <!--
+                      追加の入口はここに置かない。作曲家は検査結果から埋める（docs/SPEC.md 7.3.2）。
+                      作曲家を読み取り専用にしているのも同じ理由で、付け替えは削除して登録し直す。
+                    -->
+                    <Button DockPanel.Dock="Left" Content="削除" Command="{Binding RemoveComposerMentionExceptionCommand}"
+                            Style="{StaticResource SmallOutlineButtonStyle}" Margin="0,0,14,0" />
+                    <TextBlock Style="{StaticResource HintTextStyle}" VerticalAlignment="Center" TextWrapping="Wrap"
+                               ctl:PolicyText.Text="R-210 の照合から外す語句（TAGGING_POLICY 6.9）。その作曲家のファイルにだけ効く。追加は検査結果タブの「この語句を例外に登録」から行う。削除すると検出が戻る。" />
+                  </DockPanel>
+
+                  <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Padding="1">
+                    <DataGrid ItemsSource="{Binding ComposerMentionExceptions}"
+                              SelectedItem="{Binding SelectedComposerMentionException}"
+                              SelectionMode="Single"
+                              ctl:ScrollToSelection.Enabled="True"
+                              HorizontalScrollBarVisibility="Auto">
+                      <DataGrid.Columns>
+                        <DataGridTextColumn Header="作曲家" Binding="{Binding Composer, Mode=OneWay}" IsReadOnly="True" Width="200"
+                                            ElementStyle="{StaticResource EllipsisTextStyle}" />
+                        <DataGridTextColumn Header="語句" Binding="{Binding Phrase, UpdateSourceTrigger=PropertyChanged}" Width="260"
+                                            ElementStyle="{StaticResource EllipsisTextStyle}"
+                                            EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
                         <DataGridTextColumn Header="理由" Binding="{Binding Note, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="200"
                                             ElementStyle="{StaticResource EllipsisTextStyle}"
                                             EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />

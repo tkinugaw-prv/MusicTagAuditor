@@ -161,8 +161,11 @@ public sealed class ComposerInAlbumArtistRule : IInspectionRule
 /// </summary>
 public sealed class ComposerMismatchRule : IInspectionRule
 {
+    /// <summary>ルール ID。検査結果からの導線で行を見分けるのに使う。</summary>
+    public const string RULE_ID = "R-210";
+
     /// <inheritdoc />
-    public string Id => "R-210";
+    public string Id => RULE_ID;
 
     /// <inheritdoc />
     public Severity Severity => Severity.Info;

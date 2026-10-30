@@ -139,6 +139,7 @@ public sealed partial class MainViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(AddSelectedChangeToDictionaryCommand))]
     [NotifyCanExecuteChangedFor(nameof(AddWorkFromChangeCommand))]
     [NotifyCanExecuteChangedFor(nameof(AddAlbumOverrideFromChangeCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AddComposerMentionExceptionFromChangeCommand))]
     private bool _isScanning;
 
     /// <summary>進捗の現在値。</summary>
@@ -225,6 +226,7 @@ public sealed partial class MainViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(AddSelectedChangeToDictionaryCommand))]
     [NotifyCanExecuteChangedFor(nameof(AddWorkFromChangeCommand))]
     [NotifyCanExecuteChangedFor(nameof(AddAlbumOverrideFromChangeCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AddComposerMentionExceptionFromChangeCommand))]
     private TagChangeViewModel? _selectedChange;
 
     /// <summary>未知の値の一覧で選択中の行。</summary>
@@ -1363,6 +1365,85 @@ public sealed partial class MainViewModel : ObservableObject
                 entry.Composer,
                 entry.WorkName,
                 entry.Date));
+    }
+
+    /// <summary>
+    /// 選択中の R-210 の行から、語句の例外を足す（docs/SPEC.md 7.3.2 / docs/TAGGING_POLICY.md 6.9）。
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanAddComposerMentionExceptionFromChange))]
+    private void AddComposerMentionExceptionFromChange()
+    {
+        if (SelectedChange is null
+            || _lastContext is null
+            || FindExceptionTarget(SelectedChange) is not (TrackTags track, ComposerMismatchHit hit))
+        {
+            return;
+        }
+
+        if (!Dictionary.ConfirmDiscardIfDirty())
+        {
+            return;
+        }
+
+        AddComposerMentionExceptionViewModel viewModel = new(
+            _dictionaryStore.Dictionary, track, _lastContext.GetSiblings(track), hit);
+
+        AddComposerMentionExceptionWindow window = new(viewModel)
+        {
+            Owner = Application.Current?.MainWindow,
+        };
+
+        if (window.ShowDialog() != true)
+        {
+            return;
+        }
+
+        ComposerMentionExceptionEntry entry = viewModel.BuildEntry();
+
+        SaveDictionary(
+            viewModel.Apply,
+            $"「{entry.Composer}」の語句「{entry.Phrase}」を例外に登録して再検査しました。",
+            () => Log.Information(
+                "語句の例外を辞書に追加した composer={Composer} phrase={Phrase}",
+                entry.Composer,
+                entry.Phrase));
+    }
+
+    /// <summary>
+    /// 語句の例外を足せる行かを判定する。
+    ///
+    /// **フォルダ名だけの検出では押させない。** 作品の語句ではなく、6.9 の実例ではいずれも真の誤り
+    /// だった。例外にできると、誤りをタグを直さずに一覧から消す操作になる。
+    /// <c>composer</c> が辞書に無い行も、登録が検証で止まるので押させない。
+    /// </summary>
+    private bool CanAddComposerMentionExceptionFromChange()
+    {
+        return !IsScanning && SelectedChange is not null && FindExceptionTarget(SelectedChange) is not null;
+    }
+
+    /// <summary>
+    /// 語句の例外を足す対象を探す。
+    /// </summary>
+    /// <param name="change">明細の行。</param>
+    /// <returns>対象のファイルと検出内容。足せない行なら null。</returns>
+    private (TrackTags Track, ComposerMismatchHit Hit)? FindExceptionTarget(TagChangeViewModel change)
+    {
+        if (change.RuleId != ComposerMismatchRule.RULE_ID || _lastContext is null || _lastScan is null)
+        {
+            return null;
+        }
+
+        TrackTags? track = _lastScan.Tracks.FirstOrDefault(
+            candidate => string.Equals(candidate.RelativePath, change.RelativePath, StringComparison.OrdinalIgnoreCase));
+
+        if (track is null || !_lastContext.Dictionary.TryResolveComposer(track.Composer, out _))
+        {
+            return null;
+        }
+
+        ComposerMismatchHit? hit = ComposerMismatch.Find(track, _lastContext.Dictionary, _lastContext.GetSiblings(track));
+
+        return hit is null || (hit.FromFileName is null && hit.FromTitle is null) ? null : (track, hit);
     }
 
     /// <summary>
