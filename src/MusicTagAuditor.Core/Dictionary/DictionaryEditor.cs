@@ -1,3 +1,4 @@
+using MusicTagAuditor.Core.Inspection;
 using MusicTagAuditor.Core.Models;
 using MusicTagAuditor.Core.Normalization;
 
@@ -357,6 +358,39 @@ public static class DictionaryEditor
         }
 
         return dictionary with { AlbumOverrides = [.. overrides, entry] };
+    }
+
+    /// <summary>
+    /// R-210 の照合から外す語句を足す（docs/TAGGING_POLICY.md 6.9）。
+    ///
+    /// **同じ作曲家と語句の組があれば置き換える。** 効きは変わらず、理由だけが食い違う行が残るため。
+    /// </summary>
+    /// <param name="dictionary">元の辞書。</param>
+    /// <param name="entry">足す例外。</param>
+    /// <returns>新しい辞書。</returns>
+    public static TagDictionary AddComposerMentionException(TagDictionary dictionary, ComposerMentionExceptionEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(dictionary);
+        ArgumentNullException.ThrowIfNull(entry);
+        ArgumentException.ThrowIfNullOrWhiteSpace(entry.Composer);
+        ArgumentException.ThrowIfNullOrWhiteSpace(entry.Phrase);
+
+        ComposerMentionExceptionEntry[] exceptions = [.. dictionary.ComposerMentionExceptions ?? []];
+        string phraseKey = ComposerMismatch.CreatePhraseKey(entry.Phrase);
+
+        int index = Array.FindIndex(
+            exceptions,
+            existing => string.Equals(existing.Composer, entry.Composer, StringComparison.Ordinal)
+                && string.Equals(ComposerMismatch.CreatePhraseKey(existing.Phrase), phraseKey, StringComparison.Ordinal));
+
+        if (index >= 0)
+        {
+            exceptions[index] = entry;
+
+            return dictionary with { ComposerMentionExceptions = exceptions };
+        }
+
+        return dictionary with { ComposerMentionExceptions = [.. exceptions, entry] };
     }
 
     /// <summary>

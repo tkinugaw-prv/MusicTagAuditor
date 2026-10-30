@@ -48,8 +48,12 @@ public sealed class DictionaryStoreTests : IDisposable
             Composers = [new ComposerEntry { Canonical = "Anton Bruckner" }],
             Works = [new WorkEntry { Composer = "Anton Bruckner", Canonical = "Symphony No. 8" }],
             AlbumOverrides = [new AlbumOverrideEntry { Folder = "x", Exclude = true, Note = "y" }],
+            ComposerMentionExceptions = [new ComposerMentionExceptionEntry { Composer = "Anton Bruckner", Phrase = "a b", Note = "y" }],
         });
 
+        Assert.Contains("\"composerMentionExceptions\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"phrase\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"ComposerMentionExceptions\"", json, StringComparison.Ordinal);
         Assert.Contains("\"version\"", json, StringComparison.Ordinal);
         Assert.Contains("\"composers\"", json, StringComparison.Ordinal);
         Assert.Contains("\"works\"", json, StringComparison.Ordinal);

@@ -406,6 +406,87 @@ public sealed class DictionaryValidatorTests
     }
 
     /// <summary>
+    /// R-210 の語句の例外で、効かない・効きすぎる形をエラーにすることを確認する（docs/TAGGING_POLICY.md 6.9）。
+    ///
+    /// 1 語だけや作曲家名だけの語句を通すと、その作曲家では本物の別の作曲家も検出できなくなる。
+    /// </summary>
+    [Theory]
+    [InlineData("", "Szene am Bach")]
+    [InlineData("Unknown Composer", "Szene am Bach")]
+    [InlineData("Ludwig van Beethoven", "")]
+    [InlineData("Ludwig van Beethoven", "Bach")]
+    [InlineData("Ludwig van Beethoven", "Bach Weber")]
+    public void DetectsInvalidComposerMentionException(string composer, string phrase)
+    {
+        Assert.True(DictionaryValidator.HasError(DictionaryValidator.Validate(WithException(composer, phrase, "理由"))));
+    }
+
+    /// <summary>
+    /// 正しい語句の例外には問題を出さないことを確認する。別名の作曲家でも通る。
+    /// </summary>
+    [Theory]
+    [InlineData("Ludwig van Beethoven")]
+    [InlineData("Beethoven")]
+    public void AcceptsComposerMentionException(string composer)
+    {
+        Assert.Empty(DictionaryValidator.Validate(WithException(composer, "Szene am Bach", "小川")));
+    }
+
+    /// <summary>
+    /// 何もしない例外と理由の無い例外は、保存は止めず警告を出すことを確認する。
+    /// </summary>
+    [Theory]
+    [InlineData("Allegro con brio", "小川", "何もしません")]
+    [InlineData("Szene am Bach", "", "理由")]
+    public void WarnsAboutComposerMentionException(string phrase, string note, string expected)
+    {
+        IReadOnlyList<DictionaryIssue> issues = DictionaryValidator.Validate(
+            WithException("Ludwig van Beethoven", phrase, note));
+
+        DictionaryIssue issue = Assert.Single(issues);
+        Assert.Equal(DictionaryIssueSeverity.Warning, issue.Severity);
+        Assert.Contains(expected, issue.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 表記だけが違う同じ語句の重複を警告することを確認する。
+    /// </summary>
+    [Fact]
+    public void WarnsAboutDuplicateComposerMentionException()
+    {
+        TagDictionary dictionary = WithException("Ludwig van Beethoven", "Szene am Bach", "小川") with
+        {
+            ComposerMentionExceptions =
+            [
+                new ComposerMentionExceptionEntry { Composer = "Ludwig van Beethoven", Phrase = "Szene am Bach", Note = "小川" },
+                new ComposerMentionExceptionEntry { Composer = "Beethoven", Phrase = "szene-am-bach", Note = "小川" },
+            ],
+        };
+
+        Assert.Contains("重複", Assert.Single(DictionaryValidator.Validate(dictionary)).Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 語句の例外を 1 件持つ辞書を作る。
+    /// </summary>
+    private static TagDictionary WithException(string composer, string phrase, string note)
+    {
+        return new TagDictionary
+        {
+            Composers =
+            [
+                new ComposerEntry { Canonical = "Ludwig van Beethoven", Aliases = ["Beethoven"] },
+                new ComposerEntry { Canonical = "Johann Sebastian Bach", Aliases = ["Bach"] },
+                new ComposerEntry { Canonical = "Carl Maria von Weber", Aliases = ["Weber"] },
+            ],
+            ComposerMentionExceptions =
+            [
+                new ComposerMentionExceptionEntry { Composer = composer, Phrase = phrase, Note = note },
+            ],
+        };
+    }
+
+    /// <summary>
     /// 年だけを指定した個別例外は「何もしない例外」ではないことを確認する（3.5 規則2）。
     /// </summary>
     [Fact]

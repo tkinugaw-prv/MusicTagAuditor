@@ -31,6 +31,7 @@ public static class DictionarySummary
             + $" 誤記={Count(dictionary.Typos)}"
             + $" 作品={Count(dictionary.Works)}"
             + $" 個別例外={Count(dictionary.AlbumOverrides)}"
+            + $" 語句の例外={Count(dictionary.ComposerMentionExceptions)}"
             + $" 保護対象={Count(dictionary.ProtectedAlbumArtists)}";
     }
 

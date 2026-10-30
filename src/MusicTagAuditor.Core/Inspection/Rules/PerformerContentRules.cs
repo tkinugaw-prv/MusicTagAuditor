@@ -239,8 +239,13 @@ public sealed class ComposerMismatchRule : IInspectionRule
             sources.Add($"フォルダ「{InspectionContext.GetFolder(track.RelativePath)}」に「{hit.FromFolder}」");
         }
 
-        return $"composer は「{hit.Tagged}」だが、{string.Join(" / ", sources)}が出てくる。"
+        string rationale = $"composer は「{hit.Tagged}」だが、{string.Join(" / ", sources)}が出てくる。"
             + "曲名が別の作曲家名を正当に含む作品もあるため、誤りとは限らない。CD 実物の確認が要る";
+
+        // フォルダ名だけの検出は作品の語句ではなく、例外にする道を案内しない（6.9 の実例は真の誤り）。
+        return hit.FromFileName is null && hit.FromTitle is null
+            ? rationale
+            : rationale + "。正しければ「この語句を例外に登録」で次回から出なくなる";
     }
 }
 
