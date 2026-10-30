@@ -221,6 +221,40 @@ public sealed class DictionaryEditorTests
     }
 
     /// <summary>
+    /// 語句の例外を足すと、その作曲家で引けるようになることを確認する。
+    /// </summary>
+    [Fact]
+    public void AddedComposerMentionExceptionResolvesByComposer()
+    {
+        TagDictionary after = DictionaryEditor.AddComposerMentionException(
+            new TagDictionary { Composers = [new ComposerEntry { Canonical = "Ludwig van Beethoven" }] },
+            new ComposerMentionExceptionEntry { Composer = "Ludwig van Beethoven", Phrase = "Szene am Bach", Note = "小川" });
+
+        Assert.Equal(["Szene am Bach"], new DictionaryIndex(after).GetComposerMentionExceptions("Ludwig van Beethoven"));
+    }
+
+    /// <summary>
+    /// 同じ作曲家と語句の組は置き換えることを確認する。表記の違いは同じ語句として扱う。
+    /// </summary>
+    [Fact]
+    public void ReplacesSameComposerMentionException()
+    {
+        TagDictionary dictionary = new()
+        {
+            ComposerMentionExceptions =
+            [
+                new ComposerMentionExceptionEntry { Composer = "Ludwig van Beethoven", Phrase = "Szene am Bach", Note = "前の理由" },
+            ],
+        };
+
+        TagDictionary after = DictionaryEditor.AddComposerMentionException(
+            dictionary,
+            new ComposerMentionExceptionEntry { Composer = "Ludwig van Beethoven", Phrase = "szene-am-bach", Note = "新しい理由" });
+
+        Assert.Equal("新しい理由", Assert.Single(after.ComposerMentionExceptions).Note);
+    }
+
+    /// <summary>
     /// 個別例外を足すと、そのフォルダで引けるようになることを確認する。
     /// </summary>
     [Fact]

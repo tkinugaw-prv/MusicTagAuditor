@@ -1,5 +1,6 @@
 using MusicTagAuditor.Core.Dictionary;
 using MusicTagAuditor.Core.Models;
+using MusicTagAuditor.Core.Normalization;
 
 namespace MusicTagAuditor.Core.Inspection;
 
@@ -17,6 +18,24 @@ public sealed record ComposerMismatchHit(
     string? FromFolder);
 
 /// <summary>
+/// R-210 の例外に登録しようとしている語句の問題（docs/TAGGING_POLICY.md 6.9）。
+/// </summary>
+public enum ComposerMentionPhraseIssue
+{
+    /// <summary>問題なし。</summary>
+    None,
+
+    /// <summary>語が 2 つ未満。<c>Bach</c> だけを外すと、本物の <c>Bach</c> の曲も検出できなくなる。</summary>
+    TooFewWords,
+
+    /// <summary>全語が作曲家名。作品の語句ではなく、作曲家を丸ごと外すことになる。</summary>
+    OnlyComposerNames,
+
+    /// <summary>別の作曲家名を含まない。登録しても何も起きない。</summary>
+    NoOtherComposer,
+}
+
+/// <summary>
 /// ファイル名・<c>title</c>・フォルダ名に <c>composer</c> と違う作曲家名が出てくるファイルを見つける
 /// （R-210 / docs/TAGGING_POLICY.md 6.9）。
 ///
@@ -26,7 +45,7 @@ public sealed record ComposerMismatchHit(
 ///
 /// **一致しても誤りとは限らない。** ブラームス『ハイドンの主題による変奏曲』のように、曲名が
 /// 別の作曲家の名前を正当に含む作品がある。この判別は機械ではできないので、判定は返すだけにして
-/// 修正案は出さない。
+/// 修正案は出さない。人が正しいと判断した語句は辞書の例外に残し、照合から外す。
 ///
 /// **辞書に載っている作曲家名しか検出できない。** 辞書が育つほど誤検出は増える（6.9）。
 ///
@@ -42,6 +61,12 @@ public static class ComposerMismatch
     /// </summary>
     private static readonly char[] SEPARATORS =
         [' ', '\t', ',', ';', ':', '/', '-', '_', '(', ')', '[', ']', '&', '.', '　', '、', '・'];
+
+    /// <summary>例外の語句に要る最小の語数（docs/TAGGING_POLICY.md 6.9）。</summary>
+    private const int MINIMUM_PHRASE_WORDS = 2;
+
+    /// <summary>語句のキーで語を繋ぐ区切り。タグの値に現れない制御文字を選ぶ。</summary>
+    private const string PHRASE_KEY_SEPARATOR = "\u0001";
 
     /// <summary>
     /// <c>composer</c> と違う作曲家名がファイル名・<c>title</c>・フォルダ名に出てくるかを調べる。
@@ -177,13 +202,13 @@ public static class ComposerMismatch
             return null;
         }
 
-        string[] tokens = value.Split(
-            SEPARATORS,
-            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        IReadOnlyList<string> words = SplitWords(value);
+        bool[] excepted = MarkExceptedWords(words, dictionary.GetComposerMentionExceptions(taggedCanonical));
 
-        foreach (string token in tokens)
+        for (int i = 0; i < words.Count; i++)
         {
-            if (dictionary.ContainsComposerName(token, out string? found)
+            if (!excepted[i]
+                && dictionary.ContainsComposerName(words[i], out string? found)
                 && found is not null
                 && !string.Equals(found, taggedCanonical, StringComparison.Ordinal))
             {
@@ -192,5 +217,121 @@ public static class ComposerMismatch
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// 値を照合に使う語へ分ける。記号だけの語は落とす。
+    /// 残すと <c>Szene - am Bach</c> のような区切りの違いで語句の並びが崩れる。
+    /// </summary>
+    /// <param name="value">分ける値。</param>
+    /// <returns>語の並び。</returns>
+    public static IReadOnlyList<string> SplitWords(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return [];
+        }
+
+        return
+        [
+            .. value
+                .Split(SEPARATORS, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(word => NormalizationKey.Create(word).Length > 0),
+        ];
+    }
+
+    /// <summary>
+    /// 語句の同一性を比べるキーを作る。大小文字・発音区別符号・区切りの違いを同じものとして扱う。
+    /// </summary>
+    /// <param name="phrase">語句。</param>
+    /// <returns>キー。</returns>
+    public static string CreatePhraseKey(string? phrase)
+    {
+        return string.Join(PHRASE_KEY_SEPARATOR, SplitWords(phrase).Select(NormalizationKey.Create));
+    }
+
+    /// <summary>
+    /// 語句を R-210 の例外にしてよいかを調べる（docs/TAGGING_POLICY.md 6.9）。
+    /// 辞書の検証と登録ダイアログで判定が割れないよう、ここに 1 つだけ置く。
+    /// </summary>
+    /// <param name="dictionary">正規化辞書の索引。</param>
+    /// <param name="phrase">語句。</param>
+    /// <param name="composerCanonical">例外を効かせる作曲家の正規形。</param>
+    /// <returns>見つかった問題。</returns>
+    public static ComposerMentionPhraseIssue CheckExceptionPhrase(
+        DictionaryIndex dictionary,
+        string? phrase,
+        string composerCanonical)
+    {
+        ArgumentNullException.ThrowIfNull(dictionary);
+
+        IReadOnlyList<string> words = SplitWords(phrase);
+
+        if (words.Count < MINIMUM_PHRASE_WORDS)
+        {
+            return ComposerMentionPhraseIssue.TooFewWords;
+        }
+
+        List<string> composers = [];
+
+        foreach (string word in words)
+        {
+            if (dictionary.ContainsComposerName(word, out string? found) && found is not null)
+            {
+                composers.Add(found);
+            }
+        }
+
+        if (composers.Count == words.Count)
+        {
+            return ComposerMentionPhraseIssue.OnlyComposerNames;
+        }
+
+        return composers.Exists(found => !string.Equals(found, composerCanonical, StringComparison.Ordinal))
+            ? ComposerMentionPhraseIssue.None
+            : ComposerMentionPhraseIssue.NoOtherComposer;
+    }
+
+    /// <summary>
+    /// 例外の語句に一致した語に印を付ける。
+    ///
+    /// **語の並びで比べる。** 値全体の正規化キーは空白を除くため、語の境界が消えて
+    /// <c>Szene am Bach</c> が <c>Szene am Bachmann</c> に当たる。
+    /// **外すのは一致した部分だけ。** 同じ値にある別の作曲家名は検出を続ける。
+    /// </summary>
+    /// <param name="words">値の語の並び。</param>
+    /// <param name="phrases">例外の語句。</param>
+    /// <returns>語ごとの印。</returns>
+    private static bool[] MarkExceptedWords(IReadOnlyList<string> words, IReadOnlyList<string> phrases)
+    {
+        bool[] excepted = new bool[words.Count];
+
+        if (phrases.Count == 0)
+        {
+            return excepted;
+        }
+
+        string[] wordKeys = [.. words.Select(NormalizationKey.Create)];
+
+        foreach (string phrase in phrases)
+        {
+            string[] phraseKeys = [.. SplitWords(phrase).Select(NormalizationKey.Create)];
+
+            // 手で書かれた `Bach` 単独を効かせない。検証のエラーを無視して起動しても検出を止めない。
+            if (phraseKeys.Length < MINIMUM_PHRASE_WORDS)
+            {
+                continue;
+            }
+
+            for (int start = 0; start + phraseKeys.Length <= wordKeys.Length; start++)
+            {
+                if (wordKeys.AsSpan(start, phraseKeys.Length).SequenceEqual(phraseKeys))
+                {
+                    Array.Fill(excepted, true, start, phraseKeys.Length);
+                }
+            }
+        }
+
+        return excepted;
     }
 }

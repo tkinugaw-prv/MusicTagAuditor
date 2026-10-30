@@ -34,6 +34,26 @@ public sealed class DictionarySummaryTests
     }
 
     /// <summary>
+    /// 語句の例外の件数が出ることと、null でも 0 と出ることを確認する。
+    /// </summary>
+    [Fact]
+    public void IncludesComposerMentionExceptions()
+    {
+        Assert.Contains(
+            "語句の例外=1",
+            DictionarySummary.Describe(new TagDictionary
+            {
+                ComposerMentionExceptions = [new ComposerMentionExceptionEntry { Composer = "x", Phrase = "y z" }],
+            }),
+            StringComparison.Ordinal);
+
+        Assert.Contains(
+            "語句の例外=0",
+            DictionarySummary.Describe(new TagDictionary { ComposerMentionExceptions = null! }),
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 項目が null でも落ちずに 0 と出ることを確認する。
     ///
     /// JSON に <c>"works": null</c> と書かれているとプロパティ初期化子ではなく null が入る。
@@ -65,6 +85,7 @@ public sealed class DictionarySummaryTests
 
         Assert.Empty(bundled.Works ?? []);
         Assert.Empty(bundled.AlbumOverrides ?? []);
+        Assert.Empty(bundled.ComposerMentionExceptions ?? []);
         Assert.NotEmpty(bundled.Composers);
     }
 }

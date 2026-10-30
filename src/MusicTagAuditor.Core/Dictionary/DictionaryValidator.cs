@@ -1,4 +1,5 @@
 ﻿using System.Text.RegularExpressions;
+using MusicTagAuditor.Core.Inspection;
 using MusicTagAuditor.Core.Normalization;
 
 namespace MusicTagAuditor.Core.Dictionary;
@@ -62,6 +63,9 @@ public static class DictionaryValidator
     /// <summary>個別例外の種別名。</summary>
     public const string CATEGORY_OVERRIDE = "個別例外";
 
+    /// <summary>R-210 の語句の例外の種別名。</summary>
+    public const string CATEGORY_MENTION_EXCEPTION = "語句の例外";
+
     /// <summary>録音年の形（docs/TAGGING_POLICY.md 2.4）。R-104 が直すのと同じ 4 桁。</summary>
     private static readonly Regex FOUR_DIGIT_YEAR = new(@"^\d{4}$", RegexOptions.Compiled);
 
@@ -96,6 +100,7 @@ public static class DictionaryValidator
         ValidateProtected(dictionary, issues);
         ValidateWorks(dictionary, issues);
         ValidateAlbumOverrides(dictionary, issues);
+        ValidateComposerMentionExceptions(dictionary, issues);
         ValidateCrossCategory(issues, composerKeys, personKeys, ensembleKeys);
 
         return issues;
@@ -648,6 +653,80 @@ public static class DictionaryValidator
                 // 理由の書いていない例外は、後から消してよいか判断できなくなる。
                 issues.Add(new DictionaryIssue(
                     DictionaryIssueSeverity.Warning, CATEGORY_OVERRIDE, label, "理由（note）が空です。"));
+            }
+        }
+    }
+
+    /// <summary>
+    /// R-210 の語句の例外を検証する（docs/TAGGING_POLICY.md 6.9）。
+    ///
+    /// 作曲家が引けない例外は黙って効かないだけなので、保存前にエラーで止める。
+    /// </summary>
+    private static void ValidateComposerMentionExceptions(TagDictionary dictionary, List<DictionaryIssue> issues)
+    {
+        IReadOnlyList<ComposerMentionExceptionEntry> entries = dictionary.ComposerMentionExceptions ?? [];
+
+        if (entries.Count == 0)
+        {
+            return;
+        }
+
+        DictionaryIndex index = new(dictionary);
+        HashSet<string> seen = new(StringComparer.Ordinal);
+
+        foreach (ComposerMentionExceptionEntry entry in entries)
+        {
+            string phraseLabel = string.IsNullOrWhiteSpace(entry.Phrase) ? "(空欄)" : entry.Phrase;
+            string label = string.IsNullOrWhiteSpace(entry.Composer) ? phraseLabel : $"{entry.Composer}: {phraseLabel}";
+
+            if (!index.TryResolveComposer(entry.Composer, out string canonical))
+            {
+                issues.Add(new DictionaryIssue(
+                    DictionaryIssueSeverity.Error,
+                    CATEGORY_MENTION_EXCEPTION,
+                    label,
+                    string.IsNullOrWhiteSpace(entry.Composer) ? "作曲家が空です。" : "作曲家が辞書にありません。この例外は効きません。"));
+
+                continue;
+            }
+
+            switch (ComposerMismatch.CheckExceptionPhrase(index, entry.Phrase, canonical))
+            {
+                case ComposerMentionPhraseIssue.TooFewWords:
+                    issues.Add(new DictionaryIssue(
+                        DictionaryIssueSeverity.Error,
+                        CATEGORY_MENTION_EXCEPTION,
+                        label,
+                        "語句は 2 語以上にしてください。1 語だけでは本物の別の作曲家も検出できなくなります。"));
+                    break;
+
+                case ComposerMentionPhraseIssue.OnlyComposerNames:
+                    issues.Add(new DictionaryIssue(
+                        DictionaryIssueSeverity.Error,
+                        CATEGORY_MENTION_EXCEPTION,
+                        label,
+                        "語句に作曲家名以外の語を含めてください。"));
+                    break;
+
+                case ComposerMentionPhraseIssue.NoOtherComposer:
+                    issues.Add(new DictionaryIssue(
+                        DictionaryIssueSeverity.Warning,
+                        CATEGORY_MENTION_EXCEPTION,
+                        label,
+                        "語句に別の作曲家名がありません。この例外は何もしません。"));
+                    break;
+            }
+
+            if (!seen.Add(canonical + "\u0001" + ComposerMismatch.CreatePhraseKey(entry.Phrase)))
+            {
+                issues.Add(new DictionaryIssue(
+                    DictionaryIssueSeverity.Warning, CATEGORY_MENTION_EXCEPTION, label, "同じ作曲家と語句の組が重複しています。"));
+            }
+
+            if (string.IsNullOrWhiteSpace(entry.Note))
+            {
+                issues.Add(new DictionaryIssue(
+                    DictionaryIssueSeverity.Warning, CATEGORY_MENTION_EXCEPTION, label, "理由（note）が空です。"));
             }
         }
     }

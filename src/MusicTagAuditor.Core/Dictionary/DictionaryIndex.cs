@@ -63,6 +63,9 @@ public sealed class DictionaryIndex
     /// <summary>フォルダ（正規化した相対パス）→ 個別例外。</summary>
     private readonly FrozenDictionary<string, IReadOnlyList<AlbumOverrideEntry>> _overridesByFolder;
 
+    /// <summary>作曲家の正規形 → R-210 の照合から外す語句。</summary>
+    private readonly FrozenDictionary<string, IReadOnlyList<string>> _mentionExceptionsByComposer;
+
     /// <summary>typo 検出用にコンパイル済みの正規表現。</summary>
     private readonly IReadOnlyList<(Regex Pattern, TypoEntry Entry)> _typos;
 
@@ -158,6 +161,15 @@ public sealed class DictionaryIndex
                 group => group.Key,
                 group => (IReadOnlyList<AlbumOverrideEntry>)[.. group],
                 StringComparer.OrdinalIgnoreCase);
+
+        // 別名で書かれていても効くよう、作曲家は正規形に寄せる。引けないものは検証がエラーにする。
+        _mentionExceptionsByComposer = Safe(dictionary.ComposerMentionExceptions)
+            .Where(entry => composerByKey.ContainsKey(NormalizationKey.Create(entry.Composer)))
+            .GroupBy(entry => composerByKey[NormalizationKey.Create(entry.Composer)], StringComparer.Ordinal)
+            .ToFrozenDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<string>)[.. group.Select(entry => entry.Phrase)],
+                StringComparer.Ordinal);
 
         _typos =
         [
@@ -298,6 +310,18 @@ public sealed class DictionaryIndex
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// その作曲家について R-210 の照合から外す語句を返す（docs/TAGGING_POLICY.md 6.9）。
+    /// </summary>
+    /// <param name="composerCanonical">作曲家の正規形。</param>
+    /// <returns>語句。無ければ空。</returns>
+    public IReadOnlyList<string> GetComposerMentionExceptions(string composerCanonical)
+    {
+        return _mentionExceptionsByComposer.TryGetValue(composerCanonical, out IReadOnlyList<string>? phrases)
+            ? phrases
+            : [];
     }
 
     /// <summary>
