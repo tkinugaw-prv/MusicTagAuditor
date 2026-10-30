@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     MusicTagAuditor を安全に起動して動作確認する。
 
@@ -76,6 +76,7 @@ public static class NativeWindow {
   [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr parent, EnumProc callback, IntPtr lparam);
   [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
   [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hwnd);
+  [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr hwnd, uint command);
   [DllImport("user32.dll")] static extern bool IsWindowEnabled(IntPtr hwnd);
   [DllImport("user32.dll")] static extern int GetDlgCtrlID(IntPtr hwnd);
   [DllImport("user32.dll")] static extern bool PostMessageW(IntPtr hwnd, uint message, IntPtr wparam, IntPtr lparam);
@@ -101,6 +102,12 @@ public static class NativeWindow {
     var text = new StringBuilder(1024);
     GetWindowTextW(hwnd, text, 1024);
     return text.ToString();
+  }
+
+  /// <summary>所有者を持つか。ダイアログは所有され、モードレスの別ウィンドウは所有されない。</summary>
+  public static bool HasOwner(IntPtr hwnd) {
+    const uint GW_OWNER = 4;
+    return GetWindow(hwnd, GW_OWNER) != IntPtr.Zero;
   }
 
   /// <summary>ウィンドウクラス名を返す。ネイティブのダイアログは #32770。</summary>
@@ -253,26 +260,77 @@ function Split-Argument {
 
     **クラス名も返す。** ネイティブの MessageBox（#32770）と自前の Window では
     中身の読み方が違うので、ここで見分けて先を分ける。
+
+    **ダイアログを先に返す。** タグ付け原則のような所有者の無いモードレスのウィンドウは
+    開いたまま残る。列挙順で最初の 1 つを返していた頃は、それが先に返ると本物のダイアログを
+    見逃し、dialog: が原則ウィンドウを掴んだり、終了前の「開いたまま」判定をすり抜けて
+    強制終了に入ったりした。ダイアログ以外は -DialogsOnly で外せる。-Exclude に渡したものも
+    返さない（押す前から開いていたものを、押して開いたと読み違えないため）。
+
+    ダイアログかどうかは Test-DialogWindow で決める。所有者だけでは決めない。
 #>
 function Find-Dialog {
-    param($Process, [int]$TimeoutSeconds = 10)
+    param($Process, [int]$TimeoutSeconds = 10, [switch]$DialogsOnly, [IntPtr[]]$Exclude = @())
 
     for ($waited = 0; $waited -lt $TimeoutSeconds; $waited++) {
+        $unowned = $null
+
         foreach ($window in [NativeWindow]::VisibleWindows([uint32]$Process.Id)) {
-            if ($window.Key -ne $Process.MainWindowHandle) {
-                $className = [NativeWindow]::ClassNameOf($window.Key)
-                return [pscustomobject]@{
-                    Handle    = $window.Key
-                    Title     = $window.Value
-                    ClassName = $className
-                    IsNative  = ($className -eq '#32770')
-                }
+            if ($window.Key -eq $Process.MainWindowHandle) { continue }
+
+            if (Test-DialogWindow -Handle $window.Key) {
+                return ConvertTo-DialogInfo -Window $window
+            }
+
+            if ($null -eq $unowned -and -not $DialogsOnly -and $Exclude -notcontains $window.Key) {
+                $unowned = $window
             }
         }
+
+        if ($null -ne $unowned) { return ConvertTo-DialogInfo -Window $unowned }
+
         Start-Sleep -Seconds 1
     }
 
     return $null
+}
+
+function Test-DialogWindow {
+    # 閉じるべきダイアログかを返す。所有者のあるウィンドウか、ネイティブのダイアログ（#32770）。
+    #
+    # **所有者だけで判定しない。** MessageBox.Show を owner 無しで呼ぶと、WPF は
+    # GetActiveWindow() を owner に使う。アプリが前面に出ていない（フォアグラウンドロックで
+    # 起動直後に前へ出られない等）とこれが NULL になり、MessageBox が所有者の無い
+    # ウィンドウになる。所有者だけで見ると dialog: と「開いたまま」判定の両方から漏れる。
+    # このアプリで #32770 になるのは MessageBox とファイル選択だけで、どちらも閉じるべきもの。
+    param([IntPtr]$Handle)
+
+    return [NativeWindow]::HasOwner($Handle) -or [NativeWindow]::ClassNameOf($Handle) -eq '#32770'
+}
+
+function ConvertTo-DialogInfo {
+    # Find-Dialog が返す形にする。
+    param($Window)
+
+    $className = [NativeWindow]::ClassNameOf($Window.Key)
+
+    return [pscustomobject]@{
+        Handle    = $Window.Key
+        Title     = $Window.Value
+        ClassName = $className
+        IsNative  = ($className -eq '#32770')
+    }
+}
+
+function Get-NonDialogWindows {
+    # メイン以外の、ダイアログでない可視ウィンドウ（原則ウィンドウなど）の HWND を並べる。
+    param($Process)
+
+    return @(
+        [NativeWindow]::VisibleWindows([uint32]$Process.Id) |
+            Where-Object { $_.Key -ne $Process.MainWindowHandle -and -not (Test-DialogWindow -Handle $_.Key) } |
+            ForEach-Object { $_.Key }
+    )
 }
 
 <#
@@ -526,13 +584,15 @@ try {
             'click' {
                 $button = Find-Element -Root $root -ControlType ([System.Windows.Automation.ControlType]::Button) -Name $argument
                 if (-not $button.Current.IsEnabled) { throw "ボタン '$argument' が無効になっている" }
+                $openBefore = Get-NonDialogWindows -Process $process
                 $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
                 Start-Sleep -Seconds $ActionWaitSeconds
                 "押した: $argument"
 
                 # **ダイアログが開いたら黙って進まない。** 開いたことに気づかないまま
                 # 次の手順へ行くと、メインウィンドウを撮り続けて「何も起きない」ように見える。
-                $dialog = Find-Dialog -Process $process -TimeoutSeconds 3
+                # ダイアログ以外のウィンドウは、押して新しく開いたものだけを拾う（原則ウィンドウを開くボタン）。
+                $dialog = Find-Dialog -Process $process -TimeoutSeconds 3 -Exclude $openBefore
                 if ($null -ne $dialog) {
                     "ダイアログが開いた: $($dialog.Title)"
                     "撮影: $(Save-WindowImage -Handle $dialog.Handle -Label "dialog-$($dialog.Title)")"
@@ -547,7 +607,8 @@ try {
             }
 
             'dialog' {
-                $dialog = Find-Dialog -Process $process -TimeoutSeconds 10
+                # 押すボタンを持つのはダイアログだけ。原則ウィンドウを掴まないようダイアログ以外は外す。
+                $dialog = Find-Dialog -Process $process -TimeoutSeconds 10 -DialogsOnly
                 if ($null -eq $dialog) { throw "ダイアログが開いていないのに 'dialog:$argument' が来た" }
 
                 # ネイティブの MessageBox と自前の Window では押し方が違う。理由は
@@ -610,14 +671,24 @@ try {
                 "撮影: $(Save-WindowImage -Handle $process.MainWindowHandle -Label $argument)"
             }
 
+            'wait' {
+                # 右クリックメニューのように UI Automation では本物の入力にならない操作を、
+                # 外から実際のマウスで行う間だけ待つ。待っている間も設定の復元は finally が持つ。
+                "待機: $argument 秒（この間に外から操作できる）"
+                Start-Sleep -Seconds ([int]$argument)
+                "待機を終えた"
+            }
+
             default {
-                throw "手順 '$step' が読めない。使えるのは click / check / dialog / rule / change / rows / tab / shot"
+                throw "手順 '$step' が読めない。使えるのは click / check / dialog / rule / change / rows / tab / shot / wait"
             }
         }
     }
 
     # **開いたままのダイアログを残さない。** CloseMainWindow が効かず、強制終了になる。
-    $stray = Find-Dialog -Process $process -TimeoutSeconds 1
+    # ダイアログでないウィンドウ（タグ付け原則のようなモードレスの別ウィンドウ）は除く。
+    # メイン画面と一緒に閉じる作りなので、CloseMainWindow で片付く。
+    $stray = Find-Dialog -Process $process -TimeoutSeconds 1 -DialogsOnly
     if ($null -ne $stray) { throw "ダイアログ '$($stray.Title)' が開いたままになっている。dialog: で閉じる" }
 
     $process.CloseMainWindow() | Out-Null

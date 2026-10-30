@@ -173,6 +173,98 @@ public sealed class MainViewModelAlbumUnitCommandsTests : IDisposable
     }
 
     /// <summary>
+    /// ファイル名に別の作曲家名が出る R-210 の行では、語句の例外を足せることを確認する。
+    /// 例外を足して再検査すると行が消える。
+    /// </summary>
+    [Fact]
+    public async Task 語句の例外を足すとR210の行が消える()
+    {
+        string path = Path.Combine(@"ベートーヴェン\ベートーヴェン 6 - ベーム", "02 2 Szene am Bach.m4a");
+
+        AddTrack(path, "Ludwig van Beethoven");
+
+        MainViewModel viewModel = await CreateInspectedViewModelAsync();
+
+        SelectMismatch(viewModel, path);
+
+        Assert.True(viewModel.AddComposerMentionExceptionFromChangeCommand.CanExecute(null));
+
+        _dictionaryStore!.Save(DictionaryEditor.AddComposerMentionException(
+            _dictionaryStore.Dictionary,
+            new ComposerMentionExceptionEntry { Composer = "Ludwig van Beethoven", Phrase = "Szene am Bach", Note = "小川" }));
+
+        viewModel.InspectCommand.Execute(null);
+
+        Assert.DoesNotContain(
+            viewModel.RuleResults.SelectMany(rule => rule.Changes),
+            change => change.RuleId == ComposerMismatchRule.RULE_ID && change.RelativePath == path);
+    }
+
+    /// <summary>
+    /// フォルダ名だけの R-210 の行では、語句の例外を足せないことを確認する。
+    ///
+    /// **作品の語句ではなく、6.9 の実例ではいずれも真の誤りだった。** 足せると、誤りを直さずに
+    /// 一覧から消す操作になる。
+    /// </summary>
+    [Fact]
+    public async Task フォルダ名だけのR210の行では語句の例外を足せない()
+    {
+        string path = Path.Combine(@"チャイコフスキー\チャイコフスキー 6 - ムラヴィンスキー 1982", "01.m4a");
+
+        AddTrack(path, "Dmitri Shostakovich");
+
+        MainViewModel viewModel = await CreateInspectedViewModelAsync();
+
+        SelectMismatch(viewModel, path);
+
+        Assert.False(viewModel.AddComposerMentionExceptionFromChangeCommand.CanExecute(null));
+    }
+
+    /// <summary>
+    /// <c>composer</c> が辞書に無い行では、語句の例外を足せないことを確認する。登録が検証で止まるため。
+    /// </summary>
+    [Fact]
+    public async Task composerが辞書に無いR210の行では語句の例外を足せない()
+    {
+        string path = Path.Combine("その他", "01 Weber Oberon.m4a");
+
+        AddTrack(path, "Unknown Composer");
+
+        MainViewModel viewModel = await CreateInspectedViewModelAsync();
+
+        SelectMismatch(viewModel, path);
+
+        Assert.False(viewModel.AddComposerMentionExceptionFromChangeCommand.CanExecute(null));
+    }
+
+    /// <summary>
+    /// 別のルールの行では、語句の例外を足せないことを確認する。
+    /// </summary>
+    [Fact]
+    public async Task 別のルールの行では語句の例外を足せない()
+    {
+        MainViewModel viewModel = await CreateInspectedViewModelAsync();
+
+        RuleResultViewModel rule = viewModel.RuleResults.First(rule => rule.RuleId != ComposerMismatchRule.RULE_ID);
+
+        viewModel.SelectedRule = rule;
+        viewModel.SelectedChange = rule.Changes[0];
+
+        Assert.False(viewModel.AddComposerMentionExceptionFromChangeCommand.CanExecute(null));
+    }
+
+    /// <summary>
+    /// 指定ファイルの R-210 の行を選ぶ。
+    /// </summary>
+    private static void SelectMismatch(MainViewModel viewModel, string path)
+    {
+        RuleResultViewModel rule = viewModel.RuleResults.First(rule => rule.RuleId == ComposerMismatchRule.RULE_ID);
+
+        viewModel.SelectedRule = rule;
+        viewModel.SelectedChange = rule.Changes.First(change => change.RelativePath == path);
+    }
+
+    /// <summary>
     /// 再検査をまたいでも、選んでいたルールと明細が選ばれたままであることを確認する。
     ///
     /// 「このアルバムの扱いを決める」は辞書を保存したあと再検査する。ルール行は毎回作り直されるため、

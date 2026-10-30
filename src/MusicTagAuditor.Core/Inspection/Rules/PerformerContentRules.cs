@@ -17,6 +17,9 @@ public sealed class ComposerInArtistRule : IInspectionRule
     public string Description => "artist に作曲家名が入っている";
 
     /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("2.2")];
+
+    /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
     {
         foreach (TrackTags track in context.Tracks)
@@ -67,6 +70,9 @@ public sealed class ComposerInAlbumArtistRule : IInspectionRule
 
     /// <inheritdoc />
     public string Description => "albumartist に作曲家名が入っている";
+
+    /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("2.3")];
 
     /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
@@ -155,14 +161,20 @@ public sealed class ComposerInAlbumArtistRule : IInspectionRule
 /// </summary>
 public sealed class ComposerMismatchRule : IInspectionRule
 {
+    /// <summary>ルール ID。検査結果からの導線で行を見分けるのに使う。</summary>
+    public const string RULE_ID = "R-210";
+
     /// <inheritdoc />
-    public string Id => "R-210";
+    public string Id => RULE_ID;
 
     /// <inheritdoc />
     public Severity Severity => Severity.Info;
 
     /// <inheritdoc />
     public string Description => "ファイル名・title・フォルダ名に composer と違う作曲家名が出てくる";
+
+    /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("6.9")];
 
     /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
@@ -230,8 +242,13 @@ public sealed class ComposerMismatchRule : IInspectionRule
             sources.Add($"フォルダ「{InspectionContext.GetFolder(track.RelativePath)}」に「{hit.FromFolder}」");
         }
 
-        return $"composer は「{hit.Tagged}」だが、{string.Join(" / ", sources)}が出てくる。"
+        string rationale = $"composer は「{hit.Tagged}」だが、{string.Join(" / ", sources)}が出てくる。"
             + "曲名が別の作曲家名を正当に含む作品もあるため、誤りとは限らない。CD 実物の確認が要る";
+
+        // フォルダ名だけの検出は作品の語句ではなく、例外にする道を案内しない（6.9 の実例は真の誤り）。
+        return hit.FromFileName is null && hit.FromTitle is null
+            ? rationale
+            : rationale + "。正しければ「この語句を例外に登録」で次回から出なくなる";
     }
 }
 
@@ -252,6 +269,9 @@ public sealed class SemicolonValueRule : IInspectionRule
 
     /// <inheritdoc />
     public string Description => "値に ; が含まれる（AIMP が分割する）";
+
+    /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("3.4")];
 
     /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
@@ -300,6 +320,9 @@ public sealed class DuplicateConcatenationRule : IInspectionRule
 
     /// <inheritdoc />
     public string Description => "同一値の重複連結";
+
+    /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("3.4")];
 
     /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
@@ -389,6 +412,9 @@ public sealed class PersonNameFormatRule : IInspectionRule
 
     /// <inheritdoc />
     public string Description => "人名に生没年・「姓, 名」順・全大文字が含まれる";
+
+    /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("3.2")];
 
     /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
@@ -508,6 +534,9 @@ public sealed class JapanesePerformerNameRule : IInspectionRule
 
     /// <inheritdoc />
     public string Description => "日本語表記の人名・団体名";
+
+    /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("3.1")];
 
     /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)

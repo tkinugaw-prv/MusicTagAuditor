@@ -14,6 +14,9 @@ namespace MusicTagAuditor.App;
 /// </summary>
 public partial class MainWindow : Window
 {
+    /// <summary>ファイル一覧の右クリックにある「辞書に追加」の名前。MainWindow.xaml の Name と揃える。</summary>
+    private const string TRACK_DICTIONARY_MENU_ITEM_NAME = "TrackDictionaryMenuItem";
+
     /// <summary>
     /// メインウィンドウを初期化する。
     /// </summary>
@@ -36,6 +39,39 @@ public partial class MainWindow : Window
     {
         base.OnSourceInitialized(e);
         DwmDarkTitleBar.Apply(this);
+    }
+
+    /// <summary>
+    /// タグ付け原則のウィンドウを開く。ライブラリの状態に関わらず読めるため、ビューモデルを経由しない。
+    /// </summary>
+    private void OnOpenPolicy(object sender, RoutedEventArgs e)
+    {
+        PolicyWindow.ShowShared(this);
+    }
+
+    /// <summary>
+    /// ファイル一覧の右クリックを開いたら「辞書に追加」の項目を作り直す（docs/SPEC.md 5.2）。
+    ///
+    /// **バインドで行に持たせない。** メニューは全行で 1 つを共有しており、同じ行を開き直しても
+    /// DataContext が変わらないためバインドが評価し直されない。登録した直後に開くと、
+    /// 登録前の「未登録」が出たままになる。
+    /// </summary>
+    private void OnTrackRowContextMenuOpened(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ContextMenu menu
+            || DataContext is not MainViewModel viewModel
+            || menu.DataContext is not TrackRowViewModel row
+            || menu.Items.OfType<MenuItem>().FirstOrDefault(item => item.Name == TRACK_DICTIONARY_MENU_ITEM_NAME) is not MenuItem dictionaryItem)
+        {
+            return;
+        }
+
+        IReadOnlyList<DictionaryTargetViewModel> targets = viewModel.BuildDictionaryTargets(row);
+
+        dictionaryItem.ItemsSource = targets;
+
+        // 項目が 1 つも無い行（辞書が扱うフィールドが全部空）では、開いても何も無い見出しになる。
+        dictionaryItem.IsEnabled = targets.Count > 0;
     }
 
     /// <summary>
@@ -78,14 +114,14 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// ファイル一覧タブへ切り替えて、指定された行を選択・スクロール表示する。
+    /// ファイル一覧タブへ切り替えて、指定された行を選択し、先頭の行までスクロールする。
     ///
     /// **一連の操作は入力イベントを抜けてから行う。** ここへ来るのはダブルクリックの
     /// 処理中で、そのあと DataGrid が明細のセルへフォーカスを戻す。その場でタブを
     /// 切り替えると、<c>TabItem</c> がフォーカスの移動に追従して検査結果へ選び直され、
     /// 切り替えが即座に取り消される。
     /// </summary>
-    private void OnTrackRevealRequested(object? sender, TrackRowViewModel row)
+    private void OnTrackRevealRequested(object? sender, IReadOnlyList<TrackRowViewModel> rows)
     {
         _ = Dispatcher.BeginInvoke(
             DispatcherPriority.Background,
@@ -96,10 +132,19 @@ public partial class MainWindow : Window
                 // 行のコンテナはタブを描き直すまで作られず、ScrollIntoView が空振りする。
                 MainTabs.UpdateLayout();
 
-                // 複数選択のままだと、どの行へ飛んだのか分からなくなる。
+                // 前の選択が残っていると、どの行へ飛んだのか分からなくなる。
                 TrackGrid.UnselectAll();
-                TrackGrid.SelectedItem = row;
-                TrackGrid.ScrollIntoView(row);
+
+                foreach (TrackRowViewModel row in rows)
+                {
+                    _ = TrackGrid.SelectedItems.Add(row);
+                }
+
+                if (rows.Count > 0)
+                {
+                    TrackGrid.ScrollIntoView(rows[0]);
+                }
+
                 _ = TrackGrid.Focus();
             });
     }

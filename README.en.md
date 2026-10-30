@@ -30,10 +30,11 @@ Main features:
 | Runtime | .NET 10 (LTS; GA 2025-11-11, supported until 2028-11-14) |
 | UI | WPF (`net10.0-windows`) with MVVM |
 | MVVM | CommunityToolkit.Mvvm 8.4.2 |
-| DI | Microsoft.Extensions.DependencyInjection 10.0.10 |
+| DI | Microsoft.Extensions.DependencyInjection 10.0.14 |
 | Tag I/O | TagLibSharp 2.3.0 plus a purpose-built MP4 atom reader ([ADR-0001](docs/adr/0001-tag-io-library.md)) |
 | Logging | Serilog 4.4.0 with Serilog.Sinks.File 7.0.0 |
-| Tests | xUnit 2.9.3 with coverlet.collector 6.0.4 |
+| Policy viewer | Markdig 1.5.1 (renders `docs/TAGGING_POLICY.md` in the app) |
+| Tests | xUnit 2.9.3 with coverlet.collector 10.1.0 |
 
 The UI shares its design tokens with the sibling project [MusicFolderTimeFitter](https://github.com/tkinugaw-prv/MusicFolderTimeFitter).
 
@@ -112,7 +113,8 @@ Actions in the workflows are pinned to commit SHAs. Dependabot rewrites both the
 ### Reproducing locally
 
 ```powershell
-# 1. Run tests with a TRX log and coverage collection (.NET 10 SDK required)
+# 1. Clear previous results, then run tests with a TRX log and coverage collection (.NET 10 SDK required)
+if (Test-Path "reports/raw") { Remove-Item "reports/raw" -Recurse -Force }
 dotnet test --logger "trx" --collect:"XPlat Code Coverage" --results-directory "reports/raw"
 ```
 
@@ -125,6 +127,8 @@ dotnet tool install --global dotnet-reportgenerator-globaltool
 # 3. Generate the HTML report (reports/ is not tracked by git)
 reportgenerator "-reports:reports/raw/*/coverage.cobertura.xml" "-targetdir:reports/coverage/html" "-reporttypes:Html;TextSummary"
 ```
+
+Do not skip the cleanup in step 1. `dotnet test` leaves old results in place, so the report would otherwise merge them with earlier runs.
 
 Do not widen the glob in step 3 to `**/`. The TRX logger also copies `coverage.cobertura.xml` into its attachment directory, so `**/` would read the same report twice.
 
@@ -172,4 +176,4 @@ Note, however, that the released executables bundle `TagLibSharp.dll` inside the
 dotnet publish src/MusicTagAuditor.App -c Release -r win-x64 --self-contained false -p:PublishSingleFile=false
 ```
 
-Serilog is Apache-2.0; CommunityToolkit.Mvvm and Microsoft.Extensions.DependencyInjection are MIT. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for details.
+Serilog is Apache-2.0; CommunityToolkit.Mvvm and Microsoft.Extensions.DependencyInjection are MIT; Markdig is BSD-2-Clause. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for details.

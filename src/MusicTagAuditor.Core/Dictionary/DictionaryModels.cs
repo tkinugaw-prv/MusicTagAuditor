@@ -181,6 +181,27 @@ public sealed record AlbumOverrideEntry
 }
 
 /// <summary>
+/// R-210 の照合から外す語句 1 件（docs/TAGGING_POLICY.md 6.9）。
+///
+/// <c>Szene am Bach</c> の <c>Bach</c> は普通名詞だが、この判別は機械ではできない。
+/// 人が下した判断を残さないと、同じ曲を検査のたびに確認し直すことになる。
+///
+/// **作曲家と語句の組で持つ。** 語句だけで持つと、例外の効く範囲が不必要に広がる。
+/// タグは書き換えず、<c>composer</c> が正しいことの証明にもならない。
+/// </summary>
+public sealed record ComposerMentionExceptionEntry
+{
+    /// <summary>例外を効かせる作曲家。</summary>
+    public string Composer { get; init; } = string.Empty;
+
+    /// <summary>照合から外す語句。語の並びで照合する。</summary>
+    public string Phrase { get; init; } = string.Empty;
+
+    /// <summary>例外の理由。**書く運用とする。** 理由の無い例外は後から消せない。</summary>
+    public string? Note { get; init; }
+}
+
+/// <summary>
 /// 楽語のスペルミス 1 件（docs/TAGGING_POLICY.md 5.4）。
 ///
 /// **照合は正規表現で行う。** 完全一致だと区切り文字違いを取りこぼす。
@@ -223,6 +244,12 @@ public sealed record TagDictionary
 
     /// <summary>アルバム単位の個別例外（docs/SPEC.md 7.4.5）。</summary>
     public IReadOnlyList<AlbumOverrideEntry> AlbumOverrides { get; init; } = [];
+
+    /// <summary>
+    /// R-210 の照合から外す語句（docs/TAGGING_POLICY.md 6.9）。
+    /// 人の判断の記録なので、同梱の既定辞書には入れない。
+    /// </summary>
+    public IReadOnlyList<ComposerMentionExceptionEntry> ComposerMentionExceptions { get; init; } = [];
 
     /// <summary>楽語のスペルミス。</summary>
     public IReadOnlyList<TypoEntry> Typos { get; init; } = [];

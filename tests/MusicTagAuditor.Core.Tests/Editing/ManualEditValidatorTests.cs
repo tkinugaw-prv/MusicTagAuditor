@@ -151,7 +151,7 @@ public sealed class ManualEditValidatorTests
 
     /// <summary>
     /// 値を消す編集では書式の警告を出さないことを確認する。
-    /// 空にすることは原則が認める操作である（docs/TAGGING_POLICY.md 7.4）。
+    /// 空にすることは原則が認める操作である（docs/TAGGING_POLICY.md 7章 原則4）。
     /// </summary>
     [Fact]
     public void DoesNotWarnAboutFormatWhenClearing()

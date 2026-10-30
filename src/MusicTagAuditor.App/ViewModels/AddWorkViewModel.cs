@@ -83,7 +83,11 @@ public sealed partial class AddWorkViewModel : ObservableObject
     /// <param name="index">現在の索引。作曲家フォルダの判定と既存作品の確認に使う。</param>
     /// <param name="unit">対象のアルバム単位。</param>
     /// <param name="composer">単位の作曲家の正規形。**固定表示にする**（変更させない）。</param>
-    public AddWorkViewModel(TagDictionary dictionary, DictionaryIndex index, AlbumUnit unit, string composer)
+    /// <param name="title">
+    /// ファイル一覧の曲名から開いたときの曲名（docs/SPEC.md 5.2）。null なら検査結果からの導線。
+    /// 指定すると作品名の初期値にし、別名の候補は選ばずに出す。
+    /// </param>
+    public AddWorkViewModel(TagDictionary dictionary, DictionaryIndex index, AlbumUnit unit, string composer, string? title = null)
     {
         ArgumentNullException.ThrowIfNull(unit);
 
@@ -92,15 +96,25 @@ public sealed partial class AddWorkViewModel : ObservableObject
         Composer = composer;
         Folder = unit.Folder;
         Disc = unit.Disc;
+        Title = title;
+
+        // 曲名を作品名に入れるのは、人がその値を選んで開いたから。album を機械が正規形に
+        // 採用するのとは違い、3.5 補足2 の禁止には当たらない。
+        _canonical = title?.Trim() ?? string.Empty;
+
+        // 曲名から開いたときは候補を選ばずに出す。単位の album・フォルダ名はアルバム全体を
+        // 指しており、カップリング盤では別の作品（主作品）の名前になっている。選んだまま出すと、
+        // 主作品のフォルダ名がこの曲の作品の別名として入り、R-504 が誤った作品名を組み立てる。
+        bool selectsCandidates = title is null;
 
         foreach (string album in unit.Albums)
         {
-            Candidates.Add(new AliasCandidateViewModel(album, AliasCandidateViewModel.SOURCE_ALBUM));
+            Candidates.Add(new AliasCandidateViewModel(album, AliasCandidateViewModel.SOURCE_ALBUM) { IsSelected = selectsCandidates });
         }
 
         foreach (string hint in DictionaryEditor.SuggestWorkAliases(unit.Folder, index))
         {
-            Candidates.Add(new AliasCandidateViewModel(hint, AliasCandidateViewModel.SOURCE_FOLDER));
+            Candidates.Add(new AliasCandidateViewModel(hint, AliasCandidateViewModel.SOURCE_FOLDER) { IsSelected = selectsCandidates });
         }
 
         foreach (WorkNameCandidate candidate in WorkNameSuggester.Suggest(
@@ -125,6 +139,9 @@ public sealed partial class AddWorkViewModel : ObservableObject
 
     /// <summary>対象のディスク。</summary>
     public int Disc { get; }
+
+    /// <summary>ファイル一覧の曲名から開いたときの曲名。検査結果から開いたときは null。</summary>
+    public string? Title { get; }
 
     /// <summary>別名の候補。</summary>
     public ObservableCollection<AliasCandidateViewModel> Candidates { get; } = [];
@@ -232,7 +249,13 @@ public sealed partial class AddWorkViewModel : ObservableObject
             return;
         }
 
-        Notice = "作品名は「ジャンル名は英語、固有の題名は原語」で書きます（TAGGING_POLICY 3.5 規則8）。"
+        string candidateNote = Title is null
+            ? string.Empty
+            : "別名の候補はアルバム全体の album・フォルダ名から作っています。カップリング盤では別の作品を指すため、"
+                + "この作品のものだけを選んでください。";
+
+        Notice = candidateNote
+            + "作品名は「ジャンル名は英語、固有の題名は原語」で書きます（TAGGING_POLICY 3.5 規則8）。"
             + " 原語が非ラテン文字なら英語圏での一般的な題名を使います（The Nutcracker）。"
             + " 版・稿の違いでエントリを分けないでください（規則4）。";
     }

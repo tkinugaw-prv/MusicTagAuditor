@@ -740,9 +740,11 @@
     </Style>
 
     <!--
-      メニュー項目。今あるのは下位メニューもチェックも持たない平の項目だけなので、
-      テンプレートは Header の 1 列だけにしている。**サブメニューやチェック付きの
-      項目を足すときは、この最小テンプレートでは何も出ない。** 列を足すこと。
+      メニュー項目。平の項目と、下位メニューを持つ項目（ファイル一覧の「辞書に追加」）を扱う。
+      **チェック付きの項目を足すときは、このテンプレートでは印が出ない。** 列を足すこと。
+
+      下位メニューは PART_Popup に出す。MenuItem は IsSubmenuOpen をこの名前の Popup と
+      結び付けて開閉・キー操作を処理するため、名前を変えると下位メニューが開かなくなる。
     -->
     <Style TargetType="MenuItem">
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
@@ -750,13 +752,48 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="MenuItem">
-                    <Border x:Name="Root"
-                            Background="Transparent"
-                            CornerRadius="4"
-                            Padding="{TemplateBinding Padding}">
-                        <ContentPresenter ContentSource="Header" VerticalAlignment="Center" />
-                    </Border>
+                    <Grid>
+                        <Border x:Name="Root"
+                                Background="Transparent"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ContentPresenter ContentSource="Header" VerticalAlignment="Center" />
+                                <!-- 下位メニューがあることを示す矢印。平の項目では出さない -->
+                                <Path x:Name="SubmenuArrow"
+                                      Grid.Column="1"
+                                      Margin="16,0,0,0"
+                                      VerticalAlignment="Center"
+                                      Data="M 0 0 L 4 4 L 0 8 Z"
+                                      Fill="{TemplateBinding Foreground}"
+                                      Visibility="Collapsed" />
+                            </Grid>
+                        </Border>
+                        <Popup x:Name="PART_Popup"
+                               Placement="Right"
+                               HorizontalOffset="4"
+                               VerticalOffset="-5"
+                               AllowsTransparency="True"
+                               Focusable="False"
+                               PopupAnimation="None"
+                               IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}">
+                            <Border Background="{StaticResource PanelBarBrush}"
+                                    BorderBrush="{StaticResource BorderStrongBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="5"
+                                    Padding="4">
+                                <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle" />
+                            </Border>
+                        </Popup>
+                    </Grid>
                     <ControlTemplate.Triggers>
+                        <Trigger Property="Role" Value="SubmenuHeader">
+                            <Setter TargetName="SubmenuArrow" Property="Visibility" Value="Visible" />
+                        </Trigger>
                         <Trigger Property="IsHighlighted" Value="True">
                             <Setter TargetName="Root" Property="Background" Value="{StaticResource ButtonHoverBrush}" />
                         </Trigger>

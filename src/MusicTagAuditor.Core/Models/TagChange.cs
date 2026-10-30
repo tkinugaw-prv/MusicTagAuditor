@@ -27,7 +27,7 @@ public enum Severity
 /// 修正を保留する理由。
 ///
 /// 重大度の 3 段階とは別の軸。保留は「エラーでも警告でもなく、条件が揃えば自動で再判定できる状態」を指す
-/// （docs/TAGGING_POLICY.md 7.5）。
+/// （docs/TAGGING_POLICY.md 7章 原則5）。
 /// </summary>
 public enum HoldReason
 {
@@ -78,7 +78,7 @@ public enum HoldReason
 ///
 /// 修正案が空であること（<c>AfterValues</c> が空）は、ルールにとっては「決められなかった」を意味し、
 /// 削除の指示ではない。両者は結果として同じ形になるので、意図を別のフラグで持つ。
-/// タグを消すのは <c>TAGGING_POLICY.md</c> 7.4 が認める正当な操作である
+/// タグを消すのは <c>TAGGING_POLICY.md</c> 7章 原則4 が認める正当な操作である
 /// （誤った値で埋めるより空欄のほうが後から対処できる）。
 /// </param>
 public sealed record TagChange(

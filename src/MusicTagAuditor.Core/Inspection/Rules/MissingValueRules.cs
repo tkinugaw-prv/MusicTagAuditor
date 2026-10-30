@@ -20,6 +20,9 @@ public sealed class ComposerMissingRule : IInspectionRule
     public string Description => "composer 未設定";
 
     /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("2.1")];
+
+    /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
     {
         foreach (TrackTags track in context.Tracks)
@@ -77,6 +80,9 @@ public sealed class ConductorMissingRule : IInspectionRule
 
     /// <inheritdoc />
     public string Description => "conductor 未設定";
+
+    /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("2.2")];
 
     /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
@@ -166,7 +172,7 @@ public sealed class ConductorMissingRule : IInspectionRule
 ///
 /// 復元すると「アーティスト情報なし」「トラック 1」等になり、**実質的にタグ未設定**である
 /// （docs/TAGGING_POLICY.md 6.6）。値としての意味を持たないので、修正案は
-/// 「値を消す」にする。誤った値で埋めるより空欄のほうが後から対処できる（7.4）。
+/// 「値を消す」にする。誤った値で埋めるより空欄のほうが後から対処できる（7章 原則4）。
 ///
 /// **既定ではチェックしない。** 消すか再入力するかは人間が決める。
 /// </summary>
@@ -180,6 +186,9 @@ public sealed class MojibakeRule : IInspectionRule
 
     /// <inheritdoc />
     public string Description => "文字化け（Shift-JIS の誤解釈）";
+
+    /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("6.6")];
 
     /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)

@@ -30,10 +30,11 @@
 | ランタイム | .NET 10（LTS。GA 2025-11-11 / サポート期限 2028-11-14） |
 | UI | WPF（`net10.0-windows`）+ MVVM |
 | MVVM | CommunityToolkit.Mvvm 8.4.2 |
-| DI | Microsoft.Extensions.DependencyInjection 10.0.10 |
+| DI | Microsoft.Extensions.DependencyInjection 10.0.14 |
 | タグ入出力 | TagLibSharp 2.3.0 + 自前の MP4 atom リーダー（[ADR-0001](docs/adr/0001-tag-io-library.md)） |
 | ログ | Serilog 4.4.0 + Serilog.Sinks.File 7.0.0 |
-| テスト | xUnit 2.9.3 + coverlet.collector 6.0.4 |
+| 原則の表示 | Markdig 1.5.1（`docs/TAGGING_POLICY.md` を画面で読むため） |
+| テスト | xUnit 2.9.3 + coverlet.collector 10.1.0 |
 
 .NET 8 / .NET 9 は 2026-11-10 にサポート終了のため採用しない。
 
@@ -118,7 +119,8 @@ NuGet パッケージと GitHub Actions のバージョン更新は Dependabot �
 ### ローカルでの再現手順
 
 ```powershell
-# 1. テスト実行 + TRX ログ + カバレッジ収集（要 .NET 10 SDK）
+# 1. 前回の結果を消してから、テスト実行 + TRX ログ + カバレッジ収集（要 .NET 10 SDK）
+if (Test-Path "reports/raw") { Remove-Item "reports/raw" -Recurse -Force }
 dotnet test --logger "trx" --collect:"XPlat Code Coverage" --results-directory "reports/raw"
 ```
 
@@ -131,6 +133,8 @@ dotnet tool install --global dotnet-reportgenerator-globaltool
 # 3. HTML レポート生成（reports/ は git 管理外）
 reportgenerator "-reports:reports/raw/*/coverage.cobertura.xml" "-targetdir:reports/coverage/html" "-reporttypes:Html;TextSummary"
 ```
+
+手順 1 の削除を省かないこと。`dotnet test` は古い結果を消さないため、残したまま集計すると過去の実行分との合算値が出る。
 
 手順 3 のグロブを `**/` にしないこと。TRX ロガーが `coverage.cobertura.xml` を添付ディレクトリにも複製するため、同じレポートを二重に読み込む。
 
@@ -214,4 +218,4 @@ MIT License — [LICENSE](LICENSE) を参照。
 dotnet publish src/MusicTagAuditor.App -c Release -r win-x64 --self-contained false -p:PublishSingleFile=false
 ```
 
-Serilog は Apache-2.0、CommunityToolkit.Mvvm と Microsoft.Extensions.DependencyInjection は MIT。詳細は [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) を参照。
+Serilog は Apache-2.0、CommunityToolkit.Mvvm と Microsoft.Extensions.DependencyInjection は MIT、Markdig は BSD-2-Clause。詳細は [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) を参照。

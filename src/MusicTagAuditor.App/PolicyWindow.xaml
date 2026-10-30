@@ -1,0 +1,115 @@
+<Window x:Class="MusicTagAuditor.App.PolicyWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ctl="clr-namespace:MusicTagAuditor.App.Controls"
+        Title="タグ付け原則 - Music Tag Auditor" Height="860" Width="1180"
+        MinHeight="420" MinWidth="720"
+        Icon="/Assets/app_icon.ico"
+        Background="{StaticResource BgOuterBrush}"
+        FontFamily="{StaticResource AppFontFamily}"
+        FontSize="13"
+        WindowStartupLocation="CenterScreen"
+        PreviewKeyDown="OnWindowPreviewKeyDown">
+
+  <!--
+    モードレスで開く（docs/SPEC.md 5.5）。検査結果や辞書の画面と並べて読むためのもので、
+    開いている間もメイン画面を操作できなければならない。
+  -->
+  <Window.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+  </Window.Resources>
+
+  <DockPanel>
+
+    <!-- 検索欄 -->
+    <Border DockPanel.Dock="Top"
+            Background="{StaticResource PanelInputBrush}"
+            BorderBrush="{StaticResource BorderBrush}"
+            BorderThickness="0,0,0,1"
+            Padding="18,12">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Margin="8,0,0,0" Content="次へ"
+                Click="OnFindNext" ToolTip="次の一致へ（Enter）" />
+        <Button DockPanel.Dock="Right" Margin="10,0,0,0" Content="前へ"
+                Click="OnFindPrevious" ToolTip="前の一致へ（Shift+Enter）" />
+        <TextBlock DockPanel.Dock="Right" Margin="12,0,0,0" MinWidth="80"
+                   VerticalAlignment="Center"
+                   Style="{StaticResource HintTextStyle}"
+                   Text="{Binding SearchStatus}" />
+        <TextBox x:Name="SearchBox"
+                 ctl:Placeholder.Text="原則の中を検索（Ctrl+F）"
+                 AutomationProperties.Name="原則の中を検索"
+                 TextChanged="OnSearchTextChanged"
+                 PreviewKeyDown="OnSearchKeyDown" />
+      </DockPanel>
+    </Border>
+
+    <!-- 折りたたみ中の章にだけ一致があるときの案内。検索で見つからない理由が分からなくなるのを防ぐ。 -->
+    <Border DockPanel.Dock="Top"
+            Style="{StaticResource NoticePanelBorderStyle}"
+            Margin="18,10,18,0"
+            Padding="12,8"
+            Visibility="{Binding HasFoldedHitNotice, Converter={StaticResource BoolToVisibility}}">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Margin="10,0,0,0" Content="開いて検索"
+                Style="{StaticResource SmallOutlineButtonStyle}"
+                Click="OnExpandFoldsForSearch" />
+        <TextBlock Style="{StaticResource NoticeItemTextStyle}" VerticalAlignment="Center"
+                   Text="{Binding FoldedHitNotice}" TextWrapping="Wrap" />
+      </DockPanel>
+    </Border>
+
+    <Grid Margin="18,12,18,18">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="300" MinWidth="160" />
+        <ColumnDefinition Width="6" />
+        <ColumnDefinition Width="*" MinWidth="320" />
+      </Grid.ColumnDefinitions>
+
+      <!-- 目次 -->
+      <Border Grid.Column="0" Style="{StaticResource CardBorderStyle}" Padding="1">
+        <DockPanel>
+          <TextBlock DockPanel.Dock="Top" Margin="10,8,10,4"
+                     Style="{StaticResource SectionLabelStyle}" Text="目次" />
+          <ListBox x:Name="OutlineList"
+                   ItemsSource="{Binding Outline}"
+                   AutomationProperties.Name="目次"
+                   BorderThickness="0"
+                   ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                   SelectionChanged="OnOutlineSelectionChanged">
+            <ListBox.ItemContainerStyle>
+              <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                <Setter Property="AutomationProperties.Name" Value="{Binding Text}" />
+              </Style>
+            </ListBox.ItemContainerStyle>
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <TextBlock x:Name="Label" Text="{Binding Text}" Margin="{Binding Indent}"
+                           TextTrimming="CharacterEllipsis" ToolTip="{Binding Text}" />
+                <DataTemplate.Triggers>
+                  <DataTrigger Binding="{Binding IsChapter}" Value="True">
+                    <Setter TargetName="Label" Property="FontWeight" Value="SemiBold" />
+                  </DataTrigger>
+                  <DataTrigger Binding="{Binding IsInCollapsedChapter}" Value="True">
+                    <Setter TargetName="Label" Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+                  </DataTrigger>
+                </DataTemplate.Triggers>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </DockPanel>
+      </Border>
+
+      <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" />
+
+      <!-- 本文 -->
+      <Border Grid.Column="2" Style="{StaticResource CardBorderStyle}" Padding="1">
+        <FlowDocumentScrollViewer x:Name="Viewer"
+                                  AutomationProperties.Name="原則の本文"
+                                  IsToolBarVisible="False"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  VerticalScrollBarVisibility="Auto" />
+      </Border>
+    </Grid>
+  </DockPanel>
+</Window>

@@ -107,6 +107,38 @@ $ID3_FRAME_BY_FIELD = @{
     DiscNumber  = 'TPOS'
 }
 
+# 復元で突き合わせる論理フィールド。本体の TagField と同じ名前・同じ並びにする。
+# スナップショットにキーが無いフィールドも回すために要る。食い違いは
+# TagIo.Tests の RestoreScriptTests.ScriptFieldTablesMatchTheApplication が検出する。
+$ALL_FIELDS = @(
+    'Title'
+    'Artist'
+    'AlbumArtist'
+    'Composer'
+    'Conductor'
+    'Album'
+    'Genre'
+    'Date'
+    'TrackNumber'
+    'DiscNumber'
+    'Comment'
+)
+
+# フィールドごとに、それを記録するようになったスキーマ版。ここに無いフィールドは版 1 から記録している。
+# 本体の BackupConst.FIRST_VERSION_BY_FIELD と同じ内容にする。
+$FIRST_VERSION_BY_FIELD = @{
+    Comment = 2
+}
+
+function Test-FieldRecorded {
+    # そのスキーマ版のスナップショットがフィールドを記録しているかを返す。
+    # 本体の BackupConst.IsFieldRecorded と同じ判定。
+    param([int]$SchemaVersion, [string]$Field)
+
+    if (-not $FIRST_VERSION_BY_FIELD.ContainsKey($Field)) { return $true }
+    return $SchemaVersion -ge $FIRST_VERSION_BY_FIELD[$Field]
+}
+
 function ConvertTo-Identifier {
     # バイト列を TagLib の識別子に変換する。
     #
@@ -216,7 +248,9 @@ function Set-FieldValue {
 
             if ($Field -eq 'TrackNumber' -or $Field -eq 'DiscNumber')
             {
-                $parts = if ($Values.Count -gt 0) { $Values[0] -split '/' } else { @() }
+                # @() で包むのは必須。if 式が返す空配列はパイプラインで展開されて $null になり、
+                # StrictMode では $parts.Count が例外になる（空に戻すときだけ通る経路）。
+                $parts = @(if ($Values.Count -gt 0) { $Values[0] -split '/' })
                 $number = if ($parts.Count -gt 0) { [uint32]($parts[0].Trim()) } else { [uint32]0 }
                 $total = if ($parts.Count -gt 1) { [uint32]($parts[1].Trim()) } else { [uint32]0 }
 
@@ -286,6 +320,15 @@ Write-Host "ライブラリ      : $LibraryRoot"
 Write-Host "記録件数        : $($snapshot.trackCount)"
 Write-Host ''
 
+# スキーマ版が読めないスナップショットでは、どのフィールドを記録していたか分からない。
+# そのときは値の不在を「空だった」と読まず、キーのあるフィールドだけを戻す。
+$schemaVersion = if ($snapshot.PSObject.Properties['version']) { [int]$snapshot.version } else { $null }
+
+if ($null -eq $schemaVersion)
+{
+    Write-Warning 'スキーマ版が記録されていません。スナップショットに値のあるフィールドだけを戻し、後から入った値は消しません。'
+}
+
 # --- 差分の算出と復元 ---
 
 $changed = 0
@@ -324,21 +367,39 @@ foreach ($track in $snapshot.tracks)
     {
         $differences = @()
 
-        # スナップショットに実在するフィールドだけを回す。これは古いスキーマ版との互換性でもある。
-        # 全フィールドを列挙する形に書き換えてはならない。記録の無いフィールドが「空だった」と
-        # 解釈され、今入っている値を消す（本体側は BackupConst.IsFieldRecorded で同じ事故を防いでいる）。
-        foreach ($field in $track.fields.PSObject.Properties)
+        # スナップショットは空のフィールドをキーごと省く。キーのあるフィールドだけを回すと、
+        # スナップショットの後に入った値（genre の補完や指揮者の手編集など）を消せず、
+        # アプリの復元（RestoreService.BuildPlan）と結果が食い違う。
+        # かといってキーの無さを常に「空だった」と読むと、そのフィールドを記録していなかった
+        # 古い版のスナップショット（comment 対応前など）から戻したときに、今入っている値を消す。
+        # そこで本体と同じく、スキーマ版がそのフィールドを記録している場合に限って空と読む。
+        foreach ($fieldName in $ALL_FIELDS)
         {
-            $expected = Get-JoinedValue ([string[]]$field.Value)
-            $actual = Get-CurrentFieldValue $file $track.format $field.Name
+            $property = $track.fields.PSObject.Properties[$fieldName]
+
+            if ($null -ne $property)
+            {
+                $values = [string[]]$property.Value
+            }
+            elseif ($null -ne $schemaVersion -and (Test-FieldRecorded $schemaVersion $fieldName))
+            {
+                $values = [string[]]@()
+            }
+            else
+            {
+                continue
+            }
+
+            $expected = Get-JoinedValue $values
+            $actual = Get-CurrentFieldValue $file $track.format $fieldName
 
             if ($expected -ne $actual)
             {
                 $differences += [pscustomobject]@{
-                    Field  = $field.Name
+                    Field  = $fieldName
                     Before = $actual
                     After  = $expected
-                    Values = [string[]]$field.Value
+                    Values = $values
                 }
             }
         }

@@ -547,6 +547,69 @@ public sealed partial class AlbumOverrideRowViewModel : ObservableObject, IDicti
 }
 
 /// <summary>
+/// R-210 の語句の例外 1 件の編集行（docs/TAGGING_POLICY.md 6.9）。
+///
+/// **作曲家は検査結果から埋める前提で、ここでは編集させない**（docs/SPEC.md 7.3.2）。
+/// </summary>
+public sealed partial class ComposerMentionExceptionRowViewModel : ObservableObject, IDictionaryRow
+{
+    /// <summary>照合から外す語句。</summary>
+    [ObservableProperty]
+    private string _phrase;
+
+    /// <summary>例外の理由。</summary>
+    [ObservableProperty]
+    private string _note;
+
+    /// <summary>
+    /// 辞書のエントリから編集行を作る。
+    /// </summary>
+    /// <param name="entry">元のエントリ。</param>
+    public ComposerMentionExceptionRowViewModel(ComposerMentionExceptionEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        Composer = entry.Composer;
+        _phrase = entry.Phrase;
+        _note = entry.Note ?? string.Empty;
+    }
+
+    /// <summary>例外を効かせる作曲家。</summary>
+    public string Composer { get; }
+
+    /// <inheritdoc />
+    public string SearchText => $"{Composer}\n{Phrase}\n{Note}";
+
+    /// <summary>
+    /// 一覧の見出し。**検証が対象を名指しする文字列と同じ形にする。** 崩れると検証結果からの移動が
+    /// 黙って効かなくなる（docs/SPEC.md 7.3）。
+    /// </summary>
+    public string SortKey
+    {
+        get
+        {
+            string phrase = Phrase.Trim().Length == 0 ? "(空欄)" : Phrase.Trim();
+
+            return Composer.Length == 0 ? phrase : $"{Composer}: {phrase}";
+        }
+    }
+
+    /// <summary>
+    /// 編集内容を辞書のエントリに戻す。
+    /// </summary>
+    /// <returns>エントリ。</returns>
+    public ComposerMentionExceptionEntry ToEntry()
+    {
+        return new ComposerMentionExceptionEntry
+        {
+            Composer = Composer,
+            Phrase = Phrase.Trim(),
+            Note = Note.Trim().Length == 0 ? null : Note.Trim(),
+        };
+    }
+}
+
+/// <summary>
 /// 楽語の誤記 1 件の編集行（docs/TAGGING_POLICY.md 5.4）。
 /// </summary>
 public sealed partial class TypoRowViewModel : ObservableObject, IDictionaryRow

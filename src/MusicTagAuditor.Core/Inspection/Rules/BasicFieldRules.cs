@@ -20,6 +20,9 @@ public sealed class GenreNotClassicRule : IInspectionRule
     public string Description => "genre が Classic 以外";
 
     /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("2.4")];
+
+    /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
     {
         foreach (TrackTags track in context.Tracks)
@@ -56,6 +59,9 @@ public sealed class GenreMissingRule : IInspectionRule
     public string Description => "genre 未設定";
 
     /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("2.4")];
+
+    /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
     {
         foreach (TrackTags track in context.Tracks.Where(track => track.Genre is null))
@@ -86,6 +92,9 @@ public sealed class DiscNumberMissingRule : IInspectionRule
 
     /// <inheritdoc />
     public string Description => "discnumber 未設定";
+
+    /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("2.4")];
 
     /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
@@ -150,6 +159,9 @@ public sealed class DateFormatRule : IInspectionRule
     public string Description => "date が4桁でない";
 
     /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("2.4")];
+
+    /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)
     {
         foreach (TrackTags track in context.Tracks)
@@ -200,6 +212,9 @@ public sealed class DateMissingRule : IInspectionRule
 
     /// <inheritdoc />
     public string Description => "date 未設定";
+
+    /// <inheritdoc />
+    public IReadOnlyList<PolicyBasis> PolicyBases { get; } = [new("2.4")];
 
     /// <inheritdoc />
     public IEnumerable<TagChange> Inspect(InspectionContext context)

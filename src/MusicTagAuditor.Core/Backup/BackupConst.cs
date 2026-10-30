@@ -19,7 +19,8 @@ public static class BackupConst
     /// フィールドごとに、それを記録するようになったスキーマ版。ここに無いフィールドは版 1 から記録している。
     ///
     /// 版を上げてフィールドを足すときは <see cref="SCHEMA_VERSION"/> を上げ、この表に 1 行足す。
-    /// 復元側のロジックには触らなくてよい。
+    /// 復元側のロジックには触らなくてよい。**同梱の <c>restore-tags.ps1</c> にも同じ表があるので
+    /// そちらにも足すこと**（食い違いは TagIo.Tests の <c>RestoreScriptTests</c> が検出する）。
     /// </summary>
     private static readonly IReadOnlyDictionary<TagField, int> FIRST_VERSION_BY_FIELD =
         new Dictionary<TagField, int>

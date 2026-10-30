@@ -192,6 +192,27 @@ public sealed class TrackRowViewModel : ObservableObject
             tagField => $"{ManualEditConst.Label(tagField)}:{Get(tagField)}")));
 
     /// <summary>
+    /// 辞書に登録する候補として、セルに見えている値を 1 つずつ返す（docs/SPEC.md 5.2）。
+    ///
+    /// **複数値として格納されているものは分けて返す。** セルには連結して見えているが、
+    /// 連結した文字列のまま登録すると、どの値でも引けない別名ができる（TAGGING_POLICY.md 3.4）。
+    /// 手で編集したフィールドは、入れた文字列そのものを 1 つの値として扱う（保留中の編集は分割されない）。
+    /// </summary>
+    /// <param name="field">対象のフィールド。</param>
+    /// <returns>空でない値。無ければ空。</returns>
+    public IReadOnlyList<string> GetValuesForDictionary(TagField field)
+    {
+        if (!_edits.IsEdited(RelativePath, field) && Tags.HasMultipleValues(field))
+        {
+            return [.. Tags.GetValues(field).Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value.Trim())];
+        }
+
+        string? value = Get(field);
+
+        return string.IsNullOrWhiteSpace(value) ? [] : [value.Trim()];
+    }
+
+    /// <summary>
     /// 編集が外部から変わったことを画面に伝える。一括入力や編集の破棄のあとに呼ぶ。
     /// </summary>
     public void NotifyEditsChanged()

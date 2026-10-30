@@ -160,7 +160,23 @@
       MainViewModel のコマンドへ届かせるのに、行の Tag に DataGrid の DataContext を
       載せて中継している（TrackRowStyle 側の Tag の Setter とセットで意味を持つ）。
     -->
-    <ContextMenu x:Key="TrackRowContextMenu">
+    <ContextMenu x:Key="TrackRowContextMenu" Opened="OnTrackRowContextMenuOpened">
+      <!--
+        行の値を辞書に足す（docs/SPEC.md 5.2）。項目はメニューを開くたびに
+        OnTrackRowContextMenuOpened で作り直す。登録済みかどうかは辞書の状態で変わる。
+        押せない項目も消さずに並べ、理由はツールチップに出す（無効でも出るよう ShowOnDisabled）。
+      -->
+      <MenuItem Name="TrackDictionaryMenuItem" Header="辞書に追加">
+        <MenuItem.ItemContainerStyle>
+          <Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
+            <Setter Property="Header" Value="{Binding Header}" />
+            <Setter Property="Command" Value="{Binding Command}" />
+            <Setter Property="CommandParameter" Value="{Binding}" />
+            <Setter Property="ToolTip" Value="{Binding ToolTip}" />
+            <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
+          </Style>
+        </MenuItem.ItemContainerStyle>
+      </MenuItem>
       <MenuItem Header="エクスプローラーで表示"
                 Command="{Binding PlacementTarget.Tag.RevealInExplorerCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                 CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
@@ -179,6 +195,23 @@
                 Command="{Binding PlacementTarget.Tag.DiscardManualEditCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                 CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
     </ContextMenu>
+
+    <!--
+      個別例外の行に出す右クリックメニュー（docs/SPEC.md 7.3.1）。
+      コマンドは辞書タブの DataContext（DictionaryViewModel）ではなく MainViewModel にあるため、
+      行の Tag には DataGrid ではなく Window の DataContext を載せて中継する。
+      ダブルクリックを使わないのは、この表のセルが編集できて編集の開始と衝突するため。
+    -->
+    <ContextMenu x:Key="AlbumOverrideRowContextMenu">
+      <MenuItem Header="ファイル一覧で表示"
+                Command="{Binding PlacementTarget.Tag.RevealAlbumOverrideTracksCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+    </ContextMenu>
+
+    <Style x:Key="AlbumOverrideRowStyle" TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+      <Setter Property="ContextMenu" Value="{StaticResource AlbumOverrideRowContextMenu}" />
+      <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}" />
+    </Style>
 
     <!-- 保留中の編集の行。1 項目だけ取り消す導線をここに持たせる（全件破棄はボタン側） -->
     <Style x:Key="ManualEditRowStyle" TargetType="DataGridRow" BasedOn="{StaticResource ChangeRowNameStyle}">
@@ -261,6 +294,14 @@
                    FontSize="11.5"
                    Foreground="{StaticResource TextSecondaryBrush}"
                    Text="タグ検査・編集" />
+        <!--
+          原則はどのタブからも引くので、タブの中ではなくタイトルバーに置く（docs/SPEC.md 5.5）。
+        -->
+        <Button DockPanel.Dock="Right"
+                Content="タグ付け原則"
+                Style="{StaticResource SmallOutlineButtonStyle}"
+                ToolTip="タグ付けの原則（TAGGING_POLICY）を別ウィンドウで開きます"
+                Click="OnOpenPolicy" />
         <TextBlock Text="" />
       </DockPanel>
     </Border>
@@ -436,8 +477,16 @@
                                           EditingElementStyle="{StaticResource RuleApplyCheckBoxStyle}" />
                   <DataGridTemplateColumn Header="重大度" CellTemplate="{StaticResource SeverityBadge}"
                                           IsReadOnly="True" Width="80" SortMemberPath="Severity" />
-                  <DataGridTextColumn Header="ID" Binding="{Binding RuleId}" IsReadOnly="True" Width="70"
-                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                  <!-- ID の後ろに根拠の節をリンクで添える（docs/SPEC.md 5.5.2）。並べ替えとコピーは ID の文字列で行う -->
+                  <DataGridTemplateColumn Header="ID / 根拠" IsReadOnly="True" Width="170"
+                                          SortMemberPath="RuleId"
+                                          ClipboardContentBinding="{Binding RuleId}">
+                    <DataGridTemplateColumn.CellTemplate>
+                      <DataTemplate>
+                        <TextBlock Style="{StaticResource EllipsisTextStyle}" ctl:PolicyText.RuleIds="{Binding RuleId}" />
+                      </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                  </DataGridTemplateColumn>
                   <!-- 件数は ID の隣にまとめる。「内容」の後ろに置くと右端まで目線が飛ぶ -->
                   <DataGridTextColumn Header="検出" Binding="{Binding Count, StringFormat=N0}" IsReadOnly="True" Width="70"
                                       ElementStyle="{StaticResource NumericCell}"
@@ -504,9 +553,14 @@
                     その入口がここだと気付けなかった（docs/SPEC.md 7.3.2）。
                   -->
                   <Button DockPanel.Dock="Left" Content="このアルバムの扱いを決める"
-                          Command="{Binding AddAlbumOverrideFromChangeCommand}" Margin="0,0,14,0"
+                          Command="{Binding AddAlbumOverrideFromChangeCommand}" Margin="0,0,8,0"
                           ToolTipService.ShowOnDisabled="True"
                           ToolTip="R-504 の「作品が決まらない」保留行と R-501 の明細から、そのアルバム単位の個別例外を登録します。対象外にするか、作曲家・作品名を指定するかをダイアログで選びます。「年が決まらない」「演奏者が決まらない」保留行では押せません（個別例外に date と artist は書けないため、ファイル一覧タブでタグを直します）" />
+                  <!-- フォルダ名だけの検出は作品の語句ではないので押せない（docs/TAGGING_POLICY.md 6.9） -->
+                  <Button DockPanel.Dock="Left" Content="この語句を例外に登録"
+                          Command="{Binding AddComposerMentionExceptionFromChangeCommand}" Margin="0,0,14,0"
+                          ToolTipService.ShowOnDisabled="True"
+                          ToolTip="R-210 の行で、曲名の語句に含まれる作曲家名が別人を指していないと確認できたときに登録します。ファイル名にも曲名にも作曲家名が出ない行（フォルダ名だけの検出）と、composer が辞書に無い行では押せません" />
                   <TextBlock Style="{StaticResource StatusTextStyle}"
                              Text="{Binding InspectionSummary}" TextWrapping="Wrap" />
                 </DockPanel>
@@ -578,8 +632,18 @@
                                         ElementStyle="{StaticResource EllipsisTextStyle}" />
                     <DataGridTextColumn Header="変更後" Binding="{Binding AfterText}" IsReadOnly="True" Width="190"
                                         ElementStyle="{StaticResource EllipsisTextStyle}" />
-                    <DataGridTextColumn Header="根拠" Binding="{Binding Rationale}" IsReadOnly="True" Width="*" MinWidth="460"
-                                        ElementStyle="{StaticResource EllipsisTextStyle}" />
+                    <!-- 根拠に書かれた原則の参照（3.5 規則5 など）をリンクにする（docs/SPEC.md 5.5.1）。
+                         テンプレート列は並べ替えとコピーの対象を持たないので、SortMemberPath と
+                         ClipboardContentBinding で文字列の列と同じ振る舞いに揃える。 -->
+                    <DataGridTemplateColumn Header="根拠" IsReadOnly="True" Width="*" MinWidth="460"
+                                            SortMemberPath="Rationale"
+                                            ClipboardContentBinding="{Binding Rationale}">
+                      <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                          <TextBlock Style="{StaticResource EllipsisTextStyle}" ctl:PolicyText.Text="{Binding Rationale}" />
+                        </DataTemplate>
+                      </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
                   </DataGrid.Columns>
                   </DataGrid>
                 </DockPanel>
@@ -624,8 +688,16 @@
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
                   <DataGridTextColumn Header="フィールド" Binding="{Binding FieldsText}" Width="150"
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
-                  <DataGridTextColumn Header="ルール" Binding="{Binding RuleIdsText}" Width="80"
-                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                  <!-- ルールごとに根拠の節をリンクで添える（docs/SPEC.md 5.5.2） -->
+                  <DataGridTemplateColumn Header="ルール / 根拠" IsReadOnly="True" Width="220"
+                                          SortMemberPath="RuleIdsText"
+                                          ClipboardContentBinding="{Binding RuleIdsText}">
+                    <DataGridTemplateColumn.CellTemplate>
+                      <DataTemplate>
+                        <TextBlock Style="{StaticResource EllipsisTextStyle}" ctl:PolicyText.RuleIds="{Binding RuleIds}" />
+                      </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                  </DataGridTemplateColumn>
                   <DataGridTextColumn Header="代表ファイル" Binding="{Binding SampleRelativePath}" Width="3*" MinWidth="200"
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
                 </DataGrid.Columns>
@@ -870,7 +942,7 @@
                 </ItemsControl.Template>
                 <ItemsControl.ItemTemplate>
                   <DataTemplate>
-                    <TextBlock Style="{StaticResource NoticeItemTextStyle}" Text="{Binding Summary}" />
+                    <TextBlock Style="{StaticResource NoticeItemTextStyle}" ctl:PolicyText.Text="{Binding Summary}" />
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
@@ -902,8 +974,18 @@
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
                   <DataGridTextColumn Header="変更後" Binding="{Binding AfterText}" IsReadOnly="True" Width="190"
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
-                  <DataGridTextColumn Header="根拠" Binding="{Binding Rationale}" IsReadOnly="True" Width="*" MinWidth="460"
-                                      ElementStyle="{StaticResource EllipsisTextStyle}" />
+                  <!-- 根拠に書かれた原則の参照（3.5 規則5 など）をリンクにする（docs/SPEC.md 5.5.1）。
+                       テンプレート列は並べ替えとコピーの対象を持たないので、SortMemberPath と
+                       ClipboardContentBinding で文字列の列と同じ振る舞いに揃える。 -->
+                  <DataGridTemplateColumn Header="根拠" IsReadOnly="True" Width="*" MinWidth="460"
+                                          SortMemberPath="Rationale"
+                                          ClipboardContentBinding="{Binding Rationale}">
+                    <DataGridTemplateColumn.CellTemplate>
+                      <DataTemplate>
+                        <TextBlock Style="{StaticResource EllipsisTextStyle}" ctl:PolicyText.Text="{Binding Rationale}" />
+                      </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                  </DataGridTemplateColumn>
                 </DataGrid.Columns>
               </DataGrid>
             </Border>
@@ -1219,7 +1301,7 @@
                                   Style="{StaticResource SmallOutlineButtonStyle}" />
                           <Button DockPanel.Dock="Right" Content="区分を追加" Command="{Binding AddEraCommand}"
                                   Style="{StaticResource SmallOutlineButtonStyle}" Margin="0,0,6,0" />
-                          <TextBlock Text="時代分割（収録時点の名称を採用する。TAGGING_POLICY 5.3.1）"
+                          <TextBlock ctl:PolicyText.Text="時代分割（収録時点の名称を採用する。TAGGING_POLICY 5.3.1）"
                                      Style="{StaticResource FieldLabel}" Margin="0" VerticalAlignment="Center" />
                         </DockPanel>
                         <Border Style="{StaticResource CardBorderStyle}" Padding="1">
@@ -1387,14 +1469,20 @@
                       手で相対パスを打つと、打ち間違えても例外が黙って効かなくなるだけで原因が分からない。
                     -->
                     <Button DockPanel.Dock="Left" Content="削除" Command="{Binding RemoveAlbumOverrideCommand}"
+                            Style="{StaticResource SmallOutlineButtonStyle}" Margin="0,0,8,0" />
+                    <Button DockPanel.Dock="Left" Content="ファイル一覧で表示"
+                            Command="{Binding DataContext.RevealAlbumOverrideTracksCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                            CommandParameter="{Binding SelectedAlbumOverride}"
+                            ToolTip="選んだ例外が効くファイルをファイル一覧タブでまとめて選びます。disc が空欄ならフォルダの全行、指定があればそのディスクの行だけを選びます"
                             Style="{StaticResource SmallOutlineButtonStyle}" Margin="0,0,14,0" />
                     <TextBlock Style="{StaticResource HintTextStyle}" VerticalAlignment="Center" TextWrapping="Wrap"
-                               Text="そのアルバムだけの例外（TAGGING_POLICY 3.5 規則2・規則4・規則6・規則7）。追加は検査結果タブの「このアルバムの扱いを決める」から行う。disc が空欄ならそのフォルダの全ディスクに効く。年は単位内で録音年が割れている場合だけ効く。" />
+                               ctl:PolicyText.Text="そのアルバムだけの例外（TAGGING_POLICY 3.5 規則2・規則4・規則6・規則7）。追加は検査結果タブの「このアルバムの扱いを決める」から行う。disc が空欄ならそのフォルダの全ディスクに効く。年は単位内で録音年が割れている場合だけ効く。" />
                   </DockPanel>
 
                   <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Padding="1">
                     <DataGrid ItemsSource="{Binding AlbumOverrides}"
                               SelectedItem="{Binding SelectedAlbumOverride}"
+                              RowStyle="{StaticResource AlbumOverrideRowStyle}"
                               SelectionMode="Single"
                               ctl:ScrollToSelection.Enabled="True"
                               HorizontalScrollBarVisibility="Auto">
@@ -1418,6 +1506,46 @@
                                                 Binding="{Binding Exclude, UpdateSourceTrigger=PropertyChanged}"
                                                 ElementStyle="{StaticResource GridCheckBoxStyle}"
                                                 EditingElementStyle="{StaticResource GridCheckBoxStyle}" />
+                        <DataGridTextColumn Header="理由" Binding="{Binding Note, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="200"
+                                            ElementStyle="{StaticResource EllipsisTextStyle}"
+                                            EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
+                      </DataGrid.Columns>
+                    </DataGrid>
+                  </Border>
+                </Grid>
+              </TabItem>
+
+              <!-- R-210 の照合から外す語句（docs/TAGGING_POLICY.md 6.9） -->
+              <TabItem Header="語句の例外">
+                <Grid Margin="0,12,0,0">
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                  </Grid.RowDefinitions>
+
+                  <DockPanel Grid.Row="0" Margin="0,0,0,10">
+                    <!--
+                      追加の入口はここに置かない。作曲家は検査結果から埋める（docs/SPEC.md 7.3.2）。
+                      作曲家を読み取り専用にしているのも同じ理由で、付け替えは削除して登録し直す。
+                    -->
+                    <Button DockPanel.Dock="Left" Content="削除" Command="{Binding RemoveComposerMentionExceptionCommand}"
+                            Style="{StaticResource SmallOutlineButtonStyle}" Margin="0,0,14,0" />
+                    <TextBlock Style="{StaticResource HintTextStyle}" VerticalAlignment="Center" TextWrapping="Wrap"
+                               ctl:PolicyText.Text="R-210 の照合から外す語句（TAGGING_POLICY 6.9）。その作曲家のファイルにだけ効く。追加は検査結果タブの「この語句を例外に登録」から行う。削除すると検出が戻る。" />
+                  </DockPanel>
+
+                  <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Padding="1">
+                    <DataGrid ItemsSource="{Binding ComposerMentionExceptions}"
+                              SelectedItem="{Binding SelectedComposerMentionException}"
+                              SelectionMode="Single"
+                              ctl:ScrollToSelection.Enabled="True"
+                              HorizontalScrollBarVisibility="Auto">
+                      <DataGrid.Columns>
+                        <DataGridTextColumn Header="作曲家" Binding="{Binding Composer, Mode=OneWay}" IsReadOnly="True" Width="200"
+                                            ElementStyle="{StaticResource EllipsisTextStyle}" />
+                        <DataGridTextColumn Header="語句" Binding="{Binding Phrase, UpdateSourceTrigger=PropertyChanged}" Width="260"
+                                            ElementStyle="{StaticResource EllipsisTextStyle}"
+                                            EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
                         <DataGridTextColumn Header="理由" Binding="{Binding Note, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="200"
                                             ElementStyle="{StaticResource EllipsisTextStyle}"
                                             EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
@@ -1490,7 +1618,7 @@
 
                   <StackPanel Grid.Row="0" Margin="0,0,0,10">
                     <TextBlock Style="{StaticResource HintTextStyle}"
-                               Text="配役情報を含むため書き換えない albumartist（TAGGING_POLICY 2.3）。ここに載っている値は全ルールの検査前に除外される。" />
+                               ctl:PolicyText.Text="配役情報を含むため書き換えない albumartist（TAGGING_POLICY 2.3）。ここに載っている値は全ルールの検査前に除外される。" />
                     <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                       <Button Content="追加" Command="{Binding AddProtectedValueCommand}"
                               Style="{StaticResource SmallOutlineButtonStyle}" Margin="0,0,6,0" />

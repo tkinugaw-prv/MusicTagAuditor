@@ -594,6 +594,165 @@ public sealed class RemainingRuleTests
     }
 
     /// <summary>
+    /// R-210: 例外に登録した語句を、表記の違いがあっても照合から外すことを確認する。
+    ///
+    /// <c>Szene am Bach</c> の <c>Bach</c> は普通名詞である。**録音ごとに登録し直させない**ため、
+    /// 番号や末尾の記号が違うファイルにも 1 件で効く（docs/TAGGING_POLICY.md 6.9）。
+    /// </summary>
+    [Theory]
+    [InlineData("x/06 2. Szene am Bach.flac")]
+    [InlineData("x/02 2 Szene am Bach..flac")]
+    [InlineData("x/03 SZENE-AM-BACH.flac")]
+    public void MentionExceptionSuppressesPhrase(string path)
+    {
+        Assert.Empty(ChangesOf(InspectWithException(Beethoven(path)), "R-210"));
+    }
+
+    /// <summary>
+    /// R-210: 例外が無ければ <c>Szene am Bach</c> を検出することを確認する。
+    /// 上のテストが例外の効きを見ていることの裏付けになる。
+    /// </summary>
+    [Fact]
+    public void DetectsPhraseWithoutMentionException()
+    {
+        Assert.Single(ChangesOf(Inspect(Beethoven("x/06 2. Szene am Bach.flac")), "R-210"));
+    }
+
+    /// <summary>
+    /// R-210: 別名で書いた作曲家の例外も、正規形のタグに効くことを確認する。
+    /// </summary>
+    [Fact]
+    public void MentionExceptionResolvesComposerAlias()
+    {
+        Assert.Empty(ChangesOf(InspectWithException(Beethoven("x/06 Szene am Bach.flac"), composer: "Beethoven"), "R-210"));
+    }
+
+    /// <summary>
+    /// R-210: 例外は登録した作曲家のファイルにだけ効くことを確認する。
+    ///
+    /// **別の作曲家が付いたファイルの検出を止めない。** 6.9 の誤りはまさにこの形で見つかる。
+    /// </summary>
+    [Fact]
+    public void MentionExceptionDoesNotApplyToOtherComposer()
+    {
+        Assert.Single(
+            ChangesOf(
+                InspectWithException(Track("x/06 Szene am Bach.flac", (TagField.Composer, ["Dmitri Shostakovich"]))),
+                "R-210"));
+    }
+
+    /// <summary>
+    /// R-210: 語の並びが一致しなければ外さないことを確認する。
+    ///
+    /// 値全体の正規化キーで比べると語の境界が消え、<c>Bachmann</c> のような別の語まで当たる。
+    /// </summary>
+    [Theory]
+    [InlineData("x/01 Bach am Szene.flac")]
+    [InlineData("x/01 Szene von Bach.flac")]
+    [InlineData("x/01 Bach Toccata.flac")]
+    public void MentionExceptionRequiresExactWordSequence(string path)
+    {
+        Assert.Single(ChangesOf(InspectWithException(Beethoven(path)), "R-210"));
+    }
+
+    /// <summary>
+    /// R-210: 語句が語の途中で終わる値には効かないことを確認する。
+    /// </summary>
+    [Fact]
+    public void MentionExceptionDoesNotMatchPartOfWord()
+    {
+        Assert.Single(ChangesOf(InspectWithException(Beethoven("x/01 Szene am Bachmann und Bach.flac")), "R-210"));
+    }
+
+    /// <summary>
+    /// R-210: 同じ値にある別の作曲家名は検出を続けることを確認する。**外すのは語句の部分だけ。**
+    /// </summary>
+    [Fact]
+    public void MentionExceptionKeepsOtherComposerInSameValue()
+    {
+        TagChange change = Assert.Single(
+            ChangesOf(InspectWithException(Beethoven("x/01 Weber Szene am Bach.flac")), "R-210"));
+
+        Assert.Contains("Carl Maria von Weber", change.Rationale, StringComparison.Ordinal);
+        Assert.DoesNotContain("Johann Sebastian Bach", change.Rationale, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// R-210: 例外は <c>title</c> にも効くことを確認する。
+    /// </summary>
+    [Fact]
+    public void MentionExceptionAppliesToTitle()
+    {
+        Assert.Empty(
+            ChangesOf(
+                InspectWithException(Track(
+                    "x/06.flac",
+                    (TagField.Composer, ["Ludwig van Beethoven"]),
+                    (TagField.Title, ["2. Szene am Bach"]))),
+                "R-210"));
+    }
+
+    /// <summary>
+    /// R-210: 手で書かれた 1 語だけの例外を効かせないことを確認する。
+    /// 検証はエラーにするが、ファイルを直接編集された場合でも検出を止めない。
+    /// </summary>
+    [Fact]
+    public void IgnoresSingleWordMentionException()
+    {
+        Assert.Single(
+            ChangesOf(
+                InspectWithException(Beethoven("x/06 Szene am Bach.flac"), phrase: "Bach"),
+                "R-210"));
+    }
+
+    /// <summary>
+    /// R-210: 例外登録の案内は、ファイル名か曲名に手がかりがある行にだけ出すことを確認する。
+    ///
+    /// フォルダ名だけの検出は作品の語句ではなく、6.9 の実例では真の誤りだった。
+    /// </summary>
+    [Fact]
+    public void GuidesToExceptionOnlyWhenFileNameOrTitleMentions()
+    {
+        const string GUIDE = "この語句を例外に登録";
+
+        TagChange byFileName = Assert.Single(ChangesOf(Inspect(Beethoven("x/06 Szene am Bach.flac")), "R-210"));
+        TagChange byFolder = Assert.Single(
+            ChangesOf(
+                Inspect(Track(
+                    "チャイコフスキー/チャイコフスキー 6/01.flac",
+                    (TagField.Composer, ["Dmitri Shostakovich"]),
+                    (TagField.Title, ["1. Adagio"]))),
+                "R-210"));
+
+        Assert.Contains(GUIDE, byFileName.Rationale, StringComparison.Ordinal);
+        Assert.DoesNotContain(GUIDE, byFolder.Rationale, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// ベートーヴェンのファイルを作る。
+    /// </summary>
+    private static TrackTags Beethoven(string path)
+    {
+        return Track(path, (TagField.Composer, ["Ludwig van Beethoven"]));
+    }
+
+    /// <summary>
+    /// 語句の例外を足した辞書で検査する。
+    /// </summary>
+    private static InspectionResult InspectWithException(
+        TrackTags track,
+        string composer = "Ludwig van Beethoven",
+        string phrase = "Szene am Bach")
+    {
+        DictionaryIndex dictionary = new(DictionaryLoader.LoadDefault() with
+        {
+            ComposerMentionExceptions = [new ComposerMentionExceptionEntry { Composer = composer, Phrase = phrase, Note = "小川" }],
+        });
+
+        return Inspect([track], dictionary, enableDiacritic: false);
+    }
+
+    /// <summary>
     /// R-210: <c>composer</c> 未設定のファイルを拾わないことを確認する。
     ///
     /// 6.9 は「値が辞書の正規形と一致するのに誤り」という状態を指す。未設定は R-401 が扱うため、

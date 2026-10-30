@@ -125,6 +125,70 @@ public sealed class DictionaryWorksTests : IDisposable
     }
 
     /// <summary>
+    /// 語句の例外が読み込まれ、保存で失われないことを確認する。
+    ///
+    /// **編集行から辞書を組み立て直す作りなので、組み立てから漏れた種別は保存のたびに黙って消える。**
+    /// </summary>
+    [Fact]
+    public void KeepsComposerMentionExceptionsOnSave()
+    {
+        DictionaryStore store = CreateStore();
+        store.Save(WithMentionException(store.Dictionary));
+
+        DictionaryViewModel viewModel = new(store);
+
+        ComposerMentionExceptionRowViewModel row = Assert.Single(viewModel.ComposerMentionExceptions);
+
+        Assert.Equal("Anton Bruckner: Sym No 3 Wagner", row.SortKey);
+
+        row.Note = "愛称";
+        viewModel.SaveCommand.Execute(null);
+
+        ComposerMentionExceptionEntry entry = Assert.Single(store.Dictionary.ComposerMentionExceptions);
+
+        Assert.Equal("Sym No 3 Wagner", entry.Phrase);
+        Assert.Equal("愛称", entry.Note);
+    }
+
+    /// <summary>
+    /// 語句の例外の検証結果から、その行とタブへ移動できることを確認する（docs/SPEC.md 7.3）。
+    /// 種別タブの並びと一覧の見出しのどちらかがずれると、移動が黙って効かなくなる。
+    /// </summary>
+    [Fact]
+    public void RevealsComposerMentionExceptionFromIssue()
+    {
+        DictionaryStore store = CreateStore();
+        store.Save(WithMentionException(store.Dictionary));
+
+        DictionaryViewModel viewModel = new(store);
+
+        viewModel.ComposerMentionExceptions[0].Phrase = "Wagner";
+        viewModel.ValidateCommand.Execute(null);
+
+        DictionaryIssue issue = viewModel.Issues.First(
+            issue => issue.Category == DictionaryValidator.CATEGORY_MENTION_EXCEPTION);
+
+        viewModel.RevealIssue(issue);
+
+        Assert.Equal(5, viewModel.SelectedCategoryIndex);
+        Assert.Same(viewModel.ComposerMentionExceptions[0], viewModel.SelectedComposerMentionException);
+    }
+
+    /// <summary>
+    /// 語句の例外を 1 件足す。
+    /// </summary>
+    private static TagDictionary WithMentionException(TagDictionary dictionary)
+    {
+        return dictionary with
+        {
+            ComposerMentionExceptions =
+            [
+                new ComposerMentionExceptionEntry { Composer = "Anton Bruckner", Phrase = "Sym No 3 Wagner", Note = "前の理由" },
+            ],
+        };
+    }
+
+    /// <summary>
     /// 作業ディレクトリを片付ける。
     /// </summary>
     public void Dispose()

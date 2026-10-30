@@ -15,8 +15,9 @@ Music Tag Auditor 本体は MIT License（[LICENSE](LICENSE)）で提供する�
 | TagLibSharp | 2.3.0 | **LGPL-2.1-only**（付録 C） | Copyright (c) 2006-2007 Brian Nickel. Copyright (c) 2009-2020 Other contributors | https://github.com/mono/taglib-sharp |
 | Serilog | 4.4.0 | Apache-2.0（付録 B） | Copyright © Serilog Contributors | https://github.com/serilog/serilog |
 | Serilog.Sinks.File | 7.0.0 | Apache-2.0（付録 B） | Serilog Contributors | https://github.com/serilog/serilog-sinks-file |
+| Markdig | 1.5.1 | BSD-2-Clause（付録 D） | Copyright (c) 2016-2026, Alexandre Mutel | https://github.com/xoofx/markdig |
 | CommunityToolkit.Mvvm | 8.4.2 | MIT（付録 A） | (c) .NET Foundation and Contributors. All rights reserved. | https://github.com/CommunityToolkit/dotnet |
-| Microsoft.Extensions.DependencyInjection | 10.0.10 | MIT（付録 A） | © Microsoft Corporation. All rights reserved. | https://github.com/dotnet/runtime |
+| Microsoft.Extensions.DependencyInjection | 10.0.14 | MIT（付録 A） | © Microsoft Corporation. All rights reserved. | https://github.com/dotnet/runtime |
 | .NET ランタイム / WPF<br>（自己完結型 exe のみ） | 10.0 | MIT（付録 A） | © Microsoft Corporation. All rights reserved. | https://github.com/dotnet/runtime<br>https://github.com/dotnet/wpf |
 
 `MusicTagAuditor-<tag>-win-x64-fdd.exe`（フレームワーク依存型）には .NET ランタイムは含まれない。実行環境に別途インストールされたランタイムを使う。
@@ -54,10 +55,10 @@ Music Tag Auditor はバックアップ作成時に、アプリ無しでタグ�
 | コンポーネント | バージョン | ライセンス | 著作権表示 | 入手先 |
 |---|---|---|---|---|
 | xunit | 2.9.3 | Apache-2.0 | Copyright (C) .NET Foundation | https://github.com/xunit/xunit |
-| xunit.runner.visualstudio | 3.1.4 | Apache-2.0 | Copyright (C) .NET Foundation | https://github.com/xunit/visualstudio.xunit |
-| coverlet.collector | 6.0.4 | MIT | tonerdo（coverlet contributors） | https://github.com/coverlet-coverage/coverlet |
-| Microsoft.NET.Test.Sdk | 17.14.1 | MIT | © Microsoft Corporation. All rights reserved. | https://github.com/microsoft/vstest |
-| z440.atl.core | 7.15.3 | MIT | Zeugma440 | https://github.com/Zeugma440/atldotnet |
+| xunit.runner.visualstudio | 4.0.1 | Apache-2.0 | Copyright (C) .NET Foundation | https://github.com/xunit/visualstudio.xunit |
+| coverlet.collector | 10.1.0 | MIT | tonerdo（coverlet contributors） | https://github.com/coverlet-coverage/coverlet |
+| Microsoft.NET.Test.Sdk | 18.11.0 | MIT | © Microsoft Corporation. All rights reserved. | https://github.com/microsoft/vstest |
+| z440.atl.core | 7.19.0 | MIT | Zeugma440 | https://github.com/Zeugma440/atldotnet |
 
 `z440.atl.core` はタグ入出力ライブラリ選定の検証ツール `tools/TagIoProbe`（[ADR-0001](docs/adr/0001-tag-io-library.md)）でのみ使う。アプリケーション本体は参照していない。
 
@@ -804,4 +805,34 @@ necessary.  Here is a sample; alter the names:
   Moe Ghoul, President of Vice
 
 That's all there is to it!
+```
+
+---
+
+## 付録 D: BSD 2-Clause License（Markdig）
+
+```
+Copyright (c) 2016-2026, Alexandre Mutel
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification
+, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this 
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice, 
+   this list of conditions and the following disclaimer in the documentation 
+   and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE 
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER 
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE 
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
