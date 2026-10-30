@@ -114,14 +114,14 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// ファイル一覧タブへ切り替えて、指定された行を選択・スクロール表示する。
+    /// ファイル一覧タブへ切り替えて、指定された行を選択し、先頭の行までスクロールする。
     ///
     /// **一連の操作は入力イベントを抜けてから行う。** ここへ来るのはダブルクリックの
     /// 処理中で、そのあと DataGrid が明細のセルへフォーカスを戻す。その場でタブを
     /// 切り替えると、<c>TabItem</c> がフォーカスの移動に追従して検査結果へ選び直され、
     /// 切り替えが即座に取り消される。
     /// </summary>
-    private void OnTrackRevealRequested(object? sender, TrackRowViewModel row)
+    private void OnTrackRevealRequested(object? sender, IReadOnlyList<TrackRowViewModel> rows)
     {
         _ = Dispatcher.BeginInvoke(
             DispatcherPriority.Background,
@@ -132,10 +132,19 @@ public partial class MainWindow : Window
                 // 行のコンテナはタブを描き直すまで作られず、ScrollIntoView が空振りする。
                 MainTabs.UpdateLayout();
 
-                // 複数選択のままだと、どの行へ飛んだのか分からなくなる。
+                // 前の選択が残っていると、どの行へ飛んだのか分からなくなる。
                 TrackGrid.UnselectAll();
-                TrackGrid.SelectedItem = row;
-                TrackGrid.ScrollIntoView(row);
+
+                foreach (TrackRowViewModel row in rows)
+                {
+                    _ = TrackGrid.SelectedItems.Add(row);
+                }
+
+                if (rows.Count > 0)
+                {
+                    TrackGrid.ScrollIntoView(rows[0]);
+                }
+
                 _ = TrackGrid.Focus();
             });
     }

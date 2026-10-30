@@ -196,6 +196,23 @@
                 CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
     </ContextMenu>
 
+    <!--
+      個別例外の行に出す右クリックメニュー（docs/SPEC.md 7.3.1）。
+      コマンドは辞書タブの DataContext（DictionaryViewModel）ではなく MainViewModel にあるため、
+      行の Tag には DataGrid ではなく Window の DataContext を載せて中継する。
+      ダブルクリックを使わないのは、この表のセルが編集できて編集の開始と衝突するため。
+    -->
+    <ContextMenu x:Key="AlbumOverrideRowContextMenu">
+      <MenuItem Header="ファイル一覧で表示"
+                Command="{Binding PlacementTarget.Tag.RevealAlbumOverrideTracksCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+    </ContextMenu>
+
+    <Style x:Key="AlbumOverrideRowStyle" TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+      <Setter Property="ContextMenu" Value="{StaticResource AlbumOverrideRowContextMenu}" />
+      <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}" />
+    </Style>
+
     <!-- 保留中の編集の行。1 項目だけ取り消す導線をここに持たせる（全件破棄はボタン側） -->
     <Style x:Key="ManualEditRowStyle" TargetType="DataGridRow" BasedOn="{StaticResource ChangeRowNameStyle}">
       <Setter Property="ContextMenu" Value="{StaticResource ManualEditRowContextMenu}" />
@@ -1452,6 +1469,11 @@
                       手で相対パスを打つと、打ち間違えても例外が黙って効かなくなるだけで原因が分からない。
                     -->
                     <Button DockPanel.Dock="Left" Content="削除" Command="{Binding RemoveAlbumOverrideCommand}"
+                            Style="{StaticResource SmallOutlineButtonStyle}" Margin="0,0,8,0" />
+                    <Button DockPanel.Dock="Left" Content="ファイル一覧で表示"
+                            Command="{Binding DataContext.RevealAlbumOverrideTracksCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                            CommandParameter="{Binding SelectedAlbumOverride}"
+                            ToolTip="選んだ例外が効くファイルをファイル一覧タブでまとめて選びます。disc が空欄ならフォルダの全行、指定があればそのディスクの行だけを選びます"
                             Style="{StaticResource SmallOutlineButtonStyle}" Margin="0,0,14,0" />
                     <TextBlock Style="{StaticResource HintTextStyle}" VerticalAlignment="Center" TextWrapping="Wrap"
                                ctl:PolicyText.Text="そのアルバムだけの例外（TAGGING_POLICY 3.5 規則2・規則4・規則6・規則7）。追加は検査結果タブの「このアルバムの扱いを決める」から行う。disc が空欄ならそのフォルダの全ディスクに効く。年は単位内で録音年が割れている場合だけ効く。" />
@@ -1460,6 +1482,7 @@
                   <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Padding="1">
                     <DataGrid ItemsSource="{Binding AlbumOverrides}"
                               SelectedItem="{Binding SelectedAlbumOverride}"
+                              RowStyle="{StaticResource AlbumOverrideRowStyle}"
                               SelectionMode="Single"
                               ctl:ScrollToSelection.Enabled="True"
                               HorizontalScrollBarVisibility="Auto">
