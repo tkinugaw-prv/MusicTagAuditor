@@ -303,6 +303,11 @@ public sealed class SuggestBox : TextBox
         _list.SelectedIndex = RequiresExplicitSelection ? -1 : 0;
 
         _popup.IsOpen = true;
+
+        // 前回のスクロール位置が残ると、先頭の候補が隠れたまま開いて無いように見える。
+        // 一覧が開いてからでないと効かないので、開いたあとに呼ぶ。
+        _list.UpdateLayout();
+        _list.ScrollIntoView(suggestions[0]);
     }
 
     /// <summary>

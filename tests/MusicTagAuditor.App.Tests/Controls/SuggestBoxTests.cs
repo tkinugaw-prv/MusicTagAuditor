@@ -90,6 +90,55 @@ public sealed class SuggestBoxTests
         });
     }
 
+    /// <summary>候補が複数あるとき、選んだ行の正規形が入ることを確認する。</summary>
+    /// <param name="downCount">↓ を押す回数。</param>
+    /// <param name="upCount">そのあと ↑ を押す回数。</param>
+    /// <param name="expected">入る値。</param>
+    [Theory]
+    [InlineData(2, 0, "Adagio in G minor")]
+    [InlineData(2, 1, "Adagio for Strings")]
+    [InlineData(5, 0, "Adagio in G minor")]
+    [InlineData(1, 5, "Adagio for Strings")]
+    public void 複数の候補から選んだ行の正規形が入る(int downCount, int upCount, string expected)
+    {
+        Run(harness =>
+        {
+            harness.Open("Adagio");
+
+            for (int count = 0; count < downCount; count++)
+            {
+                _ = harness.Press(Key.Down);
+            }
+
+            for (int count = 0; count < upCount; count++)
+            {
+                _ = harness.Press(Key.Up);
+            }
+
+            bool handled = harness.Press(Key.Enter);
+
+            Assert.True(handled);
+            Assert.Equal(expected, harness.Box.Text);
+        });
+    }
+
+    /// <summary>↓ で 2 件目を選んだ状態の Tab でも、その候補が入ることを確認する。</summary>
+    [Fact]
+    public void 二件目を選んだTabでその候補が入る()
+    {
+        Run(harness =>
+        {
+            harness.Open("Adagio");
+
+            _ = harness.Press(Key.Down);
+            _ = harness.Press(Key.Down);
+            bool handled = harness.Press(Key.Tab);
+
+            Assert.False(handled);
+            Assert.Equal("Adagio in G minor", harness.Box.Text);
+        });
+    }
+
     /// <summary>既定のモードは先頭を選んで開く従来の動作のままであることを確認する。</summary>
     [Fact]
     public void 既定のモードはEnterで先頭の候補が入る()
