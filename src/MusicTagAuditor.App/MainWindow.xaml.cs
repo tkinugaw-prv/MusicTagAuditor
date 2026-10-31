@@ -171,6 +171,20 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// 一括入力の値の欄に入ったら、そのときの選択行を渡す。
+    ///
+    /// <c>SelectionChanged</c> は追わない。選択を変えずに作曲家だけ直した場合に候補が古いまま残る。
+    /// 選択も作曲家も一覧を操作して変えるので、この欄へ戻る時点の値を見れば足りる。
+    /// </summary>
+    private void OnBulkValueGotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (DataContext is MainViewModel viewModel)
+        {
+            viewModel.UpdateBulkSelection(TrackGrid.SelectedItems);
+        }
+    }
+
+    /// <summary>
     /// 検証結果の行を押したら、その対象のエントリを開く。
     ///
     /// **既に選ばれている行を押したときのための導線。** 選択が変わる場合はビューモデルが
