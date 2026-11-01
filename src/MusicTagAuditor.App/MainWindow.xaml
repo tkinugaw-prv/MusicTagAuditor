@@ -287,7 +287,7 @@
                VerticalAlignment="Center"
                Source="{StaticResource AppMarkImage}" />
         <!--
-          アプリ名はここに出さない。OS のタイトルバーが "Music Tag Auditor" を
+          アプリ名と版数はここに出さない。OS のタイトルバーが "Music Tag Auditor v1.10.0" の形で
           出しており、画面内にもう 1 つ名前を置くと表記が二重になる。
         -->
         <TextBlock DockPanel.Dock="Left"

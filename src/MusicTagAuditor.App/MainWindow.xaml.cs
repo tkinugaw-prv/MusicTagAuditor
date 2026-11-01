@@ -28,6 +28,9 @@ public partial class MainWindow : Window
         InitializeComponent();
         DataContext = viewModel;
 
+        // 版数はビルドごとに変わるので XAML に書けない（docs/SPEC.md 5.6）。
+        Title = $"{Title} {AppVersion.Current}";
+
         viewModel.TrackRevealRequested += OnTrackRevealRequested;
     }
 

@@ -113,6 +113,8 @@ dotnet run --project src/MusicTagAuditor.App/MusicTagAuditor.App.csproj -- "D:\M
 └───────────────────────────────────────────────────────────────┘
 ```
 
+使っているアプリのバージョンは、ウィンドウのタイトルバーに `Music Tag Auditor v1.10.0` の形で表示されます。
+
 ### 共通入力エリア（すべてのタブで常に表示される）
 
 | 操作 | 内容 |
