@@ -44,6 +44,14 @@ public sealed class SuggestBox : TextBox
             typeof(SuggestBox),
             new PropertyMetadata(false));
 
+    /// <summary>候補を明示的に選んだときだけ確定するか。</summary>
+    public static readonly DependencyProperty RequiresExplicitSelectionProperty =
+        DependencyProperty.Register(
+            nameof(RequiresExplicitSelection),
+            typeof(bool),
+            typeof(SuggestBox),
+            new PropertyMetadata(false));
+
     /// <summary>候補一覧を出すポップアップ。テンプレートから受け取る。</summary>
     private Popup? _popup;
 
@@ -80,6 +88,19 @@ public sealed class SuggestBox : TextBox
     {
         get => (bool)GetValue(FocusOnLoadProperty);
         set => SetValue(FocusOnLoadProperty, value);
+    }
+
+    /// <summary>
+    /// 候補を明示的に選んだときだけ確定するか。
+    ///
+    /// 曲名のような自由記述の欄で立てる。先頭の候補を選んだ状態で開くと、楽章名として
+    /// <c>Adagio</c> と打って Enter を押しただけで <c>Adagio for Strings</c> に置き換わる。
+    /// 立てると何も選ばずに開き、未選択の Enter / Tab は打った値のまま通す。
+    /// </summary>
+    public bool RequiresExplicitSelection
+    {
+        get => (bool)GetValue(RequiresExplicitSelectionProperty);
+        set => SetValue(RequiresExplicitSelectionProperty, value);
     }
 
     /// <summary>
@@ -163,14 +184,14 @@ public sealed class SuggestBox : TextBox
                 e.Handled = true;
                 break;
 
+            // 未選択なら食べない。打った値のまま 1 回でセルを確定させる。
             case Key.Enter when IsOpen:
-                Accept();
-                e.Handled = true;
+                e.Handled = Accept();
                 break;
 
             // Tab は確定したうえで通す。次のセルへ移る動きはそのまま残す。
             case Key.Tab when IsOpen:
-                Accept();
+                _ = Accept();
                 break;
 
             case Key.Escape when IsOpen:
@@ -251,7 +272,7 @@ public sealed class SuggestBox : TextBox
         }
 
         _list.SelectedItem = item.DataContext;
-        Accept();
+        _ = Accept();
         e.Handled = true;
     }
 
@@ -279,9 +300,14 @@ public sealed class SuggestBox : TextBox
         }
 
         _list.ItemsSource = suggestions;
-        _list.SelectedIndex = 0;
+        _list.SelectedIndex = RequiresExplicitSelection ? -1 : 0;
 
         _popup.IsOpen = true;
+
+        // 前回のスクロール位置が残ると、先頭の候補が隠れたまま開いて無いように見える。
+        // 一覧が開いてからでないと効かないので、開いたあとに呼ぶ。
+        _list.UpdateLayout();
+        _list.ScrollIntoView(suggestions[0]);
     }
 
     /// <summary>
@@ -304,12 +330,13 @@ public sealed class SuggestBox : TextBox
     /// <summary>
     /// 選択中の候補を確定する。**入るのは正規形。**
     /// </summary>
-    private void Accept()
+    /// <returns>候補を確定したら true。未選択で閉じただけなら false。</returns>
+    private bool Accept()
     {
         if (_list?.SelectedItem is not DictionarySuggestion suggestion)
         {
             Close();
-            return;
+            return false;
         }
 
         _isAccepting = true;
@@ -325,6 +352,7 @@ public sealed class SuggestBox : TextBox
         }
 
         Close();
+        return true;
     }
 
     /// <summary>
