@@ -55,7 +55,7 @@ git push origin <現在のブランチ>
 ```
 
 - リモートは origin（github.com/tkinugaw-prv/MusicTagAuditor）。
-- **`main` と `develop` への直 push は禁止**（`docs/branch_strategy.md`）。`feature/` または `fix/` ブランチに push し、`develop` への PR を作る。
+- **`main` と `develop` への直 push は禁止**（`docs/branch_strategy.md`）。`feature/` または `fix/` ブランチに push する。`develop` への PR は、ユーザーに確認して了承を得てから作る。
   現在のブランチが `main` / `develop` なら、push せずにブランチを切るよう促して終了する。
 - 完了したらテスト件数・カバレッジ・コミットハッシュ・プッシュ先を報告する。
 - プッシュ後に GitHub Actions の CI ワークフローが成功したことを確認する（`gh run watch` など）。

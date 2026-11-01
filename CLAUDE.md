@@ -22,6 +22,10 @@
 - **`main` と `develop` へ直接コミット・push しない。** 変更に着手する前に、
   `develop` から `feature/` または `fix/` を切る。マージは PR を経由する
   （[docs/branch_strategy.md](docs/branch_strategy.md)）
+- **PR を直接出さない。** 必ずユーザーに確認し、了承を得てから出す
+  （[docs/branch_strategy.md](docs/branch_strategy.md)）
+- **ビルド確認では必ず Release ビルドも確かめる。** CI と配布物は Release 構成で作るので、
+  Debug だけの確認では手元と同じ結果になる保証がない
 - **ビルドは警告 0 件でなければ通らない。** `TreatWarningsAsErrors=true` と
   `GenerateDocumentationFile=true` のため、public メンバーに XML ドキュメント
   コメントが無いと CS1591 で失敗する
@@ -46,6 +50,10 @@
 
 ```bash
 dotnet build MusicTagAuditor.slnx
+```
+
+```bash
+dotnet build MusicTagAuditor.slnx -c Release
 ```
 
 ```bash

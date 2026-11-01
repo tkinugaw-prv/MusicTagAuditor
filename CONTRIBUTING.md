@@ -12,8 +12,14 @@ dotnet build
 ```
 
 ```bash
+dotnet build -c Release
+```
+
+```bash
 dotnet test
 ```
+
+ビルドを確認するときは Release 構成も必ず確かめる。CI と配布物は Release 構成で作る。
 
 `[RealLibraryFact]` を付けた結合テスト 11 件は実際の音楽ライブラリを必要とする。環境変数 `MUSICTAGAUDITOR_LIBRARY_ROOT` を設定しない限り自動的にスキップされるので、手元にライブラリが無くても残りのテストは通る。
 
