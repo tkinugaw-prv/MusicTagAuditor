@@ -76,7 +76,8 @@ public partial class App : Application
             Log.Warning("設定の読み込みに失敗した {Reason}", settingsStore.LoadError);
         }
 
-        Log.Information("Music Tag Auditor を起動した 検査ルール={RuleCount} 件", engine.RuleCount);
+        // 版数を残すのは、ログだけ受け取ったときにどの版の不具合かを切り分けるため。
+        Log.Information("Music Tag Auditor を起動した 版={Version} 検査ルール={RuleCount} 件", AppVersion.Current, engine.RuleCount);
 
         // **どの辞書を読んだかを必ず残す。** 辞書は所蔵に依存し、実行環境によっては
         // 別のファイルを読むこともある。件数が見えないと、検出結果が想定と違うときに

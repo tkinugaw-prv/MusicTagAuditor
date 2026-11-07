@@ -41,9 +41,9 @@ public sealed class CellEditCommitTests
         {
             Harness harness = new();
 
-            harness.Edit(harness.TitleColumn, "打ったタイトル");
+            harness.Edit(harness.AlbumColumn, "打ったアルバム");
 
-            Assert.Equal("打ったタイトル", harness.Row.Title);
+            Assert.Equal("打ったアルバム", harness.Row.Album);
             Assert.Equal(1, harness.Edits.Count);
 
             harness.Close();
@@ -77,6 +77,27 @@ public sealed class CellEditCommitTests
     }
 
     /// <summary>
+    /// タイトルの列（明示選択の <c>SuggestBox</c>）でも、打った値がそのまま保留に入ることを確認する。
+    /// </summary>
+    [Fact]
+    public void タイトルの列も別セルへ移った時点で保留に入る()
+    {
+        DispatcherTestRunner.Run(() =>
+        {
+            Harness harness = new();
+
+            harness.Edit(harness.TitleColumn, "打ったタイトル");
+
+            Assert.Equal("打ったタイトル", harness.Row.Title);
+            Assert.Equal(1, harness.Edits.Count);
+
+            harness.Close();
+
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>
     /// 取り消し（Esc）では保留に入らないことを確認する。
     /// 捨てるつもりの入力が残ると、取り消しの意味が反転する。
     /// </summary>
@@ -87,9 +108,9 @@ public sealed class CellEditCommitTests
         {
             Harness harness = new();
 
-            harness.Edit(harness.TitleColumn, "打ったタイトル", cancel: true);
+            harness.Edit(harness.AlbumColumn, "打ったアルバム", cancel: true);
 
-            Assert.Null(harness.Row.Title);
+            Assert.Null(harness.Row.Album);
             Assert.Equal(0, harness.Edits.Count);
 
             harness.Close();
@@ -97,6 +118,14 @@ public sealed class CellEditCommitTests
             return Task.CompletedTask;
         });
     }
+
+    /// <summary>タイトルの列の編集テンプレート。</summary>
+    private const string TITLE_TEMPLATE = """
+        <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                      xmlns:ctl="clr-namespace:MusicTagAuditor.App.Controls;assembly=MusicTagAuditor.App">
+          <ctl:SuggestBox RequiresExplicitSelection="True" Text="{Binding Title, UpdateSourceTrigger=LostFocus}" />
+        </DataTemplate>
+        """;
 
     /// <summary>
     /// ファイル一覧と同じ作りの DataGrid を立てて、セル編集を再現する道具。
@@ -116,7 +145,12 @@ public sealed class CellEditCommitTests
         {
             Row = new TrackRowViewModel(Track("01.m4a"), Edits);
 
-            TitleColumn = new DataGridTextColumn { Header = "タイトル", Binding = new Binding("Title") };
+            AlbumColumn = new DataGridTextColumn { Header = "アルバム", Binding = new Binding("Album") };
+            TitleColumn = new DataGridTemplateColumn
+            {
+                Header = "タイトル",
+                CellEditingTemplate = (DataTemplate)XamlReader.Parse(TITLE_TEMPLATE),
+            };
             ComposerColumn = new DataGridTemplateColumn
             {
                 Header = "作曲家",
@@ -124,6 +158,7 @@ public sealed class CellEditCommitTests
             };
 
             _grid = new DataGrid { AutoGenerateColumns = false };
+            _grid.Columns.Add(AlbumColumn);
             _grid.Columns.Add(TitleColumn);
             _grid.Columns.Add(ComposerColumn);
 
@@ -150,7 +185,10 @@ public sealed class CellEditCommitTests
         public TrackRowViewModel Row { get; }
 
         /// <summary>文字列の列。</summary>
-        public DataGridTextColumn TitleColumn { get; }
+        public DataGridTextColumn AlbumColumn { get; }
+
+        /// <summary>タイトルの列。</summary>
+        public DataGridTemplateColumn TitleColumn { get; }
 
         /// <summary>候補付きの列。</summary>
         public DataGridTemplateColumn ComposerColumn { get; }
@@ -176,7 +214,7 @@ public sealed class CellEditCommitTests
                 return;
             }
 
-            DataGridColumn other = ReferenceEquals(column, TitleColumn) ? ComposerColumn : TitleColumn;
+            DataGridColumn other = ReferenceEquals(column, AlbumColumn) ? ComposerColumn : AlbumColumn;
 
             _grid.CurrentCell = new DataGridCellInfo(Row, other);
             _grid.UpdateLayout();

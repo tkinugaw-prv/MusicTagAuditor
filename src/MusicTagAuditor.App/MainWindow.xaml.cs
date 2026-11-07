@@ -28,6 +28,9 @@ public partial class MainWindow : Window
         InitializeComponent();
         DataContext = viewModel;
 
+        // 版数はビルドごとに変わるので XAML に書けない（docs/SPEC.md 5.6）。
+        Title = $"{Title} {AppVersion.Current}";
+
         viewModel.TrackRevealRequested += OnTrackRevealRequested;
     }
 
@@ -167,6 +170,20 @@ public partial class MainWindow : Window
         if (DataContext is MainViewModel viewModel)
         {
             viewModel.NotifyTracksSelected(TrackGrid.SelectedItems.Count);
+        }
+    }
+
+    /// <summary>
+    /// 一括入力の値の欄に入ったら、そのときの選択行を渡す。
+    ///
+    /// <c>SelectionChanged</c> は追わない。選択を変えずに作曲家だけ直した場合に候補が古いまま残る。
+    /// 選択も作曲家も一覧を操作して変えるので、この欄へ戻る時点の値を見れば足りる。
+    /// </summary>
+    private void OnBulkValueGotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (DataContext is MainViewModel viewModel)
+        {
+            viewModel.UpdateBulkSelection(TrackGrid.SelectedItems);
         }
     }
 

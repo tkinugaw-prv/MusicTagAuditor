@@ -258,6 +258,9 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool _showOnlyEditedTracks;
 
+    /// <summary>一括入力の対象として最後に受け取った行。タイトルの候補を引くために持つ。</summary>
+    private IReadOnlyList<TrackRowViewModel> _bulkSelection = [];
+
     /// <summary>一括入力の対象フィールド。</summary>
     [ObservableProperty]
     private TagField _bulkField = TagField.Conductor;
@@ -360,6 +363,12 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>一括入力の欄に出す候補。対象フィールドに追従する。</summary>
     public IReadOnlyList<SuggestionEntry> BulkSuggestions { get; private set; } = [];
+
+    /// <summary>タイトル欄に出す作品名の候補。行の作曲家で引く。</summary>
+    public WorkSuggestionIndex WorkSuggestions { get; private set; } = WorkSuggestionIndex.EMPTY;
+
+    /// <summary>一括入力の欄で、候補を明示的に選んだときだけ確定するか。自由記述のタイトルだけが対象。</summary>
+    public bool BulkRequiresExplicitSelection => BulkField == TagField.Title;
 
     /// <summary>保留中の手編集の差分。**適用前に必ずここで確認できる。**</summary>
     public ObservableCollection<TagChange> ManualEditChanges { get; } = [];
@@ -1529,6 +1538,9 @@ public sealed partial class MainViewModel : ObservableObject
             _dictionaryStore.Save(edited);
             Dictionary.ReloadFromStore();
 
+            // この経路は辞書タブの Saved を通らない。作り直さないと、足した作品が候補に出ない。
+            RefreshSuggestions();
+
             log();
 
             RunInspection();
@@ -1942,6 +1954,17 @@ public sealed partial class MainViewModel : ObservableObject
     /// </summary>
     partial void OnBulkFieldChanged(TagField value)
     {
+        OnPropertyChanged(nameof(BulkRequiresExplicitSelection));
+        RefreshBulkSuggestions();
+    }
+
+    /// <summary>
+    /// 一括入力の対象になる行を受け取り、候補を選び直す。
+    /// </summary>
+    /// <param name="selection">ファイル一覧の選択行。</param>
+    public void UpdateBulkSelection(System.Collections.IList? selection)
+    {
+        _bulkSelection = selection?.OfType<TrackRowViewModel>().ToArray() ?? [];
         RefreshBulkSuggestions();
     }
 
@@ -1958,27 +1981,31 @@ public sealed partial class MainViewModel : ObservableObject
         ComposerSuggestions = DictionarySuggester.BuildCandidates(dictionary, DictionaryCategory.Composer);
         PersonSuggestions = DictionarySuggester.BuildCandidates(dictionary, DictionaryCategory.Person);
         EnsembleSuggestions = DictionarySuggester.BuildCandidates(dictionary, DictionaryCategory.Ensemble);
+        WorkSuggestions = new WorkSuggestionIndex(dictionary, _dictionaryStore.Index);
 
         OnPropertyChanged(nameof(ComposerSuggestions));
         OnPropertyChanged(nameof(PersonSuggestions));
         OnPropertyChanged(nameof(EnsembleSuggestions));
+        OnPropertyChanged(nameof(WorkSuggestions));
 
         RefreshBulkSuggestions();
     }
 
     /// <summary>
     /// 一括入力の欄に出す候補を、対象フィールドに合わせて選び直す。
-    /// 辞書が扱わないフィールド（曲名・年など）では候補を出さない。
+    /// 辞書が扱わないフィールド（年など）では候補を出さない。タイトルは選択行の作曲家の作品を出す。
     /// </summary>
     private void RefreshBulkSuggestions()
     {
-        BulkSuggestions = DictionarySuggester.CategoryFor(BulkField) switch
-        {
-            DictionaryCategory.Composer => ComposerSuggestions,
-            DictionaryCategory.Person => PersonSuggestions,
-            DictionaryCategory.Ensemble => EnsembleSuggestions,
-            _ => [],
-        };
+        BulkSuggestions = BulkField == TagField.Title
+            ? WorkSuggestions.For(_bulkSelection.Select(row => row.GetValuesForDictionary(TagField.Composer)))
+            : DictionarySuggester.CategoryFor(BulkField) switch
+            {
+                DictionaryCategory.Composer => ComposerSuggestions,
+                DictionaryCategory.Person => PersonSuggestions,
+                DictionaryCategory.Ensemble => EnsembleSuggestions,
+                _ => [],
+            };
 
         OnPropertyChanged(nameof(BulkSuggestions));
     }

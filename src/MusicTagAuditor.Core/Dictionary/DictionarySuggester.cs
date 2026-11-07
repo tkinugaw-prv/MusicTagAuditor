@@ -196,7 +196,7 @@ public static class DictionarySuggester
     /// <param name="aliases">ラテン文字の別表記。</param>
     /// <param name="aliasesJa">日本語表記。</param>
     /// <returns>候補。</returns>
-    private static SuggestionEntry Build(
+    internal static SuggestionEntry Build(
         string canonical,
         IReadOnlyList<string>? aliases,
         IReadOnlyList<string>? aliasesJa)

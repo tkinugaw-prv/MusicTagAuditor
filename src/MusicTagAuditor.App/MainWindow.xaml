@@ -16,6 +16,7 @@
     <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
     <conv:CountToVisibilityConverter x:Key="CountToVisibility" />
     <conv:TagFieldLabelConverter x:Key="TagFieldLabel" />
+    <conv:RowWorkSuggestionsConverter x:Key="RowWorkSuggestions" />
     <conv:RootFolderLabelConverter x:Key="RootFolderLabel" />
     <conv:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisibility" />
 
@@ -286,7 +287,7 @@
                VerticalAlignment="Center"
                Source="{StaticResource AppMarkImage}" />
         <!--
-          アプリ名はここに出さない。OS のタイトルバーが "Music Tag Auditor" を
+          アプリ名と版数はここに出さない。OS のタイトルバーが "Music Tag Auditor v1.10.0" の形で
           出しており、画面内にもう 1 つ名前を置くと表記が二重になる。
         -->
         <TextBlock DockPanel.Dock="Left"
@@ -758,9 +759,14 @@
                   </DataTemplate>
                 </ComboBox.ItemTemplate>
               </ComboBox>
-              <!-- 対象フィールドが辞書の扱う名前なら、打つそばから候補が出る -->
+              <!--
+                対象フィールドが辞書の扱う名前なら、打つそばから候補が出る。タイトルの候補は
+                選択行の作曲家で決まるので、入力を受け取るたびに選択を渡して選び直す。
+              -->
               <ctl:SuggestBox Grid.Row="1" Grid.Column="2" Margin="0,8,0,0"
                               ctl:Placeholder.Text="選択行に入れる値（空のまま実行するとタグを消します）"
+                              GotKeyboardFocus="OnBulkValueGotKeyboardFocus"
+                              RequiresExplicitSelection="{Binding BulkRequiresExplicitSelection}"
                               Suggestions="{Binding BulkSuggestions}"
                               Text="{Binding BulkValue, UpdateSourceTrigger=PropertyChanged}" />
               <!--
@@ -820,11 +826,33 @@
                                       ElementStyle="{StaticResource EllipsisTextStyle}" />
                   <DataGridTextColumn Header="形式" Binding="{Binding Format}" IsReadOnly="True" Width="64" MinWidth="64"
                                       ElementStyle="{StaticResource CenterCellTextStyle}" />
-                  <DataGridTextColumn Header="タイトル" Binding="{Binding Title}" Width="2*" MinWidth="180"
-                                      ElementStyle="{StaticResource EllipsisTextStyle}"
-                                      EditingElementStyle="{StaticResource GridEditingTextBoxStyle}" />
                   <!--
-                    名前を扱う 4 列は辞書の候補を出す。辞書は composer / artist / conductor /
+                    タイトルは行の作曲家の作品名を候補に出す。**自由記述の欄なので明示的に選ぶまで
+                    確定しない。** 楽章名を打って Enter を押しただけで作品名に置き換わると困る。
+                  -->
+                  <DataGridTemplateColumn Header="タイトル" Width="2*" MinWidth="180" SortMemberPath="Title">
+                    <DataGridTemplateColumn.CellTemplate>
+                      <DataTemplate>
+                        <TextBlock Style="{StaticResource EllipsisTextStyle}" Text="{Binding Title}" />
+                      </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                    <DataGridTemplateColumn.CellEditingTemplate>
+                      <DataTemplate>
+                        <ctl:SuggestBox Style="{StaticResource GridEditingSuggestBoxStyle}" FocusOnLoad="True"
+                                        RequiresExplicitSelection="True"
+                                        Text="{Binding Title, UpdateSourceTrigger=LostFocus}">
+                          <ctl:SuggestBox.Suggestions>
+                            <MultiBinding Converter="{StaticResource RowWorkSuggestions}">
+                              <Binding />
+                              <Binding Path="DataContext.WorkSuggestions" RelativeSource="{RelativeSource AncestorType=DataGrid}" />
+                            </MultiBinding>
+                          </ctl:SuggestBox.Suggestions>
+                        </ctl:SuggestBox>
+                      </DataTemplate>
+                    </DataGridTemplateColumn.CellEditingTemplate>
+                  </DataGridTemplateColumn>
+                  <!--
+                    名前を扱う 4 列も辞書の候補を出す。辞書は composer / artist / conductor /
                     albumartist の正規形を持っているのに、手打ちだと表記が揺れて次の検査で
                     跳ね返る。**候補は入力を助けるだけで縛らない。** 辞書に無い名前も入る。
                     SortMemberPath を落とすと並べ替えが黙って効かなくなる（TemplateColumn は
