@@ -106,7 +106,7 @@ Anyone can verify the pass/fail status and per-class coverage from there.
 
 ### Dependency updates
 
-Dependabot opens weekly pull requests for NuGet packages and GitHub Actions ([configuration](.github/dependabot.yml)). They target the default branch, `develop`. Minor and patch updates are grouped; major updates come one at a time.
+Dependabot opens weekly pull requests for NuGet packages and GitHub Actions ([configuration](.github/dependabot.yml)). They target the default branch, `develop`. Minor and patch updates are grouped; major updates come one at a time. As a guard against supply-chain attacks, versions published less than 7 days ago are not picked up (security updates for vulnerabilities are exempt and arrive immediately).
 
 Actions in the workflows are pinned to commit SHAs. Dependabot rewrites both the SHA and the trailing version comment, so the pinning convention stays intact.
 

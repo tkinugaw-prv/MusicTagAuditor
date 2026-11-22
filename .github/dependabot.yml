@@ -5,6 +5,16 @@
 #
 # セキュリティ更新（脆弱性が公表されたときの PR）はこのファイルとは別に、
 # リポジトリの設定で有効になっている。ここで設定するのは定期的なバージョン更新のほう。
+#
+# どちらの ecosystem にも cooldown（公開から 7 日未満の版を拾わない）を入れている。
+# 週 1 回の定期実行はその時点の最新版をすぐ拾うため、公開から数時間の版が PR に
+# 入ることがあった（PR #124 の z440.atl.core 7.21.0 は公開 8.5 時間後に取り込まれた）。
+# 乗っ取られたアカウントから出た悪意ある版は数日で見つかって取り下げられることが多く、
+# 待つだけで避けられる。テスト用・ツール用のパッケージもビルド時に CI と手元で
+# 実行されるので除外しない。
+# 日数は default-days だけで指定する。semver-*-days は GitHub Actions では使えず、
+# 両者の挙動を揃えておくほうが読み違えにくい。cooldown はセキュリティ更新には
+# 掛からないので、脆弱性修正は遅れない。
 
 version: 2
 
@@ -19,6 +29,8 @@ updates:
       time: "03:00"
       timezone: "Asia/Tokyo"
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
     # メジャー更新だけは 1 件ずつ出す。破壊的変更を含みうるため、
     # まとめられると「どれが原因で落ちたか」を切り分けられない。
     groups:
@@ -41,6 +53,8 @@ updates:
       time: "03:00"
       timezone: "Asia/Tokyo"
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
     groups:
       actions-minor-patch:
         update-types:

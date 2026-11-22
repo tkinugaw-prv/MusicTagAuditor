@@ -112,7 +112,7 @@ git push origin v1.0.0
 
 ### 依存関係の更新
 
-NuGet パッケージと GitHub Actions のバージョン更新は Dependabot が毎週 PR にする（[設定](.github/dependabot.yml)）。宛先は既定ブランチの `develop`。minor / patch はまとめ、major は 1 件ずつ出す。
+NuGet パッケージと GitHub Actions のバージョン更新は Dependabot が毎週 PR にする（[設定](.github/dependabot.yml)）。宛先は既定ブランチの `develop`。minor / patch はまとめ、major は 1 件ずつ出す。サプライチェーン攻撃に備えて、公開から 7 日未満の版は拾わない（脆弱性修正のセキュリティ更新は対象外で、すぐ出る）。
 
 ワークフローの Action はコミット SHA で固定しているが、Dependabot は SHA と末尾のバージョンコメントの両方を書き換えるため、固定方針は崩れない。
 
